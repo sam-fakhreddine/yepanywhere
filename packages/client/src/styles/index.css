@@ -1,4 +1,5 @@
 @import "./renderers.css";
+@import "./tool-rows.css";
 
 * {
   box-sizing: border-box;
@@ -94,7 +95,6 @@ h2 {
   color: inherit;
   font-size: 1rem;
 }
-
 
 /* Session page layout */
 .session-page {

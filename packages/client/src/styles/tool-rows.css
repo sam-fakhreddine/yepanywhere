@@ -1,0 +1,213 @@
+/* ==========================================================================
+   Tool Call Rows - VS Code Style
+   ========================================================================== */
+
+.tool-row {
+  position: relative;
+  margin: 2px 0;
+}
+
+/* Fixed-height header - CRITICAL for no-jump during streaming */
+.tool-row-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 8px 0 24px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.1s;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+
+.tool-row-header:hover {
+  background: var(--bg-hover, #2a2a2a);
+}
+
+.tool-row-header:focus {
+  outline: 1px solid var(--focus-border, #007acc);
+  outline-offset: -1px;
+}
+
+/* Timeline dot */
+.timeline-dot {
+  position: absolute;
+  left: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--timeline-dot-idle, #3c3c3c);
+  flex-shrink: 0;
+}
+
+.timeline-dot.pending {
+  background: var(--timeline-dot-working, #0078d4);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.timeline-dot.complete {
+  background: var(--timeline-dot-success, #4ec9b0);
+}
+
+.timeline-dot.error {
+  background: var(--timeline-dot-error, #f48771);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.9);
+  }
+}
+
+/* Spinner (for pending state) */
+.tool-spinner {
+  flex-shrink: 0;
+  color: var(--text-muted, #888);
+  display: flex;
+  align-items: center;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Tool icon */
+.tool-icon {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  font-size: 12px;
+}
+
+/* Tool name */
+.tool-name {
+  flex-shrink: 0;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary, #ccc);
+}
+
+/* Tool summary - takes remaining space, truncates */
+.tool-summary {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono, "SF Mono", Monaco, Consolas, monospace);
+  font-size: 13px;
+  color: var(--link-color, #4fc1ff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Error badge */
+.tool-error-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--error-color, #f48771);
+  background: rgba(244, 135, 113, 0.15);
+  border-radius: 3px;
+}
+
+/* Expand chevron */
+.expand-chevron {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-dimmed, #666);
+  transition: transform 0.15s;
+}
+
+.tool-row.expanded .expand-chevron {
+  transform: rotate(0deg);
+}
+
+/* Expanded content area */
+.tool-row-content {
+  margin-left: 24px;
+  padding: 8px;
+  border-left: 1px solid var(--border-color, #333);
+  animation: slideDown 0.15s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tool-pending-message {
+  color: var(--text-muted, #888);
+  font-style: italic;
+  font-size: 13px;
+}
+
+.tool-no-result {
+  color: var(--text-muted, #888);
+  font-style: italic;
+  font-size: 13px;
+}
+
+.tool-use-expanded,
+.tool-result-expanded {
+  font-size: 13px;
+}
+
+/* ==========================================================================
+   Status-specific styles
+   ========================================================================== */
+
+.tool-row.status-pending .tool-summary {
+  color: var(--text-muted, #888);
+}
+
+.tool-row.status-error .tool-name {
+  color: var(--error-color, #f48771);
+}
+
+.tool-row.status-error .tool-summary {
+  color: var(--error-color, #f48771);
+}
+
+/* ==========================================================================
+   JSON fallback content
+   ========================================================================== */
+
+.tool-content-json {
+  margin: 0;
+  padding: 8px;
+  background: var(--bg-code, #1e1e1e);
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+.tool-content-json code {
+  color: var(--text-primary, #ccc);
+}

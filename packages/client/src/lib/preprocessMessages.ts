@@ -1,0 +1,151 @@
+import type { ContentBlock, Message } from "../types";
+import type {
+  RenderItem,
+  ToolCallItem,
+  ToolResultData,
+} from "../types/renderItems";
+
+/**
+ * Preprocess messages into render items, pairing tool_use with tool_result.
+ *
+ * This is a pure function - given the same messages, returns the same items.
+ * Safe to call on every render (use useMemo).
+ */
+export function preprocessMessages(messages: Message[]): RenderItem[] {
+  const items: RenderItem[] = [];
+  const pendingToolCalls = new Map<string, number>(); // tool_use_id → index in items
+
+  for (const msg of messages) {
+    processMessage(msg, items, pendingToolCalls);
+  }
+
+  return items;
+}
+
+function processMessage(
+  msg: Message,
+  items: RenderItem[],
+  pendingToolCalls: Map<string, number>,
+): void {
+  const content = msg.content;
+
+  // String content = user prompt
+  if (typeof content === "string") {
+    items.push({
+      type: "user_prompt",
+      id: msg.id,
+      content,
+    });
+    return;
+  }
+
+  // Not an array - shouldn't happen but handle gracefully
+  if (!Array.isArray(content)) {
+    return;
+  }
+
+  // Check if this is a user message with only tool_result blocks
+  const isToolResultMessage =
+    msg.role === "user" && content.every((b) => b.type === "tool_result");
+
+  if (isToolResultMessage) {
+    // Attach results to pending tool calls
+    for (const block of content) {
+      if (block.type === "tool_result" && block.tool_use_id) {
+        attachToolResult(block, msg.toolUseResult, items, pendingToolCalls);
+      }
+    }
+    return;
+  }
+
+  // Check if this is a real user prompt (not tool results)
+  if (msg.role === "user") {
+    items.push({
+      type: "user_prompt",
+      id: msg.id,
+      content,
+    });
+    return;
+  }
+
+  // Assistant message - process each block
+  for (let i = 0; i < content.length; i++) {
+    const block = content[i];
+    if (!block) continue;
+
+    const blockId = `${msg.id}-${i}`;
+
+    if (block.type === "text") {
+      if (block.text?.trim()) {
+        items.push({
+          type: "text",
+          id: blockId,
+          text: block.text,
+        });
+      }
+    } else if (block.type === "thinking") {
+      if (block.thinking?.trim()) {
+        items.push({
+          type: "thinking",
+          id: blockId,
+          thinking: block.thinking,
+          signature: undefined,
+          status: "complete",
+        });
+      }
+    } else if (block.type === "tool_use") {
+      if (block.id && block.name) {
+        const toolCall: ToolCallItem = {
+          type: "tool_call",
+          id: block.id,
+          toolName: block.name,
+          toolInput: block.input,
+          toolResult: undefined,
+          status: "pending",
+        };
+        pendingToolCalls.set(block.id, items.length);
+        items.push(toolCall);
+      }
+    }
+  }
+}
+
+function attachToolResult(
+  block: ContentBlock,
+  structuredResult: unknown,
+  items: RenderItem[],
+  pendingToolCalls: Map<string, number>,
+): void {
+  const toolUseId = block.tool_use_id;
+  if (!toolUseId) return;
+
+  const index = pendingToolCalls.get(toolUseId);
+  if (index === undefined) {
+    // Orphan result - shouldn't happen normally
+    console.warn(`Tool result for unknown tool_use: ${toolUseId}`);
+    return;
+  }
+
+  const item = items[index];
+  if (!item || item.type !== "tool_call") return;
+
+  // Attach result to existing tool call
+  const resultData: ToolResultData = {
+    content: block.content || "",
+    isError: block.is_error || false,
+    structured: structuredResult,
+  };
+
+  // Create a new ToolCallItem to ensure React sees the change
+  const updatedItem: ToolCallItem = {
+    type: "tool_call",
+    id: item.id,
+    toolName: item.toolName,
+    toolInput: item.toolInput,
+    toolResult: resultData,
+    status: block.is_error ? "error" : "complete",
+  };
+
+  items[index] = updatedItem;
+  pendingToolCalls.delete(toolUseId);
+}
