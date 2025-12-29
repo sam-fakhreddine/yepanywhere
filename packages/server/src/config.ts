@@ -14,6 +14,8 @@ export interface Config {
   defaultPermissionMode: PermissionMode;
   /** Server port */
   port: number;
+  /** Use mock SDK instead of real Claude SDK */
+  useMockSdk: boolean;
 }
 
 /**
@@ -30,6 +32,7 @@ export function loadConfig(): Config {
     ),
     defaultPermissionMode: parsePermissionMode(process.env.PERMISSION_MODE),
     port: parseIntOrDefault(process.env.PORT, 3400),
+    useMockSdk: process.env.USE_MOCK_SDK === "true",
   };
 }
 

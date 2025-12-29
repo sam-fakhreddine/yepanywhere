@@ -21,9 +21,10 @@ describe("Sessions API", () => {
     const encodedPath = projectPath.replaceAll("/", "-");
 
     await mkdir(join(testDir, "localhost", encodedPath), { recursive: true });
+    // Session file must include cwd field for project path discovery
     await writeFile(
       join(testDir, "localhost", encodedPath, "sess-existing.jsonl"),
-      '{"type":"user","message":{"content":"Hello"}}\n',
+      `{"type":"user","cwd":"${projectPath}","message":{"content":"Hello"}}\n`,
     );
   });
 

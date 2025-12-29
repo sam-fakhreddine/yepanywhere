@@ -18,10 +18,10 @@ describe("Projects API", () => {
     await mkdir(join(testDir, "localhost", "-home-user-myproject"), {
       recursive: true,
     });
-    // Create a sample session file
+    // Create a sample session file with cwd field (required for project path discovery)
     await writeFile(
       join(testDir, "localhost", "-home-user-myproject", "sess-123.jsonl"),
-      '{"type":"user","message":{"content":"Hello"}}\n',
+      '{"type":"user","cwd":"/home/user/myproject","message":{"content":"Hello"}}\n',
     );
   });
 

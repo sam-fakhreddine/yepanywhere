@@ -60,18 +60,39 @@ export class RealClaudeSDK implements RealClaudeSDKInterface {
       : undefined;
 
     // Create the SDK query with our message generator
-    const iterator = query({
-      prompt: queue.generator(),
-      options: {
-        cwd: options.cwd,
-        resume: options.resumeSessionId,
-        abortController,
-        permissionMode: options.permissionMode ?? "default",
-        canUseTool,
-        systemPrompt: { type: "preset", preset: "claude_code" },
-        settingSources: ["user", "project", "local"],
-      },
-    });
+    let iterator: AsyncGenerator<AgentSDKMessage>;
+    try {
+      iterator = query({
+        prompt: queue.generator(),
+        options: {
+          cwd: options.cwd,
+          resume: options.resumeSessionId,
+          abortController,
+          permissionMode: options.permissionMode ?? "default",
+          canUseTool,
+          systemPrompt: { type: "preset", preset: "claude_code" },
+          settingSources: ["user", "project", "local"],
+        },
+      });
+    } catch (error) {
+      // Handle common SDK initialization errors
+      if (error instanceof Error) {
+        if (error.message.includes("Claude Code executable not found")) {
+          throw new Error(
+            "Claude CLI not installed. Run: curl -fsSL https://claude.ai/install.sh | bash",
+          );
+        }
+        if (
+          error.message.includes("SPAWN") ||
+          error.message.includes("spawn")
+        ) {
+          throw new Error(
+            `Failed to spawn Claude CLI process: ${error.message}`,
+          );
+        }
+      }
+      throw error;
+    }
 
     // Wrap the iterator to convert SDK message types to our internal types
     const wrappedIterator = this.wrapIterator(iterator);

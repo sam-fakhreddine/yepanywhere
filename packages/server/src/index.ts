@@ -1,9 +1,24 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { detectClaudeCli } from "./sdk/cli-detection.js";
 import { RealClaudeSDK } from "./sdk/real.js";
 
 const config = loadConfig();
+
+// Check for Claude CLI
+const cliInfo = detectClaudeCli();
+if (!cliInfo.found) {
+  console.error("Error: Claude CLI not found!");
+  console.error("");
+  console.error("The real SDK requires Claude CLI to be installed.");
+  console.error("Install: curl -fsSL https://claude.ai/install.sh | bash");
+  console.error("");
+  console.error("Alternatively, run with mock SDK: USE_MOCK_SDK=true pnpm dev");
+  process.exit(1);
+}
+
+console.log(`Claude CLI found: ${cliInfo.path} (${cliInfo.version})`);
 
 // Create the real SDK
 const realSdk = new RealClaudeSDK();
