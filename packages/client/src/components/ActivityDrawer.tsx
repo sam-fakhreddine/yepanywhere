@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 import { useActivityDrawer } from "../context/ActivityDrawerContext";
 import {
   type FileChangeEvent,
@@ -51,14 +52,46 @@ function getFileTypeLabel(fileType: FileChangeEvent["fileType"]): string {
 export function ActivityDrawer() {
   const { isOpen, setIsOpen, drawerHeight } = useActivityDrawer();
   const [filter, setFilter] = useState("");
+  const [scope, setScope] = useState<"context" | "all">("context");
+  const { projectId, sessionId } = useParams<{
+    projectId?: string;
+    sessionId?: string;
+  }>();
   const { events, connected, paused, clearEvents, togglePause, filterByPath } =
     useFileActivity();
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
 
+  // Reset scope to "context" when URL params change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset when params change
+  useEffect(() => {
+    setScope("context");
+  }, [projectId, sessionId]);
+
+  // Filter events by context (session or project)
+  const filterByContext = (evts: FileChangeEvent[]) => {
+    if (scope === "all") return evts;
+
+    return evts.filter((event) => {
+      // Session page: match exact session file
+      if (sessionId && projectId) {
+        return event.relativePath.startsWith(
+          `projects/${projectId}/${sessionId}`,
+        );
+      }
+      // Project page: match any file in project
+      if (projectId) {
+        return event.relativePath.startsWith(`projects/${projectId}/`);
+      }
+      // Other pages: show all
+      return true;
+    });
+  };
+
   // Events are stored newest-first, reverse for chronological display (oldest at top)
-  const filteredEvents = filter ? filterByPath(filter) : events;
+  const pathFilteredEvents = filter ? filterByPath(filter) : events;
+  const filteredEvents = filterByContext(pathFilteredEvents);
   const displayedEvents = [...filteredEvents].reverse();
 
   // Track scroll position to know if we should auto-scroll
@@ -72,6 +105,7 @@ export function ActivityDrawer() {
   };
 
   // Auto-scroll to bottom when new events arrive (if already at bottom)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally trigger on events change
   useLayoutEffect(() => {
     const container = scrollContainerRef.current;
     if (container && isAtBottomRef.current) {
@@ -123,10 +157,35 @@ export function ActivityDrawer() {
             Activity
           </span>
           <span style={{ color: "#888", fontSize: "0.75rem" }}>
-            ({events.length} events)
+            ({filteredEvents.length}
+            {scope === "context" && filteredEvents.length !== events.length
+              ? ` of ${events.length}`
+              : ""}{" "}
+            events)
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {/* Scope toggle - only show when there's context to filter */}
+          {(projectId || sessionId) && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setScope((s) => (s === "context" ? "all" : "context"));
+              }}
+              style={{
+                padding: "0.25rem 0.5rem",
+                fontSize: "0.75rem",
+                background: scope === "context" ? "#4a4aff" : "#444",
+              }}
+            >
+              {scope === "context"
+                ? sessionId
+                  ? "Session"
+                  : "Project"
+                : "All"}
+            </button>
+          )}
           <button
             type="button"
             onClick={(e) => {
@@ -155,6 +214,17 @@ export function ActivityDrawer() {
           >
             Clear
           </button>
+          <Link
+            to="/activity"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              color: "#888",
+              fontSize: "0.75rem",
+              textDecoration: "none",
+            }}
+          >
+            Full Activity →
+          </Link>
           <span style={{ fontSize: "1rem" }}>{isOpen ? "▼" : "▲"}</span>
         </div>
       </div>
