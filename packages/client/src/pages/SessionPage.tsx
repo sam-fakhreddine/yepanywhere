@@ -7,7 +7,7 @@ import { StatusIndicator } from "../components/StatusIndicator";
 import { useActivityDrawer } from "../context/ActivityDrawerContext";
 import { useSession } from "../hooks/useSession";
 
-export function ChatPage() {
+export function SessionPage() {
   const { projectId, sessionId } = useParams<{
     projectId: string;
     sessionId: string;
@@ -18,10 +18,10 @@ export function ChatPage() {
     return <div className="error">Invalid session URL</div>;
   }
 
-  return <ChatPageContent projectId={projectId} sessionId={sessionId} />;
+  return <SessionPageContent projectId={projectId} sessionId={sessionId} />;
 }
 
-function ChatPageContent({
+function SessionPageContent({
   projectId,
   sessionId,
 }: {
@@ -62,9 +62,9 @@ function ChatPageContent({
   if (error) return <div className="error">Error: {error.message}</div>;
 
   return (
-    <div className="chat-page" style={{ paddingBottom: drawerHeight }}>
-      <header className="chat-header">
-        <div className="chat-header-left">
+    <div className="session-page" style={{ paddingBottom: drawerHeight }}>
+      <header className="session-header">
+        <div className="session-header-left">
           <nav className="breadcrumb">
             <Link to="/projects">Projects</Link> /{" "}
             <Link to={`/projects/${projectId}`}>Project</Link> / Session
@@ -86,11 +86,11 @@ function ChatPageContent({
         </div>
       )}
 
-      <main className="chat-messages">
+      <main className="session-messages">
         <MessageList messages={messages} />
       </main>
 
-      <footer className="chat-input">
+      <footer className="session-input">
         <MessageInput
           onSend={handleSend}
           disabled={sending}

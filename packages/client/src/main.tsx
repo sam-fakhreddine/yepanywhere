@@ -4,8 +4,8 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ActivityDrawer } from "./components/ActivityDrawer";
 import { ActivityDrawerProvider } from "./context/ActivityDrawerContext";
 import { ActivityPage } from "./pages/ActivityPage";
-import { ChatPage } from "./pages/ChatPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { SessionPage } from "./pages/SessionPage";
 import { SessionsPage } from "./pages/SessionsPage";
 import "./styles/index.css";
 
@@ -24,7 +24,7 @@ createRoot(rootElement).render(
           <Route path="/projects/:projectId" element={<SessionsPage />} />
           <Route
             path="/projects/:projectId/sessions/:sessionId"
-            element={<ChatPage />}
+            element={<SessionPage />}
           />
           <Route path="/activity" element={<ActivityPage />} />
         </Routes>

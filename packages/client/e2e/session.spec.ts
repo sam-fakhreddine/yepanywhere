@@ -14,7 +14,7 @@ test.describe("Session Flow", () => {
     await expect(page).toHaveURL(/\/sessions\//);
 
     // Should see the chat interface
-    await expect(page.locator(".chat-messages")).toBeVisible();
+    await expect(page.locator(".session-messages")).toBeVisible();
   });
 
   test("receives streamed response", async ({ page }) => {
