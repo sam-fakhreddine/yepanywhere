@@ -19,7 +19,8 @@ export const ToolCallRow = memo(function ToolCallRow({
   toolResult,
   status,
 }: Props) {
-  const [expanded, setExpanded] = useState(false);
+  // Edit tool is expanded by default to show diff preview
+  const [expanded, setExpanded] = useState(toolName === "Edit");
 
   const summary = useMemo(() => {
     return getToolSummary(toolName, toolInput, toolResult, status);
