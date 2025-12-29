@@ -742,6 +742,612 @@
 }
 
 /* ==========================================================================
+   Task Tool
+   ========================================================================== */
+
+.task-tool-use {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.task-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.task-description {
+  font-weight: 500;
+  color: #aaa;
+}
+
+.task-prompt {
+  margin-top: 0.5rem;
+}
+
+.task-prompt-toggle {
+  background: transparent;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #888;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.task-prompt-toggle:hover {
+  background: #333;
+  color: #aaa;
+}
+
+.task-prompt-content {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: #1e1e1e;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.task-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.task-result-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.task-stats {
+  color: #666;
+  font-size: 0.8125rem;
+}
+
+.task-content {
+  border-left: 2px solid #444;
+  padding-left: 1rem;
+  margin-left: 0.25rem;
+}
+
+.task-error {
+  color: #f88;
+  padding: 0.5rem;
+  background: #2a1a1a;
+  border-radius: 4px;
+}
+
+.task-empty {
+  color: #666;
+  font-style: italic;
+  font-size: 0.875rem;
+}
+
+/* ==========================================================================
+   WebSearch Tool
+   ========================================================================== */
+
+.websearch-tool-use {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.websearch-query {
+  font-family: "SF Mono", Monaco, monospace;
+  font-size: 0.875rem;
+  color: #88f;
+}
+
+.websearch-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.websearch-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.websearch-query-display {
+  color: #aaa;
+  font-style: italic;
+}
+
+.websearch-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.websearch-link-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.5rem;
+  background: #1e1e1e;
+  border-radius: 4px;
+  border: 1px solid #333;
+}
+
+.websearch-link-item:hover {
+  background: #252525;
+}
+
+.websearch-link {
+  color: #88f;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.websearch-link:hover {
+  text-decoration: underline;
+}
+
+.websearch-url {
+  font-size: 0.75rem;
+  color: #555;
+  word-break: break-all;
+}
+
+.websearch-error {
+  color: #f88;
+  padding: 0.5rem;
+  background: #2a1a1a;
+  border-radius: 4px;
+}
+
+.websearch-empty {
+  color: #666;
+  font-style: italic;
+  font-size: 0.875rem;
+}
+
+/* ==========================================================================
+   WebFetch Tool
+   ========================================================================== */
+
+.webfetch-tool-use {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.webfetch-url {
+  color: #88f;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.webfetch-url:hover {
+  text-decoration: underline;
+}
+
+.webfetch-prompt {
+  color: #888;
+  font-size: 0.875rem;
+}
+
+.webfetch-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.webfetch-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.webfetch-meta {
+  color: #666;
+  font-size: 0.75rem;
+}
+
+.webfetch-content {
+  margin: 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.webfetch-error {
+  color: #f88;
+  padding: 0.5rem;
+  background: #2a1a1a;
+  border-radius: 4px;
+}
+
+.webfetch-empty {
+  color: #666;
+  font-style: italic;
+  font-size: 0.875rem;
+}
+
+/* ==========================================================================
+   AskUserQuestion Tool
+   ========================================================================== */
+
+.question-tool-use,
+.question-result {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.question-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.question-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.question-text {
+  color: #aaa;
+}
+
+.question-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.question-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #333;
+  background: #1e1e1e;
+}
+
+.question-option:hover {
+  background: #252525;
+}
+
+.question-option-selected {
+  border-color: #4a4;
+  background: rgba(68, 170, 68, 0.1);
+}
+
+.question-option-indicator {
+  color: #666;
+  font-family: monospace;
+  flex-shrink: 0;
+}
+
+.question-option-selected .question-option-indicator {
+  color: #4a4;
+}
+
+.question-option-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.question-option-label {
+  font-weight: 500;
+  color: #aaa;
+}
+
+.question-option-desc {
+  font-size: 0.8125rem;
+  color: #666;
+}
+
+.question-error {
+  color: #f88;
+  padding: 0.5rem;
+  background: #2a1a1a;
+  border-radius: 4px;
+}
+
+.question-empty {
+  color: #666;
+  font-style: italic;
+  font-size: 0.875rem;
+}
+
+/* ==========================================================================
+   ExitPlanMode Tool
+   ========================================================================== */
+
+.exitplan-tool-use {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.exitplan-label {
+  color: #aaa;
+}
+
+.exitplan-has-plan {
+  color: #666;
+  font-size: 0.8125rem;
+}
+
+.exitplan-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.exitplan-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.exitplan-filepath {
+  font-family: "SF Mono", Monaco, monospace;
+  font-size: 0.875rem;
+  color: #88f;
+}
+
+.exitplan-fullpath {
+  font-size: 0.75rem;
+  color: #555;
+  word-break: break-all;
+}
+
+.exitplan-content {
+  margin: 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.exitplan-error {
+  color: #f88;
+  padding: 0.5rem;
+  background: #2a1a1a;
+  border-radius: 4px;
+}
+
+.exitplan-empty {
+  color: #666;
+  font-style: italic;
+  font-size: 0.875rem;
+}
+
+/* ==========================================================================
+   BashOutput Tool
+   ========================================================================== */
+
+.bashoutput-tool-use {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bashoutput-label {
+  color: #aaa;
+}
+
+.bashoutput-id {
+  font-family: "SF Mono", Monaco, monospace;
+  font-size: 0.8125rem;
+  color: #888;
+  background: #1e1e1e;
+  padding: 0.125rem 0.375rem;
+  border-radius: 3px;
+}
+
+.bashoutput-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bashoutput-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.bashoutput-status {
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.bashoutput-command {
+  font-family: "SF Mono", Monaco, monospace;
+  font-size: 0.8125rem;
+  color: #aaa;
+}
+
+.bashoutput-timestamp {
+  font-size: 0.75rem;
+  color: #555;
+}
+
+.bashoutput-error {
+  color: #f88;
+  padding: 0.5rem;
+  background: #2a1a1a;
+  border-radius: 4px;
+}
+
+.bashoutput-empty {
+  color: #666;
+  font-style: italic;
+  font-size: 0.875rem;
+}
+
+/* Status indicators */
+.status-running {
+  color: #88f;
+}
+
+.status-completed {
+  color: #4a4;
+}
+
+.status-failed {
+  color: #f88;
+}
+
+.status-timeout {
+  color: #ff4;
+}
+
+/* ==========================================================================
+   TaskOutput Tool
+   ========================================================================== */
+
+.taskoutput-tool-use {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.taskoutput-label {
+  color: #aaa;
+}
+
+.taskoutput-id {
+  font-family: "SF Mono", Monaco, monospace;
+  font-size: 0.8125rem;
+  color: #888;
+  background: #1e1e1e;
+  padding: 0.125rem 0.375rem;
+  border-radius: 3px;
+}
+
+.taskoutput-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.taskoutput-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.taskoutput-status {
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.taskoutput-desc {
+  color: #888;
+  font-size: 0.875rem;
+}
+
+.taskoutput-task {
+  border-left: 2px solid #444;
+  padding-left: 1rem;
+  margin-left: 0.25rem;
+}
+
+.taskoutput-task-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.taskoutput-content {
+  margin: 0;
+}
+
+.taskoutput-error {
+  color: #f88;
+  padding: 0.5rem;
+  background: #2a1a1a;
+  border-radius: 4px;
+}
+
+.taskoutput-empty {
+  color: #666;
+  font-style: italic;
+  font-size: 0.875rem;
+}
+
+/* ==========================================================================
+   KillShell Tool
+   ========================================================================== */
+
+.killshell-tool-use {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.killshell-label {
+  color: #aaa;
+}
+
+.killshell-id {
+  font-family: "SF Mono", Monaco, monospace;
+  font-size: 0.8125rem;
+  color: #888;
+  background: #1e1e1e;
+  padding: 0.125rem 0.375rem;
+  border-radius: 3px;
+}
+
+.killshell-result {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.killshell-message {
+  color: #aaa;
+}
+
+.killshell-error {
+  color: #f88;
+  padding: 0.5rem;
+  background: #2a1a1a;
+  border-radius: 4px;
+}
+
+.killshell-empty {
+  color: #666;
+  font-style: italic;
+  font-size: 0.875rem;
+}
+
+/* ==========================================================================
+   Badge Success (for status badges)
+   ========================================================================== */
+
+.badge-success {
+  background: #1a3a1a;
+  color: #8f8;
+}
+
+/* ==========================================================================
    Mobile Adjustments
    ========================================================================== */
 

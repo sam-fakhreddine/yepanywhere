@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { RenderContext } from "../types";
+import type { ContentBlock, RenderContext } from "../types";
 
 /**
  * Bash tool types
@@ -150,6 +150,142 @@ export interface GrepResult {
   content?: string;
   numLines?: number;
   appliedLimit?: number;
+}
+
+/**
+ * Task tool types
+ */
+export interface TaskInput {
+  description: string;
+  prompt: string;
+  subagent_type: string;
+  model?: string;
+}
+
+export interface TaskResult {
+  status: "completed" | "failed" | "timeout";
+  prompt: string;
+  agentId: string;
+  content: ContentBlock[];
+  totalDurationMs: number;
+  totalTokens: number;
+  totalToolUseCount: number;
+}
+
+/**
+ * WebSearch tool types
+ */
+export interface WebSearchInput {
+  query: string;
+}
+
+export interface WebSearchResult {
+  query: string;
+  results: Array<{ content: Array<{ title: string; url: string }> }>;
+  durationSeconds: number;
+}
+
+/**
+ * WebFetch tool types
+ */
+export interface WebFetchInput {
+  url: string;
+  prompt: string;
+}
+
+export interface WebFetchResult {
+  bytes: number;
+  code: number;
+  codeText: string;
+  result: string;
+  durationMs: number;
+  url: string;
+}
+
+/**
+ * AskUserQuestion tool types
+ */
+export interface AskUserQuestionInput {
+  questions: Question[];
+}
+
+export interface Question {
+  question: string;
+  header: string;
+  options: Array<{ label: string; description: string }>;
+  multiSelect: boolean;
+}
+
+export interface AskUserQuestionResult {
+  questions: Question[];
+  answers: Record<string, string>;
+}
+
+/**
+ * ExitPlanMode tool types
+ */
+export interface ExitPlanModeInput {
+  plan?: string;
+}
+
+export interface ExitPlanModeResult {
+  plan: string;
+  isAgent: boolean;
+  filePath: string;
+}
+
+/**
+ * BashOutput tool types
+ */
+export interface BashOutputInput {
+  bash_id: string;
+  block?: boolean;
+  wait_up_to?: number;
+}
+
+export interface BashOutputResult {
+  shellId: string;
+  command: string;
+  status: "running" | "completed" | "failed";
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  stdoutLines: number;
+  stderrLines: number;
+  timestamp: string;
+}
+
+/**
+ * TaskOutput tool types
+ */
+export interface TaskOutputInput {
+  task_id: string;
+  block?: boolean;
+  timeout?: number;
+}
+
+export interface TaskOutputResult {
+  retrieval_status: "completed" | "timeout" | "running";
+  task: {
+    task_id: string;
+    task_type: "local_bash" | "agent";
+    status: "running" | "completed" | "failed";
+    description: string;
+    output: string;
+    exitCode: number | null;
+  };
+}
+
+/**
+ * KillShell tool types
+ */
+export interface KillShellInput {
+  shell_id: string;
+}
+
+export interface KillShellResult {
+  message: string;
+  shell_id: string;
 }
 
 /**

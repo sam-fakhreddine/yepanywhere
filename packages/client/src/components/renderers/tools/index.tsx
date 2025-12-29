@@ -64,14 +64,23 @@ const fallbackToolRenderer: ToolRenderer = {
 export const toolRegistry = new ToolRendererRegistry(fallbackToolRenderer);
 
 // Import and register tool renderers
+import { askUserQuestionRenderer } from "./AskUserQuestionRenderer";
+import { bashOutputRenderer } from "./BashOutputRenderer";
 import { bashRenderer } from "./BashRenderer";
 import { editRenderer } from "./EditRenderer";
+import { exitPlanModeRenderer } from "./ExitPlanModeRenderer";
 import { globRenderer } from "./GlobRenderer";
 import { grepRenderer } from "./GrepRenderer";
+import { killShellRenderer } from "./KillShellRenderer";
 import { readRenderer } from "./ReadRenderer";
+import { taskOutputRenderer } from "./TaskOutputRenderer";
+import { taskRenderer } from "./TaskRenderer";
 import { todoWriteRenderer } from "./TodoWriteRenderer";
+import { webFetchRenderer } from "./WebFetchRenderer";
+import { webSearchRenderer } from "./WebSearchRenderer";
 import { writeRenderer } from "./WriteRenderer";
 
+// Tier 1 & 2: Core tools
 toolRegistry.register(bashRenderer);
 toolRegistry.register(readRenderer);
 toolRegistry.register(editRenderer);
@@ -79,3 +88,15 @@ toolRegistry.register(writeRenderer);
 toolRegistry.register(globRenderer);
 toolRegistry.register(grepRenderer);
 toolRegistry.register(todoWriteRenderer);
+
+// Tier 3: Less common tools
+toolRegistry.register(taskRenderer);
+toolRegistry.register(webSearchRenderer);
+toolRegistry.register(webFetchRenderer);
+toolRegistry.register(askUserQuestionRenderer);
+toolRegistry.register(exitPlanModeRenderer);
+
+// Tier 4: Background/async tools
+toolRegistry.register(bashOutputRenderer);
+toolRegistry.register(taskOutputRenderer);
+toolRegistry.register(killShellRenderer);
