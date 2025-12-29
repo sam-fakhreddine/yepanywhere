@@ -10,7 +10,9 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
   const [connected, setConnected] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
   const lastEventIdRef = useRef<string | null>(null);
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const optionsRef = useRef(options);
   optionsRef.current = options;
 

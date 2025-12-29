@@ -1,8 +1,10 @@
+import * as path from "node:path";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { detectClaudeCli } from "./sdk/cli-detection.js";
 import { RealClaudeSDK } from "./sdk/real.js";
+import { EventBus, FileWatcher } from "./watcher/index.js";
 
 const config = loadConfig();
 
@@ -23,12 +25,25 @@ console.log(`Claude CLI found: ${cliInfo.path} (${cliInfo.version})`);
 // Create the real SDK
 const realSdk = new RealClaudeSDK();
 
+// Create EventBus and FileWatcher for ~/.claude
+const eventBus = new EventBus();
+const claudeDir = path.dirname(config.claudeProjectsDir); // ~/.claude
+const fileWatcher = new FileWatcher({
+  watchDir: claudeDir,
+  eventBus,
+  debounceMs: 200,
+});
+
+// Start file watcher
+fileWatcher.start();
+
 // Create the app with real SDK
 const app = createApp({
   realSdk,
   projectsDir: config.claudeProjectsDir,
   idleTimeoutMs: config.idleTimeoutMs,
   defaultPermissionMode: config.defaultPermissionMode,
+  eventBus,
 });
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {

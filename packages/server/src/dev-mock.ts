@@ -1,7 +1,10 @@
+import * as os from "node:os";
+import * as path from "node:path";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { MockClaudeSDK, createMockScenario } from "./sdk/mock.js";
 import { setupMockProjects } from "./testing/mockProjectData.js";
+import { EventBus, FileWatcher } from "./watcher/index.js";
 
 // Ensure mock data exists
 setupMockProjects();
@@ -80,10 +83,21 @@ const mockSdk = new MockClaudeSDK([
   },
 ]);
 
+// Create EventBus and FileWatcher for ~/.claude
+const eventBus = new EventBus();
+const claudeDir = path.join(os.homedir(), ".claude");
+const fileWatcher = new FileWatcher({
+  watchDir: claudeDir,
+  eventBus,
+  debounceMs: 200,
+});
+fileWatcher.start();
+
 // Create app with mock SDK
 const app = createApp({
   sdk: mockSdk,
   idleTimeoutMs: 60000, // 1 minute for testing
+  eventBus,
 });
 
 serve({ fetch: app.fetch, port: 3400 }, () => {

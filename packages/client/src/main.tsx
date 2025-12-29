@@ -1,6 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { ActivityDrawer } from "./components/ActivityDrawer";
+import { ActivityPage } from "./pages/ActivityPage";
 import { ChatPage } from "./pages/ChatPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { SessionsPage } from "./pages/SessionsPage";
@@ -22,7 +24,9 @@ createRoot(rootElement).render(
           path="/projects/:projectId/sessions/:sessionId"
           element={<ChatPage />}
         />
+        <Route path="/activity" element={<ActivityPage />} />
       </Routes>
+      <ActivityDrawer />
     </BrowserRouter>
   </StrictMode>,
 );

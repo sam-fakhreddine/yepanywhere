@@ -1,12 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { Project, SessionSummary } from "../types";
+import { type FileChangeEvent, useFileActivity } from "./useFileActivity";
+
+const REFETCH_DEBOUNCE_MS = 500;
 
 export function useSessions(projectId: string | undefined) {
   const [project, setProject] = useState<Project | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetch = useCallback(async () => {
     if (!projectId) return;
@@ -23,9 +27,51 @@ export function useSessions(projectId: string | undefined) {
     }
   }, [projectId]);
 
+  // Debounced refetch for file change events
+  const debouncedRefetch = useCallback(() => {
+    if (refetchTimerRef.current) {
+      clearTimeout(refetchTimerRef.current);
+    }
+    refetchTimerRef.current = setTimeout(() => {
+      fetch();
+    }, REFETCH_DEBOUNCE_MS);
+  }, [fetch]);
+
+  // Handle file change events
+  const handleFileChange = useCallback(
+    (event: FileChangeEvent) => {
+      // Only care about session files
+      if (event.fileType !== "session" && event.fileType !== "agent-session") {
+        return;
+      }
+
+      // Check if this file belongs to the current project
+      // Path format: projects/<encoded-project-id>/<session-id>.jsonl
+      if (projectId && event.relativePath.includes(`projects/${projectId}/`)) {
+        debouncedRefetch();
+      }
+    },
+    [projectId, debouncedRefetch],
+  );
+
+  // Subscribe to file activity
+  useFileActivity({
+    onFileChange: handleFileChange,
+  });
+
+  // Initial fetch
   useEffect(() => {
     fetch();
   }, [fetch]);
+
+  // Cleanup debounce timer
+  useEffect(() => {
+    return () => {
+      if (refetchTimerRef.current) {
+        clearTimeout(refetchTimerRef.current);
+      }
+    };
+  }, []);
 
   return { project, sessions, loading, error, refetch: fetch };
 }

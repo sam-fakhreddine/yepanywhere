@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { ProjectScanner } from "./projects/scanner.js";
+import { createActivityRoutes } from "./routes/activity.js";
 import { health } from "./routes/health.js";
 import { createProcessesRoutes } from "./routes/processes.js";
 import { createProjectsRoutes } from "./routes/projects.js";
@@ -13,6 +14,7 @@ import type {
 } from "./sdk/types.js";
 import { SessionReader } from "./sessions/reader.js";
 import { Supervisor } from "./supervisor/Supervisor.js";
+import type { EventBus } from "./watcher/index.js";
 
 export interface AppOptions {
   /** Legacy SDK interface for mock SDK (for testing) */
@@ -22,6 +24,8 @@ export interface AppOptions {
   projectsDir?: string; // override for testing
   idleTimeoutMs?: number;
   defaultPermissionMode?: PermissionMode;
+  /** EventBus for file change events */
+  eventBus?: EventBus;
 }
 
 export function createApp(options: AppOptions): Hono {
@@ -52,6 +56,14 @@ export function createApp(options: AppOptions): Hono {
   );
   app.route("/api/processes", createProcessesRoutes({ supervisor }));
   app.route("/api", createStreamRoutes({ supervisor }));
+
+  // Activity routes (file watching)
+  if (options.eventBus) {
+    app.route(
+      "/api/activity",
+      createActivityRoutes({ eventBus: options.eventBus }),
+    );
+  }
 
   return app;
 }
