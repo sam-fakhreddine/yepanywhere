@@ -16,6 +16,7 @@ export async function fetchJSON<T>(
     ...options,
     headers: {
       "Content-Type": "application/json",
+      "X-Claude-Anywhere": "true",
       ...options?.headers,
     },
   });

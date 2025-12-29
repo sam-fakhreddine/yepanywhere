@@ -6,64 +6,40 @@ claude-anywhere runs as a service on a trusted machine (e.g., Mac Mini) and acce
 
 Our approach layers three defenses:
 
-1. **Network isolation** — Bind to Tailscale IP only
+1. **Network isolation** — Expose via Tailscale serve
 2. **CORS + custom header** — Block cross-origin requests from malicious sites
 3. **Bearer token** — Explicit authentication for all requests
 
-## 1. Tailscale-Only Binding
+## 1. Network Isolation via Tailscale Serve
 
-The server should only listen on the Tailscale interface (100.x.x.x), not on 0.0.0.0 or the LAN IP.
+The server listens only on localhost. We use `tailscale serve` to expose it on the Tailscale network, providing network-level isolation without binding to specific interfaces.
 
 ### Implementation
 
-```typescript
-// src/server/tailscale.ts
-
-import { networkInterfaces } from 'os'
-
-export function getTailscaleIP(): string | undefined {
-  const interfaces = networkInterfaces()
-  for (const [name, addrs] of Object.entries(interfaces)) {
-    for (const addr of addrs ?? []) {
-      if (addr.family === 'IPv4' && addr.address.startsWith('100.')) {
-        return addr.address
-      }
-    }
-  }
-  return undefined
-}
-```
-
-```typescript
-// src/server/index.ts
-
-const tailscaleIP = getTailscaleIP()
-
-if (!tailscaleIP) {
-  console.error('Tailscale IP not found. Is Tailscale running?')
-  process.exit(1)
-}
-
-server.listen(PORT, tailscaleIP, () => {
-  console.log(`Listening on ${tailscaleIP}:${PORT}`)
-})
-```
-
-### Why This Matters
-
-- Only devices on your tailnet can route to 100.x.x.x addresses
-- Tailnet membership requires authentication via your identity provider
-- Connections are encrypted via WireGuard
-
-### Optional: HTTPS via Tailscale Certs
-
-For PWA features (push notifications, service workers), you may need a proper HTTPS origin:
+The server binds to localhost only (default behavior). Tailscale serve acts as a reverse proxy, exposing the local port on the Tailscale network with automatic HTTPS.
 
 ```bash
-tailscale cert $(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')
+# Start the dev server with Tailscale exposure
+pnpm dev-tailscale
 ```
 
-This gives you a valid Let's Encrypt cert for your MagicDNS hostname.
+This runs `tailscale serve --bg 5555` before starting the dev server. The app is then accessible at:
+- `http://localhost:5555` (local)
+- `https://your-machine.tailnet.ts.net` (Tailscale network)
+
+To stop Tailscale serve:
+```bash
+tailscale serve off
+```
+
+### Why This Works
+
+- Server stays on localhost—no direct network exposure
+- Tailscale serve proxies requests from the tailnet to localhost
+- Only devices on your tailnet can reach the Tailscale hostname
+- Tailnet membership requires authentication via your identity provider
+- Connections are encrypted via WireGuard
+- Automatic HTTPS with valid Let's Encrypt certificates
 
 ## 2. CORS + Custom Header
 
@@ -84,28 +60,36 @@ The browser can reach that IP. Without protection, the request fires.
 ### Implementation
 
 ```typescript
-// src/server/middleware/security.ts
+// packages/server/src/middleware/security.ts
 
-import { cors } from 'hono/cors'
-import type { MiddlewareHandler } from 'hono'
+import { cors } from "hono/cors";
+import type { MiddlewareHandler } from "hono";
 
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN // e.g., 'https://mac-mini.tail1234.ts.net:3000'
+// Allow localhost (dev) and any *.ts.net (Tailscale)
+const isAllowedOrigin = (origin: string): boolean => {
+  if (!origin) return false;
+  if (origin.startsWith("http://localhost:")) return true;
+  if (origin.endsWith(".ts.net")) return true;
+  return false;
+};
 
-// Strict CORS
 export const corsMiddleware = cors({
-  origin: ALLOWED_ORIGIN,
+  origin: (origin) => (isAllowedOrigin(origin) ? origin : null),
   credentials: true,
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowHeaders: ['Content-Type', 'Authorization', 'X-Claude-Anywhere'],
-})
+  allowMethods: ["GET", "POST", "PUT", "DELETE"],
+  allowHeaders: ["Content-Type", "Authorization", "X-Claude-Anywhere"],
+});
 
-// Require custom header on all API routes
+// Only require header on mutating requests (SSE uses native EventSource which can't send headers)
 export const requireCustomHeader: MiddlewareHandler = async (c, next) => {
-  if (c.req.header('X-Claude-Anywhere') !== 'true') {
-    return c.json({ error: 'Missing required header' }, 403)
+  const method = c.req.method;
+  if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
+    if (c.req.header("X-Claude-Anywhere") !== "true") {
+      return c.json({ error: "Missing required header" }, 403);
+    }
   }
-  await next()
-}
+  await next();
+};
 ```
 
 ### Why Custom Header Works
@@ -216,13 +200,13 @@ fetchEventSource(`/sse/session/${id}`, {
 
 ## Checklist
 
-- [ ] Server binds to Tailscale IP only (fail fast if not found)
-- [ ] CORS configured with explicit allowed origin
-- [ ] `X-Claude-Anywhere` header required on all API routes
+- [x] Server exposed via `tailscale serve` (localhost only binding)
+- [x] CORS configured to allow localhost and *.ts.net origins
+- [x] `X-Claude-Anywhere` header required on mutating API routes (POST/PUT/DELETE)
 - [ ] Bearer token required on all API routes
 - [ ] SSE endpoint authenticates via query param or header
 - [ ] Token stored in `.env`, not committed
-- [ ] Client includes all required headers
+- [x] Client includes required headers
 - [ ] Native app stores token after pairing
 
 ## Future Considerations

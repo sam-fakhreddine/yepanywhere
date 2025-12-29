@@ -4,6 +4,8 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [react()],
   server: {
+    port: 5555, // also referenced in root package.json dev-tailscale script
+    allowedHosts: true,
     proxy: {
       "/api": {
         target: "http://localhost:3400",

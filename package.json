@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter server dev & pnpm --filter client dev",
+    "dev-tailscale": "tailscale serve --bg 5555 && pnpm dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r exec tsc --noEmit",
     "test": "pnpm -r test",

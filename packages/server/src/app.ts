@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { cors } from "hono/cors";
+import { corsMiddleware, requireCustomHeader } from "./middleware/security.js";
 import { ProjectScanner } from "./projects/scanner.js";
 import { createActivityRoutes } from "./routes/activity.js";
 import { health } from "./routes/health.js";
@@ -32,8 +32,9 @@ export interface AppOptions {
 export function createApp(options: AppOptions): Hono {
   const app = new Hono();
 
-  // CORS for client access
-  app.use("/api/*", cors());
+  // Security middleware: CORS + custom header requirement
+  app.use("/api/*", corsMiddleware);
+  app.use("/api/*", requireCustomHeader);
 
   // Create dependencies
   const scanner = new ProjectScanner({ projectsDir: options.projectsDir });
