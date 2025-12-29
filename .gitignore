@@ -37,3 +37,4 @@ test-results/
 # Temp files
 .tmp/
 .temp/
+docs/tasks/schema-report.json

@@ -12,15 +12,30 @@ export interface SessionReaderOptions {
   sessionDir: string;
 }
 
+// JSONL content block format from claude-code
+interface RawContentBlock {
+  type: string;
+  text?: string;
+  thinking?: string;
+  signature?: string;
+  id?: string;
+  name?: string;
+  input?: unknown;
+  tool_use_id?: string;
+  content?: string;
+  is_error?: boolean;
+}
+
 // JSONL message format from claude-code
 interface RawSessionMessage {
   type: string;
   message?: {
-    content: string | Array<{ type: string; text?: string }>;
+    content: string | RawContentBlock[];
     role?: string;
   };
   timestamp?: string;
   uuid?: string;
+  toolUseResult?: unknown;
 }
 
 export class SessionReader {
@@ -205,19 +220,40 @@ export class SessionReader {
     if (typeof raw.message?.content === "string") {
       content = raw.message.content;
     } else if (Array.isArray(raw.message?.content)) {
+      // Preserve all fields from content blocks
       content = raw.message.content.map((block) => ({
         type: block.type as ContentBlock["type"],
+        // text block
         text: block.text,
+        // thinking block
+        thinking: block.thinking,
+        signature: block.signature,
+        // tool_use block
+        id: block.id,
+        name: block.name,
+        input: block.input,
+        // tool_result block
+        tool_use_id: block.tool_use_id,
+        content: block.content,
+        is_error: block.is_error,
       }));
     } else {
       content = "";
     }
 
-    return {
+    const message: Message = {
       id: raw.uuid ?? `msg-${index}`,
       role,
       content,
       timestamp: raw.timestamp ?? new Date().toISOString(),
     };
+
+    // Include toolUseResult if present
+    if (raw.toolUseResult !== undefined) {
+      (message as Message & { toolUseResult?: unknown }).toolUseResult =
+        raw.toolUseResult;
+    }
+
+    return message;
   }
 }

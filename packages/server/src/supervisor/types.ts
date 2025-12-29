@@ -36,11 +36,20 @@ export interface SessionSummary {
 
 // Content block in messages
 export interface ContentBlock {
-  type: "text" | "tool_use" | "tool_result";
+  type: "text" | "thinking" | "tool_use" | "tool_result";
+  // text block
   text?: string;
+  // thinking block
+  thinking?: string;
+  signature?: string; // Never rendered (but preserved for completeness)
+  // tool_use block
   id?: string;
   name?: string;
   input?: unknown;
+  // tool_result block
+  tool_use_id?: string;
+  content?: string;
+  is_error?: boolean;
 }
 
 // Message representation
@@ -54,6 +63,8 @@ export interface Message {
     name: string;
     input: unknown;
   };
+  /** Structured tool result data (from JSONL toolUseResult field) */
+  toolUseResult?: unknown;
 }
 
 // Full session with messages

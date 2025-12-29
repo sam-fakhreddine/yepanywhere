@@ -24,11 +24,18 @@ export type SessionStatus =
   | { state: "external" };
 
 export interface ContentBlock {
-  type: "text" | "tool_use" | "tool_result" | "image";
+  type: "text" | "thinking" | "tool_use" | "tool_result" | "image";
   text?: string;
+  // thinking block
+  thinking?: string;
+  // tool_use block
   id?: string;
   name?: string;
   input?: unknown;
+  // tool_result block
+  tool_use_id?: string;
+  content?: string;
+  is_error?: boolean;
 }
 
 export interface Message {
@@ -41,6 +48,8 @@ export interface Message {
     name: string;
     input: unknown;
   };
+  /** Structured tool result data (from JSONL toolUseResult field) */
+  toolUseResult?: unknown;
 }
 
 export interface Session extends SessionSummary {

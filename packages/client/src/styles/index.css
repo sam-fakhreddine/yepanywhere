@@ -1,3 +1,5 @@
+@import "./renderers.css";
+
 * {
   box-sizing: border-box;
 }
