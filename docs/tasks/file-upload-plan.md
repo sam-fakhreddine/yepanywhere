@@ -12,7 +12,8 @@ Add file upload capability to the message input panel. Users can attach files wh
 ## Architecture
 
 ### File Storage
-- **Location**: `~/.claude/projects/<encoded-path>/<session-id>/uploads/`
+- **Location**: `~/.claude-anywhere/uploads/<encoded-path>/<session-id>/`
+- Separate from `~/.claude` metadata directory
 - Files stored per-session for isolation and easy cleanup
 - Agent accesses via absolute filesystem paths
 - UUID prefix on filenames prevents collisions
@@ -198,10 +199,11 @@ const app = new Hono();
 const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app });
 
 // WebSocket upload endpoint
-// GET /api/sessions/:sessionId/upload/ws (upgrades to WebSocket)
+// GET /api/projects/:projectId/sessions/:sessionId/upload/ws (upgrades to WebSocket)
 app.get(
-  "/sessions/:sessionId/upload/ws",
+  "/projects/:projectId/sessions/:sessionId/upload/ws",
   upgradeWebSocket((c) => {
+    const projectId = c.req.param("projectId");
     const sessionId = c.req.param("sessionId");
 
     let uploadDir: string;
@@ -214,9 +216,8 @@ app.get(
 
     return {
       async onOpen(evt, ws) {
-        // Look up session to get sessionDir
-        // For now, may need to scan or get from supervisor
-        // TODO: implement session lookup
+        // Validate projectId and get upload directory
+        // Upload dir: ~/.claude-anywhere/uploads/<projectId>/<sessionId>/
       },
 
       async onMessage(evt, ws) {
@@ -287,8 +288,8 @@ app.get(
 );
 
 // REST endpoints for listing/deleting (optional, can add later)
-// GET /api/sessions/:sessionId/uploads
-// DELETE /api/sessions/:sessionId/uploads/:fileId
+// GET /api/projects/:projectId/sessions/:sessionId/uploads
+// DELETE /api/projects/:projectId/sessions/:sessionId/uploads/:fileId
 
 export default app;
 ```
@@ -306,13 +307,7 @@ app.route("/api", uploadRoutes);
 
 ### 1.5 Session Directory Lookup
 
-Need a way to find the session's directory given just `sessionId`. Options:
-
-1. **Add to Supervisor** - Track sessionDir when process starts
-2. **Scan projects** - Search `~/.claude/projects/**/sessionId.jsonl`
-3. **Pass in URL** - Include projectId in upload URL
-
-Recommend option 1: Add `sessionDir` to Process/Supervisor state. The session route handlers already have access to this info.
+**Implemented:** Include `projectId` in the upload URL (`/api/projects/:projectId/sessions/:sessionId/upload/ws`). The client already has `projectId` available, and the server uses it to construct the upload directory path: `~/.claude-anywhere/uploads/<projectId>/<sessionId>/`.
 
 ### 1.6 Unit Tests
 
@@ -474,11 +469,12 @@ export async function* fileToChunks(file: File): AsyncGenerator<Uint8Array> {
  * High-level upload function for browser use.
  */
 export async function uploadFile(
+  projectId: string,
   sessionId: string,
   file: File,
   options?: UploadOptions
 ): Promise<UploadedFile> {
-  const wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/sessions/${sessionId}/upload/ws`;
+  const wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/projects/${projectId}/sessions/${sessionId}/upload/ws`;
   const ws = new WebSocket(wsUrl);
 
   await new Promise<void>((resolve, reject) => {
