@@ -12,7 +12,7 @@ export function StatusIndicator({
   connected,
   processState = "idle",
 }: Props) {
-  // Hide when session is truly idle (no subprocess)
+  // Hide when session is idle (no active subprocess from UX perspective)
   if (status.state === "idle") {
     return null;
   }

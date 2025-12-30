@@ -201,7 +201,12 @@ export function useSession(projectId: string, sessionId: string) {
           const role =
             (sdkMessage.message.role as Message["role"]) || "assistant";
           const id = sdkMessage.uuid ?? `msg-${Date.now()}`;
-          const content = sdkMessage.message.content;
+          const rawContent = sdkMessage.message.content;
+          // Convert assistant string content to ContentBlock[] format for preprocessMessages
+          const content =
+            role === "assistant" && typeof rawContent === "string"
+              ? [{ type: "text" as const, text: rawContent }]
+              : rawContent;
 
           setMessages((prev) => {
             // For user messages, check if we have a temp message with same content
@@ -249,6 +254,9 @@ export function useSession(projectId: string, sessionId: string) {
         ) {
           setProcessState(statusData.state as ProcessState);
         }
+        // When subprocess goes idle, treat the session as idle from a UX perspective
+        // (hides status indicator, changes placeholder to "Send a message to resume...")
+        // even though the subprocess may still be alive in the warm pool
         if (statusData.state === "idle") {
           setStatus({ state: "idle" });
         }
