@@ -140,6 +140,17 @@ export class Process {
    * For mock SDK, uses legacy queue behavior.
    */
   queueMessage(message: UserMessage): number {
+    // Emit user message to SSE subscribers so other clients see it immediately
+    const uuid = randomUUID();
+    this.emit({
+      type: "message",
+      message: {
+        type: "user",
+        uuid,
+        message: { role: "user", content: message.text },
+      },
+    });
+
     if (this.messageQueue) {
       return this.messageQueue.push(message);
     }

@@ -38,42 +38,47 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
       return c.json({ error: "Project not found" }, 404);
     }
 
-    // Check if session is actively owned by a process (for mock/testing scenarios
-    // where session files may not exist on disk yet)
+    // Check if session is actively owned by a process
     const process = deps.supervisor.getProcessForSession(sessionId);
-    if (process) {
-      // Return minimal session data for active processes
-      return c.json({
-        session: {
-          id: sessionId,
-          projectId,
-          title: null,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          messageCount: 0,
-          status: { state: "owned", processId: process.id },
-          messages: [],
-        },
-        messages: [],
-        status: { state: "owned", processId: process.id },
-      });
-    }
 
     // Check if session is being controlled by an external program
     const isExternal = deps.externalTracker?.isExternal(sessionId) ?? false;
 
+    // Always try to read from disk first (even for owned sessions)
     const reader = deps.readerFactory(project.sessionDir);
     const session = await reader.getSession(
       sessionId,
       projectId,
       afterMessageId,
     );
+
+    // Determine the session status
+    const status = process
+      ? { state: "owned" as const, processId: process.id }
+      : isExternal
+        ? { state: "external" as const }
+        : (session?.status ?? { state: "idle" as const });
+
     if (!session) {
+      // Session file doesn't exist yet - only valid if we own the process
+      if (process) {
+        return c.json({
+          session: {
+            id: sessionId,
+            projectId,
+            title: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            messageCount: 0,
+            status,
+            messages: [],
+          },
+          messages: [],
+          status,
+        });
+      }
       return c.json({ error: "Session not found" }, 404);
     }
-
-    // Override status if external activity detected
-    const status = isExternal ? { state: "external" as const } : session.status;
 
     return c.json({
       session: { ...session, status },

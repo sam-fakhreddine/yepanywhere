@@ -17,7 +17,7 @@ export function MessageInput({ onSend, disabled, placeholder }: Props) {
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Enter" && e.shiftKey) {
+    if (e.key === "Enter" && (e.shiftKey || e.ctrlKey)) {
       e.preventDefault();
       handleSubmit();
     }
