@@ -39,9 +39,24 @@ export function createStreamRoutes(deps: StreamDeps): Hono {
         }),
       });
 
+      // Helper to check if a message belongs to this session
+      // Subagent messages have a different session_id and should be filtered out
+      // to match JSONL behavior (subagent messages are in separate files)
+      const isMessageForSession = (message: {
+        session_id?: string;
+      }): boolean => {
+        // Include if no session_id (system messages, old format)
+        if (!message.session_id) return true;
+        // Include if session_id matches
+        return message.session_id === sessionId;
+      };
+
       // Replay buffered messages (for mock SDK that doesn't persist to disk)
       // This ensures clients that connect after messages were emitted still receive them
       for (const message of process.getMessageHistory()) {
+        // Skip subagent messages to match JSONL behavior
+        if (!isMessageForSession(message)) continue;
+
         await stream.writeSSE({
           id: String(eventId++),
           event: "message",

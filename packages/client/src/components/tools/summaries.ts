@@ -24,14 +24,21 @@ export function getToolSummary(
   }
 
   // Show result summary when complete or error
-  if (renderer.getResultSummary) {
-    return renderer.getResultSummary(
-      result?.structured,
-      result?.isError ?? false,
-    );
+  // For some tools, combine input + result for a complete summary
+  const inputSummary = renderer.getUseSummary
+    ? renderer.getUseSummary(input)
+    : getDefaultInputSummary(toolName, input);
+
+  const resultSummary = renderer.getResultSummary
+    ? renderer.getResultSummary(result?.structured, result?.isError ?? false)
+    : getDefaultResultSummary(toolName, result, status);
+
+  // Combine input and result for tools where the input context is valuable
+  if (toolName === "Glob" || toolName === "Grep") {
+    return `${inputSummary} → ${resultSummary}`;
   }
 
-  return getDefaultResultSummary(toolName, result, status);
+  return resultSummary;
 }
 
 /**

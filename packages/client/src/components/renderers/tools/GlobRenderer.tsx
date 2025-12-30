@@ -100,12 +100,14 @@ export const globRenderer: ToolRenderer<GlobInput, GlobResult> = {
   },
 
   getUseSummary(input) {
-    return (input as GlobInput).pattern;
+    return `pattern: "${(input as GlobInput).pattern}"`;
   },
 
   getResultSummary(result, isError) {
     if (isError) return "Error";
     const r = result as GlobResult;
-    return r?.numFiles !== undefined ? `${r.numFiles} files` : "Files";
+    if (r?.numFiles === undefined) return "Searching...";
+    if (r.numFiles === 0) return "No files found";
+    return `Found ${r.numFiles} files`;
   },
 };
