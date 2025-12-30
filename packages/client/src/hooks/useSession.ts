@@ -185,6 +185,9 @@ export function useSession(projectId: string, sessionId: string) {
           // Track which temp IDs have been replaced
           const replacedTempIds = new Set<string>();
 
+          // Track ID replacements: old ID -> new ID (for position preservation)
+          const idReplacements = new Map<string, string>();
+
           // Merge each incoming JSONL message
           for (const incoming of data.messages) {
             // Check if this is a user message that should replace a temp or SDK message
@@ -200,8 +203,9 @@ export function useSession(projectId: string, sessionId: string) {
                     JSON.stringify(incomingContent),
               );
               if (duplicateMsg) {
-                // Mark duplicate ID as replaced (JSONL is authoritative)
+                // Mark duplicate ID as replaced and track the replacement
                 replacedTempIds.add(duplicateMsg.id);
+                idReplacements.set(duplicateMsg.id, incoming.id);
                 messageMap.delete(duplicateMsg.id);
               }
             }
@@ -213,19 +217,30 @@ export function useSession(projectId: string, sessionId: string) {
             );
           }
 
-          // Return as array, preserving order (existing + new)
+          // Return as array, preserving order
+          // When a message is replaced, insert the replacement at the same position
           const result: Message[] = [];
           const seen = new Set<string>();
 
-          // First add existing messages (in order), skipping replaced temp messages
+          // First add existing messages (in order), replacing as needed
           for (const msg of prev) {
-            if (!seen.has(msg.id) && !replacedTempIds.has(msg.id)) {
+            if (replacedTempIds.has(msg.id)) {
+              // This message was replaced - insert the replacement here
+              const replacementId = idReplacements.get(msg.id);
+              if (replacementId && !seen.has(replacementId)) {
+                const replacement = messageMap.get(replacementId);
+                if (replacement) {
+                  result.push(replacement);
+                  seen.add(replacementId);
+                }
+              }
+            } else if (!seen.has(msg.id)) {
               result.push(messageMap.get(msg.id) ?? msg);
               seen.add(msg.id);
             }
           }
 
-          // Then add any new messages
+          // Then add any truly new messages (not replacements)
           for (const incoming of data.messages) {
             if (!seen.has(incoming.id)) {
               result.push(messageMap.get(incoming.id) ?? incoming);
