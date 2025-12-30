@@ -30,7 +30,11 @@ export function getToolSummary(
     : getDefaultInputSummary(toolName, input);
 
   const resultSummary = renderer.getResultSummary
-    ? renderer.getResultSummary(result?.structured, result?.isError ?? false)
+    ? renderer.getResultSummary(
+        result?.structured,
+        result?.isError ?? false,
+        input,
+      )
     : getDefaultResultSummary(toolName, result, status);
 
   // Combine input and result for tools where the input context is valuable

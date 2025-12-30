@@ -129,6 +129,7 @@ export const ToolCallRow = memo(function ToolCallRow({
           ) : (
             <ToolResultExpanded
               toolName={toolName}
+              toolInput={toolInput}
               toolResult={toolResult}
               context={renderContext}
             />
@@ -157,10 +158,12 @@ function ToolUseExpanded({
 
 function ToolResultExpanded({
   toolName,
+  toolInput,
   toolResult,
   context,
 }: {
   toolName: string;
+  toolInput: unknown;
   toolResult: ToolResultData | undefined;
   context: RenderContext;
 }) {
@@ -178,6 +181,7 @@ function ToolResultExpanded({
         result,
         toolResult.isError,
         context,
+        toolInput,
       )}
     </div>
   );

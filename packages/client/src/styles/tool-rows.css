@@ -223,14 +223,6 @@
   color: var(--text-muted, #888);
 }
 
-.tool-row.status-error .tool-name {
-  color: var(--error-color, #f48771);
-}
-
-.tool-row.status-error .tool-summary {
-  color: var(--error-color, #f48771);
-}
-
 /* Aborted (interrupted) tool styles */
 .tool-row.status-aborted {
   opacity: 0.7;

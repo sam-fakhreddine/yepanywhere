@@ -19,7 +19,11 @@ export function useSessions(projectId: string | undefined) {
 
   const fetch = useCallback(async () => {
     if (!projectId) return;
-    setLoading(true);
+    // Only show loading state on initial load, not on refetches
+    setSessions((prev) => {
+      if (prev.length === 0) setLoading(true);
+      return prev;
+    });
     setError(null);
     try {
       const data = await api.getProject(projectId);
@@ -50,13 +54,24 @@ export function useSessions(projectId: string | undefined) {
         return;
       }
 
-      // Check if this file belongs to the current project
-      // Path format: projects/<encoded-project-id>/<session-id>.jsonl
-      if (projectId && event.relativePath.includes(`projects/${projectId}/`)) {
-        debouncedRefetch();
-      }
+      // Extract session ID from the file path (e.g., "projects/xxx/session-id.jsonl" -> "session-id")
+      const match = event.relativePath.match(/([^/\\]+)\.jsonl$/);
+      const sessionId = match?.[1];
+      if (!sessionId) return;
+
+      // Check if this session is in our current list
+      // This handles both internally managed sessions (by sessionId) and ensures
+      // we refetch when any session in this project changes
+      setSessions((prev) => {
+        const sessionExists = prev.some((s) => s.id === sessionId);
+        if (sessionExists) {
+          // Trigger refetch for updates to existing sessions
+          debouncedRefetch();
+        }
+        return prev;
+      });
     },
-    [projectId, debouncedRefetch],
+    [debouncedRefetch],
   );
 
   // Handle session status changes (real-time updates without refetch)

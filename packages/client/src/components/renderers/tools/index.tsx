@@ -34,8 +34,9 @@ class ToolRendererRegistry {
     result: unknown,
     isError: boolean,
     context: RenderContext,
+    input?: unknown,
   ): ReactNode {
-    return this.get(toolName).renderToolResult(result, isError, context);
+    return this.get(toolName).renderToolResult(result, isError, context, input);
   }
 
   hasInteractiveSummary(toolName: string): boolean {

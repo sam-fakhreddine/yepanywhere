@@ -13,6 +13,13 @@ function getFileName(filePath: string): string {
 }
 
 /**
+ * Check if this is a Claude plan file
+ */
+function isPlanFile(filePath: string): boolean {
+  return filePath.includes(".claude/plans/");
+}
+
+/**
  * Render a single diff hunk (without @@ header for cleaner display)
  */
 function DiffHunk({ hunk }: { hunk: PatchHunk }) {
@@ -43,10 +50,13 @@ function DiffHunk({ hunk }: { hunk: PatchHunk }) {
  */
 function EditToolUse({ input }: { input: EditInput }) {
   const fileName = getFileName(input.file_path);
+  const isPlan = isPlanFile(input.file_path);
   return (
     <div className="edit-tool-use">
       <span className="file-path">{fileName}</span>
-      <span className="edit-action">Editing file...</span>
+      <span className="edit-action">
+        {isPlan ? "Updating plan..." : "Editing file..."}
+      </span>
     </div>
   );
 }
@@ -69,9 +79,11 @@ function DiffModalContent({ result }: { result: EditResult }) {
  */
 function EditToolResult({
   result,
+  input,
   isError,
 }: {
   result: EditResult;
+  input?: EditInput;
   isError: boolean;
 }) {
   const [showModal, setShowModal] = useState(false);
@@ -125,13 +137,20 @@ function EditToolResult({
   }
 
   // Handle case where result doesn't have structuredPatch
+  // Use input data as fallback when result data is missing
   if (!result?.structuredPatch || result.structuredPatch.length === 0) {
+    const filePath = result?.filePath || input?.file_path;
+    const oldString = result?.oldString || input?.old_string || "";
+    const newString = result?.newString || input?.new_string || "";
+    const isPlan = filePath ? isPlanFile(filePath) : false;
+
     return (
       <div className="edit-result">
         <div className="edit-header">
           <span className="file-path">
-            {result?.filePath ? getFileName(result.filePath) : "File"}
+            {filePath ? getFileName(filePath) : "File"}
           </span>
+          {isPlan && <span className="badge badge-muted">Plan</span>}
           {result?.userModified && (
             <span className="badge badge-info">User modified</span>
           )}
@@ -140,13 +159,13 @@ function EditToolResult({
           <div className="edit-old">
             <div className="edit-label">Removed:</div>
             <pre className="code-block">
-              <code>{result?.oldString || "(empty)"}</code>
+              <code>{oldString || "(empty)"}</code>
             </pre>
           </div>
           <div className="edit-new">
             <div className="edit-label">Added:</div>
             <pre className="code-block">
-              <code>{result?.newString || "(empty)"}</code>
+              <code>{newString || "(empty)"}</code>
             </pre>
           </div>
         </div>
@@ -209,8 +228,14 @@ export const editRenderer: ToolRenderer<EditInput, EditResult> = {
     return <EditToolUse input={input as EditInput} />;
   },
 
-  renderToolResult(result, isError, _context) {
-    return <EditToolResult result={result as EditResult} isError={isError} />;
+  renderToolResult(result, isError, _context, input) {
+    return (
+      <EditToolResult
+        result={result as EditResult}
+        input={input as EditInput | undefined}
+        isError={isError}
+      />
+    );
   },
 
   getUseSummary(input) {

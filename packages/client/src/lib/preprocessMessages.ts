@@ -168,10 +168,14 @@ function attachToolResult(
   if (!item || item.type !== "tool_call") return;
 
   // Attach result to existing tool call
+  // Handle both camelCase (toolUseResult) and snake_case (tool_use_result) from SDK
+  const structured =
+    resultMessage.toolUseResult ??
+    (resultMessage as Record<string, unknown>).tool_use_result;
   const resultData: ToolResultData = {
     content: block.content || "",
     isError: block.is_error || false,
-    structured: resultMessage.toolUseResult,
+    structured,
   };
 
   // Create a new ToolCallItem to ensure React sees the change

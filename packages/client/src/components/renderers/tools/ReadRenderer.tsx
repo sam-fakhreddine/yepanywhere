@@ -181,7 +181,7 @@ function ReadInteractiveSummary({
   const fileName = getFileName(input.file_path);
 
   if (isError) {
-    return <span className="read-error-inline">Error reading {fileName}</span>;
+    return <span>{fileName}</span>;
   }
 
   if (!result?.file) {
@@ -235,7 +235,8 @@ export const readRenderer: ToolRenderer<ReadInput, ReadResult> = {
     return getFileName((input as ReadInput).file_path);
   },
 
-  getResultSummary(result, isError) {
+  getResultSummary(result, isError, input?) {
+    if (isError && input) return getFileName((input as ReadInput).file_path);
     if (isError) return "Error";
     const r = result as ReadResult;
     if (!r?.file) return "Reading...";
