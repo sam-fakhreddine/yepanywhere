@@ -36,11 +36,20 @@ export interface SessionCreatedEvent {
   timestamp: string;
 }
 
+/** Event emitted when source code changes and manual reload is needed */
+export interface SourceChangeEvent {
+  type: "source-change";
+  target: "backend" | "frontend";
+  files: string[];
+  timestamp: string;
+}
+
 /** Union of all event types that can be emitted through the bus */
 export type BusEvent =
   | FileChangeEvent
   | SessionStatusEvent
-  | SessionCreatedEvent;
+  | SessionCreatedEvent
+  | SourceChangeEvent;
 
 export type EventHandler<T = BusEvent> = (event: T) => void;
 

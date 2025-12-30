@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { corsMiddleware, requireCustomHeader } from "./middleware/security.js";
 import { ProjectScanner } from "./projects/scanner.js";
 import { createActivityRoutes } from "./routes/activity.js";
+import { createDevRoutes } from "./routes/dev.js";
 import { health } from "./routes/health.js";
 import { createProcessesRoutes } from "./routes/processes.js";
 import { createProjectsRoutes } from "./routes/projects.js";
@@ -95,6 +96,14 @@ export function createApp(options: AppOptions): Hono {
       "/api/activity",
       createActivityRoutes({ eventBus: options.eventBus }),
     );
+
+    // Dev routes (manual reload workflow) - mounted when manual reload is enabled
+    const isDevMode =
+      process.env.NO_BACKEND_RELOAD === "true" ||
+      process.env.NO_FRONTEND_RELOAD === "true";
+    if (isDevMode) {
+      app.route("/api/dev", createDevRoutes({ eventBus: options.eventBus }));
+    }
   }
 
   return app;

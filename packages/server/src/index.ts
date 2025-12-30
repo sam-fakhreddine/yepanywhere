@@ -4,7 +4,7 @@ import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { detectClaudeCli } from "./sdk/cli-detection.js";
 import { RealClaudeSDK } from "./sdk/real.js";
-import { EventBus, FileWatcher } from "./watcher/index.js";
+import { EventBus, FileWatcher, SourceWatcher } from "./watcher/index.js";
 
 const config = loadConfig();
 
@@ -36,6 +36,13 @@ const fileWatcher = new FileWatcher({
 
 // Start file watcher
 fileWatcher.start();
+
+// When running without tsx watch (NO_BACKEND_RELOAD=true), start source watcher
+// to notify the UI when server code changes and needs manual reload
+if (process.env.NO_BACKEND_RELOAD === "true") {
+  const sourceWatcher = new SourceWatcher({ eventBus });
+  sourceWatcher.start();
+}
 
 // Create the app with real SDK
 const app = createApp({

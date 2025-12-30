@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { App } from "./App";
 import { ActivityPage } from "./pages/ActivityPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { SessionPage } from "./pages/SessionPage";
@@ -15,16 +16,18 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Navigate to="/projects" replace />} />
-        <Route path="/projects" element={<ProjectsPage />} />
-        <Route path="/projects/:projectId" element={<SessionsPage />} />
-        <Route
-          path="/projects/:projectId/sessions/:sessionId"
-          element={<SessionPage />}
-        />
-        <Route path="/activity" element={<ActivityPage />} />
-      </Routes>
+      <App>
+        <Routes>
+          <Route path="/" element={<Navigate to="/projects" replace />} />
+          <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/projects/:projectId" element={<SessionsPage />} />
+          <Route
+            path="/projects/:projectId/sessions/:sessionId"
+            element={<SessionPage />}
+          />
+          <Route path="/activity" element={<ActivityPage />} />
+        </Routes>
+      </App>
     </BrowserRouter>
   </StrictMode>,
 );
