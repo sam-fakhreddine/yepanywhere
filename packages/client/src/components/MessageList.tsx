@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { preprocessMessages } from "../lib/preprocessMessages";
 import type { Message } from "../types";
 import type { RenderItem } from "../types/renderItems";
+import { ProcessingIndicator } from "./ProcessingIndicator";
 import { RenderItemComponent } from "./RenderItemComponent";
 
 /**
@@ -40,11 +41,13 @@ function groupItemsIntoTurns(
 interface Props {
   messages: Message[];
   isStreaming?: boolean;
+  isProcessing?: boolean;
 }
 
 export const MessageList = memo(function MessageList({
   messages,
   isStreaming = false,
+  isProcessing = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -124,6 +127,7 @@ export const MessageList = memo(function MessageList({
           </div>
         );
       })}
+      <ProcessingIndicator isProcessing={isProcessing} />
       <div ref={bottomRef} />
     </div>
   );

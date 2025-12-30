@@ -1,6 +1,10 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+// VITE_API_PORT: Backend API port (default: 3400)
+// E2E tests set this to avoid conflicts with the real dev server
+const apiPort = process.env.VITE_API_PORT || "3400";
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -11,7 +15,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       "/api": {
-        target: "http://localhost:3400",
+        target: `http://localhost:${apiPort}`,
         changeOrigin: true,
       },
     },

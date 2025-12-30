@@ -8,12 +8,15 @@ import {
 } from "./useFileActivity";
 import { useSSE } from "./useSSE";
 
+export type ProcessState = "idle" | "running" | "waiting-input";
+
 const THROTTLE_MS = 500;
 
 export function useSession(projectId: string, sessionId: string) {
   const [session, setSession] = useState<Session | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState<SessionStatus>({ state: "idle" });
+  const [processState, setProcessState] = useState<ProcessState>("idle");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -204,10 +207,19 @@ export function useSession(projectId: string, sessionId: string) {
         }
       } else if (data.eventType === "status") {
         const statusData = data as { eventType: string; state: string };
+        // Track process state (running, idle, waiting-input)
+        if (
+          statusData.state === "idle" ||
+          statusData.state === "running" ||
+          statusData.state === "waiting-input"
+        ) {
+          setProcessState(statusData.state as ProcessState);
+        }
         if (statusData.state === "idle") {
           setStatus({ state: "idle" });
         }
       } else if (data.eventType === "complete") {
+        setProcessState("idle");
         setStatus({ state: "idle" });
       }
     },
@@ -225,10 +237,12 @@ export function useSession(projectId: string, sessionId: string) {
     session,
     messages,
     status,
+    processState,
     loading,
     error,
     connected,
     setStatus,
+    setProcessState,
     addUserMessage,
   };
 }

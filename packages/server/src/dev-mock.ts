@@ -100,7 +100,8 @@ const app = createApp({
   eventBus,
 });
 
-serve({ fetch: app.fetch, port: 3400 }, () => {
-  console.log("Mock server running at http://localhost:3400");
+const port = Number.parseInt(process.env.E2E_SERVER_PORT || "3400");
+serve({ fetch: app.fetch, port }, () => {
+  console.log(`Mock server running at http://localhost:${port}`);
   console.log("Using MockClaudeSDK with canned responses");
 });

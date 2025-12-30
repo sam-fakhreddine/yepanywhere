@@ -407,7 +407,14 @@ h2 {
   background: #888;
 }
 .status-dot.status-owned {
-  background: #4f4;
+  background: var(--success-color);
+}
+.status-dot.status-owned.process-running {
+  background: var(--timeline-dot-working);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+.status-dot.status-owned.process-waiting-input {
+  background: var(--warning-color);
 }
 .status-dot.status-external {
   background: #ff4;
@@ -451,4 +458,52 @@ h2 {
 .status-badge.status-external {
   background: #3a3a1a;
   color: #ff4;
+}
+
+/* Processing Indicator - shown at bottom of message list */
+.processing-indicator {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  padding-left: 24px; /* Align with assistant turn padding */
+}
+
+.processing-dot-container {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  margin-left: -16px; /* Align with timeline dots */
+  margin-top: 4px;
+}
+
+.processing-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--timeline-dot-working);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.processing-text {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.processing-cursor {
+  animation: blink 0.7s step-start infinite;
+  margin-left: 1px;
+}
+
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
 }

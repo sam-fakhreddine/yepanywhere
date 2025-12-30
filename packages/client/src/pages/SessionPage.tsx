@@ -32,10 +32,12 @@ function SessionPageContent({
     session,
     messages,
     status,
+    processState,
     loading,
     error,
     connected,
     setStatus,
+    setProcessState,
     addUserMessage,
   } = useSession(projectId, sessionId);
   const [sending, setSending] = useState(false);
@@ -58,6 +60,7 @@ function SessionPageContent({
   const handleSend = async (text: string) => {
     setSending(true);
     addUserMessage(text); // Optimistic display with temp ID
+    setProcessState("running"); // Optimistic: show processing indicator immediately
     try {
       if (status.state === "idle") {
         // Resume the session with current permission mode
@@ -75,6 +78,7 @@ function SessionPageContent({
       }
     } catch (err) {
       console.error("Failed to send:", err);
+      setProcessState("idle"); // Reset on error
     } finally {
       setSending(false);
     }
@@ -104,7 +108,11 @@ function SessionPageContent({
             <span className="session-title">{session.title}</span>
           )}
         </div>
-        <StatusIndicator status={status} connected={connected} />
+        <StatusIndicator
+          status={status}
+          connected={connected}
+          processState={processState}
+        />
       </header>
 
       {status.state === "external" && (
@@ -114,7 +122,10 @@ function SessionPageContent({
       )}
 
       <main className="session-messages">
-        <MessageList messages={messages} />
+        <MessageList
+          messages={messages}
+          isProcessing={status.state === "owned" && processState === "running"}
+        />
       </main>
 
       <footer className="session-input">

@@ -36,7 +36,7 @@ test.describe("Session Flow", () => {
     ).not.toBeEmpty();
   });
 
-  test("shows status indicator", async ({ page }) => {
+  test("shows processing indicator during response", async ({ page }) => {
     await page.goto("/projects");
     await page.waitForSelector(".project-list a");
     await page.locator(".project-list a").first().click();
@@ -44,13 +44,18 @@ test.describe("Session Flow", () => {
     await page.fill(".new-session-form input", "Test");
     await page.click(".new-session-form button");
 
-    // Should show running status initially, then idle
-    await expect(page.locator(".status-indicator")).toBeVisible();
+    // Should show processing indicator while agent is working
+    await expect(page.locator(".processing-indicator")).toBeVisible({
+      timeout: 5000,
+    });
 
-    // Eventually should show idle
-    await expect(page.locator(".status-text")).toHaveText("Idle", {
+    // Wait for response to complete (status indicator hides when idle)
+    await expect(page.locator(".status-indicator")).not.toBeVisible({
       timeout: 10000,
     });
+
+    // Processing indicator should disappear when idle
+    await expect(page.locator(".processing-indicator")).not.toBeVisible();
   });
 
   test("can send follow-up message", async ({ page }) => {
@@ -62,11 +67,11 @@ test.describe("Session Flow", () => {
     await page.fill(".new-session-form input", "First message");
     await page.click(".new-session-form button");
 
-    // Wait for response and idle status
+    // Wait for response and idle status (status indicator hidden when idle)
     await expect(page.locator(".message-assistant")).toBeVisible({
       timeout: 10000,
     });
-    await expect(page.locator(".status-text")).toHaveText("Idle", {
+    await expect(page.locator(".status-indicator")).not.toBeVisible({
       timeout: 10000,
     });
 

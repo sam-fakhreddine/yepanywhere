@@ -7,7 +7,13 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "ignore": ["node_modules", "dist", "*.d.ts"]
+    "ignore": [
+      "node_modules",
+      "dist",
+      "*.d.ts",
+      "claude-vscode-extension",
+      "docs/tasks"
+    ]
   },
   "formatter": {
     "enabled": true,
