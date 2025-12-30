@@ -86,12 +86,23 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
     // Check if session is being controlled by an external program
     const isExternal = deps.externalTracker?.isExternal(sessionId) ?? false;
 
+    // Check if we've ever owned this session (for orphan detection)
+    // Only mark tools as "aborted" if we owned the session and know it terminated
+    const wasEverOwned = deps.supervisor.wasEverOwned(sessionId);
+
     // Always try to read from disk first (even for owned sessions)
     const reader = deps.readerFactory(project.sessionDir);
     const session = await reader.getSession(
       sessionId,
       projectId,
       afterMessageId,
+      {
+        // Only include orphaned tool info if:
+        // 1. We previously owned this session (not external)
+        // 2. No active process (tools aren't potentially in progress)
+        // When we own the session, tools without results might be pending approval
+        includeOrphans: wasEverOwned && !process,
+      },
     );
 
     // Determine the session status

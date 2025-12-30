@@ -34,6 +34,7 @@ export interface SupervisorOptions {
 export class Supervisor {
   private processes: Map<string, Process> = new Map();
   private sessionToProcess: Map<string, string> = new Map(); // sessionId -> processId
+  private everOwnedSessions: Set<string> = new Set(); // Sessions we've ever owned (for orphan detection)
   private sdk: ClaudeSDK | null;
   private realSdk: RealClaudeSDKInterface | null;
   private idleTimeoutMs?: number;
@@ -258,6 +259,15 @@ export class Supervisor {
     return this.getAllProcesses().map((p) => p.getInfo());
   }
 
+  /**
+   * Check if a session was ever owned by this server instance.
+   * Used to determine if orphaned tool detection should be trusted.
+   * For sessions we never owned (external), we can't know if tools were interrupted.
+   */
+  wasEverOwned(sessionId: string): boolean {
+    return this.everOwnedSessions.has(sessionId);
+  }
+
   async abortProcess(processId: string): Promise<boolean> {
     const process = this.processes.get(processId);
     if (!process) return false;
@@ -270,6 +280,7 @@ export class Supervisor {
   private registerProcess(process: Process, isNewSession: boolean): void {
     this.processes.set(process.id, process);
     this.sessionToProcess.set(process.sessionId, process.id);
+    this.everOwnedSessions.add(process.sessionId);
 
     const status: SessionStatus = {
       state: "owned",

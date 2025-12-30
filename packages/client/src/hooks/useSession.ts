@@ -331,6 +331,7 @@ export function useSession(projectId: string, sessionId: string) {
           state?: string;
           permissionMode?: PermissionMode;
           modeVersion?: number;
+          request?: InputRequest;
         };
         // Sync process state so watching tabs see "processing" indicator
         if (
@@ -339,6 +340,10 @@ export function useSession(projectId: string, sessionId: string) {
           connectedData.state === "waiting-input"
         ) {
           setProcessState(connectedData.state as ProcessState);
+        }
+        // Restore pending input request if state is waiting-input
+        if (connectedData.state === "waiting-input" && connectedData.request) {
+          setPendingInputRequest(connectedData.request);
         }
         if (
           connectedData.permissionMode &&

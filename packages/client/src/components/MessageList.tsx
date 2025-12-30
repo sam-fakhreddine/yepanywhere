@@ -55,6 +55,7 @@ export const MessageList = memo(function MessageList({
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
+  const isInitialLoadRef = useRef(true);
   const [thinkingExpanded, setThinkingExpanded] = useState(false);
 
   // Preprocess messages into render items and group into turns
@@ -100,7 +101,10 @@ export const MessageList = memo(function MessageList({
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on render item/processing changes is intentional
   useEffect(() => {
     if (shouldAutoScrollRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      // Use instant scroll on initial load to avoid slow animation, smooth for updates
+      const behavior = isInitialLoadRef.current ? "instant" : "smooth";
+      bottomRef.current?.scrollIntoView({ behavior });
+      isInitialLoadRef.current = false;
     }
   }, [renderItems, isProcessing]);
 

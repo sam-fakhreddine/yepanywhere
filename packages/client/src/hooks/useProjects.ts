@@ -10,6 +10,7 @@ export function useProjects() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasFetchedRef = useRef(false);
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -23,6 +24,13 @@ export function useProjects() {
       setLoading(false);
     }
   }, []);
+
+  // Initial fetch - only once (avoid StrictMode double-fetch)
+  useEffect(() => {
+    if (hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
+    fetch();
+  }, [fetch]);
 
   // Debounced refetch for status change events
   const debouncedRefetch = useCallback(() => {
@@ -46,10 +54,6 @@ export function useProjects() {
   useFileActivity({
     onSessionStatusChange: handleSessionStatusChange,
   });
-
-  useEffect(() => {
-    fetch();
-  }, [fetch]);
 
   // Cleanup debounce timer
   useEffect(() => {

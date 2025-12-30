@@ -143,6 +143,7 @@ export class SessionReader {
     sessionId: string,
     projectId: string,
     afterMessageId?: string,
+    options?: { includeOrphans?: boolean },
   ): Promise<Session | null> {
     const summary = await this.getSessionSummary(sessionId, projectId);
     if (!summary) return null;
@@ -163,7 +164,13 @@ export class SessionReader {
 
     // Build DAG and get active branch (filters out dead branches)
     const { activeBranch } = buildDag(rawMessages);
-    const orphanedToolUses = findOrphanedToolUses(activeBranch);
+
+    // Only calculate orphaned tools if includeOrphans is true (default)
+    // For external sessions, we don't know if tools were interrupted or still running
+    const includeOrphans = options?.includeOrphans ?? true;
+    const orphanedToolUses = includeOrphans
+      ? findOrphanedToolUses(activeBranch)
+      : new Set<string>();
 
     // Convert to Message objects (only active branch)
     const messages: Message[] = activeBranch.map((node, index) =>

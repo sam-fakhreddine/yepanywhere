@@ -32,6 +32,10 @@ export function createStreamRoutes(deps: StreamDeps): Hono {
           state: process.state.type,
           permissionMode: process.permissionMode,
           modeVersion: process.modeVersion,
+          // Include pending request for waiting-input state
+          ...(process.state.type === "waiting-input"
+            ? { request: process.state.request }
+            : {}),
         }),
       });
 

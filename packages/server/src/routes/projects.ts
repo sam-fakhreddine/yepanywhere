@@ -16,13 +16,20 @@ interface ProjectActivityCounts {
   activeExternalCount: number;
 }
 
+/**
+ * Get activity counts for all projects.
+ *
+ * Note: Supervisor uses base64url-encoded projectId, but ExternalSessionTracker
+ * uses directory-based projectId (path after ~/.claude/projects/).
+ * We return both keyed formats in the map to support lookups.
+ */
 function getProjectActivityCounts(
   supervisor: Supervisor | undefined,
   externalTracker: ExternalSessionTracker | undefined,
 ): Map<string, ProjectActivityCounts> {
   const counts = new Map<string, ProjectActivityCounts>();
 
-  // Count owned sessions from Supervisor
+  // Count owned sessions from Supervisor (uses base64url projectId)
   if (supervisor) {
     for (const process of supervisor.getAllProcesses()) {
       const existing = counts.get(process.projectId) || {
@@ -34,7 +41,8 @@ function getProjectActivityCounts(
     }
   }
 
-  // Count external sessions
+  // Count external sessions (uses directory-based projectId)
+  // Store under directory-based key for lookup in enrichment
   if (externalTracker) {
     for (const sessionId of externalTracker.getExternalSessions()) {
       const info = externalTracker.getExternalSessionInfo(sessionId);
@@ -50,6 +58,18 @@ function getProjectActivityCounts(
   }
 
   return counts;
+}
+
+/**
+ * Extract directory-based projectId from sessionDir path.
+ * e.g., "/home/user/.claude/projects/hostname/-home-code-proj" -> "hostname/-home-code-proj"
+ *       "/home/user/.claude/projects/-home-code-proj" -> "-home-code-proj"
+ */
+function getDirectoryProjectId(sessionDir: string): string | null {
+  const marker = "/projects/";
+  const idx = sessionDir.indexOf(marker);
+  if (idx === -1) return null;
+  return sessionDir.slice(idx + marker.length);
 }
 
 export function createProjectsRoutes(deps: ProjectsDeps): Hono {
@@ -87,12 +107,24 @@ export function createProjectsRoutes(deps: ProjectsDeps): Hono {
     );
 
     // Enrich projects with active counts
-    const projects = rawProjects.map((project) => ({
-      ...project,
-      activeOwnedCount: activityCounts.get(project.id)?.activeOwnedCount ?? 0,
-      activeExternalCount:
-        activityCounts.get(project.id)?.activeExternalCount ?? 0,
-    }));
+    // Note: Supervisor uses base64url projectId (project.id)
+    //       ExternalSessionTracker uses directory-based projectId (from sessionDir)
+    const projects = rawProjects.map((project) => {
+      // Look up owned count by base64url projectId
+      const ownedCount = activityCounts.get(project.id)?.activeOwnedCount ?? 0;
+
+      // Look up external count by directory-based projectId
+      const dirProjectId = getDirectoryProjectId(project.sessionDir);
+      const externalCount = dirProjectId
+        ? (activityCounts.get(dirProjectId)?.activeExternalCount ?? 0)
+        : 0;
+
+      return {
+        ...project,
+        activeOwnedCount: ownedCount,
+        activeExternalCount: externalCount,
+      };
+    });
 
     // Sort by lastActivity descending (most recent first), nulls last
     projects.sort((a, b) => {

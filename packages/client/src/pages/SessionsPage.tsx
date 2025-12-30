@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
+import { SessionStatusBadge } from "../components/StatusBadge";
 import { useSessions } from "../hooks/useSessions";
 
 export function SessionsPage() {
@@ -61,15 +62,7 @@ export function SessionsPage() {
                 </strong>
                 <span className="meta">
                   {session.messageCount} messages
-                  <span
-                    className={`status-badge status-${session.status.state}`}
-                  >
-                    {session.status.state === "external"
-                      ? "Active, External"
-                      : session.status.state === "owned"
-                        ? "Active"
-                        : "Idle"}
-                  </span>
+                  <SessionStatusBadge status={session.status} />
                 </span>
               </Link>
             </li>
