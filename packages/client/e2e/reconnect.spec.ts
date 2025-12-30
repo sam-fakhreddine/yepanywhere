@@ -8,7 +8,7 @@ test.describe("SSE Streaming", () => {
     await page.waitForSelector(".project-list a");
     await page.locator(".project-list a").first().click();
 
-    await page.fill(".new-session-form input", "Test");
+    await page.fill(".new-session-form textarea", "Test");
     await page.click(".new-session-form button");
 
     // Wait for assistant message to appear (session streaming works)

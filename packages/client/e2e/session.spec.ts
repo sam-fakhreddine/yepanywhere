@@ -7,7 +7,7 @@ test.describe("Session Flow", () => {
     await page.locator(".project-list a").first().click();
 
     // Type a message
-    await page.fill(".new-session-form input", "Hello Claude");
+    await page.fill(".new-session-form textarea", "Hello Claude");
     await page.click(".new-session-form button");
 
     // Should navigate to chat page
@@ -22,7 +22,7 @@ test.describe("Session Flow", () => {
     await page.waitForSelector(".project-list a");
     await page.locator(".project-list a").first().click();
 
-    await page.fill(".new-session-form input", "Test message");
+    await page.fill(".new-session-form textarea", "Test message");
     await page.click(".new-session-form button");
 
     // Wait for assistant message to appear
@@ -39,7 +39,7 @@ test.describe("Session Flow", () => {
     await page.waitForSelector(".project-list a");
     await page.locator(".project-list a").first().click();
 
-    await page.fill(".new-session-form input", "Test");
+    await page.fill(".new-session-form textarea", "Test");
     await page.click(".new-session-form button");
 
     // Should show processing indicator while agent is working
@@ -62,7 +62,7 @@ test.describe("Session Flow", () => {
     await page.locator(".project-list a").first().click();
 
     // Start session
-    await page.fill(".new-session-form input", "First message");
+    await page.fill(".new-session-form textarea", "First message");
     await page.click(".new-session-form button");
 
     // Wait for response and idle status (status indicator hidden when idle)

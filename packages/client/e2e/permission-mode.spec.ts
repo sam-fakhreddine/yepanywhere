@@ -7,7 +7,7 @@ test.describe("Permission Mode", () => {
     await page.locator(".project-list a").first().click();
 
     // Start a session first
-    await page.fill(".new-session-form input", "Test message");
+    await page.fill(".new-session-form textarea", "Test message");
     await page.click(".new-session-form button");
 
     // Wait for session page to load
@@ -25,7 +25,7 @@ test.describe("Permission Mode", () => {
     await page.locator(".project-list a").first().click();
 
     // Start a session
-    await page.fill(".new-session-form input", "Test message");
+    await page.fill(".new-session-form textarea", "Test message");
     await page.click(".new-session-form button");
 
     await expect(page.locator(".session-messages")).toBeVisible();
@@ -57,7 +57,7 @@ test.describe("Permission Mode", () => {
     await page.waitForSelector(".project-list a");
     await page.locator(".project-list a").first().click();
 
-    await page.fill(".new-session-form input", "Test message");
+    await page.fill(".new-session-form textarea", "Test message");
     await page.click(".new-session-form button");
 
     await expect(page.locator(".session-messages")).toBeVisible();
@@ -89,7 +89,7 @@ test.describe("Permission Mode", () => {
     await page.locator(".project-list a").first().click();
 
     // Start a session
-    await page.fill(".new-session-form input", "Test message");
+    await page.fill(".new-session-form textarea", "Test message");
     await page.click(".new-session-form button");
 
     await expect(page.locator(".session-messages")).toBeVisible();
@@ -129,7 +129,7 @@ test.describe("Permission Mode", () => {
     await page.locator(".project-list a").first().click();
 
     // Start a session
-    await page.fill(".new-session-form input", "Test message");
+    await page.fill(".new-session-form textarea", "Test message");
     await page.click(".new-session-form button");
 
     await expect(page.locator(".session-messages")).toBeVisible();
@@ -163,7 +163,7 @@ test.describe("Permission Mode", () => {
     await page.locator(".project-list a").first().click();
 
     // Start a session with a message
-    await page.fill(".new-session-form input", "Test message for sync");
+    await page.fill(".new-session-form textarea", "Test message for sync");
     await page.click(".new-session-form button");
 
     await expect(page.locator(".session-messages")).toBeVisible();

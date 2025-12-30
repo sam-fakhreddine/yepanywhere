@@ -7,7 +7,7 @@ test.describe("Session Sync", () => {
     await page.locator(".project-list a").first().click();
 
     // Start a session
-    await page.fill(".new-session-form input", "Hello from reload test");
+    await page.fill(".new-session-form textarea", "Hello from reload test");
     await page.click(".new-session-form button");
 
     // Wait for assistant response
@@ -53,7 +53,7 @@ test.describe("Session Sync", () => {
     await page.locator(".project-list a").first().click();
 
     // Start a session in the first tab
-    await page.fill(".new-session-form input", "Hello from first tab");
+    await page.fill(".new-session-form textarea", "Hello from first tab");
     await page.click(".new-session-form button");
 
     // Wait for assistant response
@@ -97,7 +97,7 @@ test.describe("Session Sync", () => {
     await page.locator(".project-list a").first().click();
 
     // Start a session in the first tab
-    await page.fill(".new-session-form input", "Initial message");
+    await page.fill(".new-session-form textarea", "Initial message");
     await page.click(".new-session-form button");
 
     // Wait for assistant response and idle status (status indicator hidden when idle)
