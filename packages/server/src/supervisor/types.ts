@@ -20,14 +20,20 @@ export interface Project {
 // Session status
 export type SessionStatus =
   | { state: "idle" } // no active process
-  | { state: "owned"; processId: string } // we control it
+  | {
+      state: "owned";
+      processId: string;
+      permissionMode?: PermissionMode;
+      modeVersion?: number;
+    } // we control it
   | { state: "external" }; // another process owns it
 
 // Session metadata (light, for lists)
 export interface SessionSummary {
   id: string;
   projectId: string;
-  title: string | null; // first 50 chars of first user message
+  title: string | null; // first 50 chars of first user message (truncated with ...)
+  fullTitle: string | null; // complete first user message (for hover tooltip)
   createdAt: string; // ISO timestamp
   updatedAt: string;
   messageCount: number;

@@ -122,11 +122,13 @@ export class SessionReader {
 
       const stats = await stat(filePath);
       const firstUserMessage = this.findFirstUserMessage(messages);
+      const fullTitle = firstUserMessage?.trim() || null;
 
       return {
         id: sessionId,
         projectId,
         title: this.extractTitle(firstUserMessage),
+        fullTitle,
         createdAt: stats.birthtime.toISOString(),
         updatedAt: stats.mtime.toISOString(),
         messageCount: conversationMessages.length,

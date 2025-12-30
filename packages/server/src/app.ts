@@ -43,6 +43,7 @@ export function createApp(options: AppOptions): Hono {
     realSdk: options.realSdk,
     idleTimeoutMs: options.idleTimeoutMs,
     defaultPermissionMode: options.defaultPermissionMode,
+    eventBus: options.eventBus,
   });
   const readerFactory = (sessionDir: string) =>
     new SessionReader({ sessionDir });

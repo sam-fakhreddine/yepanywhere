@@ -56,7 +56,9 @@ export function SessionsPage() {
           {sessions.map((session) => (
             <li key={session.id}>
               <Link to={`/projects/${projectId}/sessions/${session.id}`}>
-                <strong>{session.title || "Untitled"}</strong>
+                <strong title={session.fullTitle || undefined}>
+                  {session.title || "Untitled"}
+                </strong>
                 <span className="meta">
                   {session.messageCount} messages
                   <span

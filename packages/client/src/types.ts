@@ -12,7 +12,8 @@ export interface Project {
 export interface SessionSummary {
   id: string;
   projectId: string;
-  title: string | null;
+  title: string | null; // truncated title (max 50 chars)
+  fullTitle: string | null; // complete title for hover tooltip
   createdAt: string;
   updatedAt: string;
   messageCount: number;

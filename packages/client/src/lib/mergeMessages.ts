@@ -1,3 +1,4 @@
+import { orderByParentChain } from "@claude-anywhere/shared";
 import type { Message } from "../types";
 
 /**
@@ -197,7 +198,9 @@ export function mergeJSONLMessages(
     }
   }
 
-  return { messages: result, replacedIds, newMappings };
+  // Reorder messages by parentUuid chain to fix race conditions
+  // where SSE messages arrived before their parent (e.g., agent response before user message)
+  return { messages: orderByParentChain(result), replacedIds, newMappings };
 }
 
 export interface MergeSSEResult {

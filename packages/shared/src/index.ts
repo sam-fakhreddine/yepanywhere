@@ -7,3 +7,9 @@ export {
 } from "./ideMetadata.js";
 
 export type { PermissionMode, SessionStatus } from "./types.js";
+
+export {
+  orderByParentChain,
+  needsReorder,
+  type DagOrderable,
+} from "./dag.js";

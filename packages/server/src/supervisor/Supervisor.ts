@@ -5,8 +5,9 @@ import type {
   RealClaudeSDKInterface,
   UserMessage,
 } from "../sdk/types.js";
+import type { EventBus, SessionStatusEvent } from "../watcher/EventBus.js";
 import { Process, type ProcessConstructorOptions } from "./Process.js";
-import type { ProcessInfo, ProcessOptions } from "./types.js";
+import type { ProcessInfo, ProcessOptions, SessionStatus } from "./types.js";
 import { encodeProjectId } from "./types.js";
 
 export interface SupervisorOptions {
@@ -17,6 +18,8 @@ export interface SupervisorOptions {
   idleTimeoutMs?: number;
   /** Default permission mode for new sessions */
   defaultPermissionMode?: PermissionMode;
+  /** EventBus for emitting session status changes */
+  eventBus?: EventBus;
 }
 
 export class Supervisor {
@@ -26,12 +29,14 @@ export class Supervisor {
   private realSdk: RealClaudeSDKInterface | null;
   private idleTimeoutMs?: number;
   private defaultPermissionMode: PermissionMode;
+  private eventBus?: EventBus;
 
   constructor(options: SupervisorOptions) {
     this.sdk = options.sdk ?? null;
     this.realSdk = options.realSdk ?? null;
     this.idleTimeoutMs = options.idleTimeoutMs;
     this.defaultPermissionMode = options.defaultPermissionMode ?? "default";
+    this.eventBus = options.eventBus;
 
     if (!this.sdk && !this.realSdk) {
       throw new Error("Either sdk or realSdk must be provided");
@@ -248,6 +253,14 @@ export class Supervisor {
     this.processes.set(process.id, process);
     this.sessionToProcess.set(process.sessionId, process.id);
 
+    // Emit status change event
+    this.emitStatusChange(process.sessionId, process.projectId, {
+      state: "owned",
+      processId: process.id,
+      permissionMode: process.permissionMode,
+      modeVersion: process.modeVersion,
+    });
+
     // Listen for completion to auto-cleanup
     process.subscribe((event) => {
       if (event.type === "complete") {
@@ -259,5 +272,27 @@ export class Supervisor {
   private unregisterProcess(process: Process): void {
     this.processes.delete(process.id);
     this.sessionToProcess.delete(process.sessionId);
+
+    // Emit status change event (back to idle)
+    this.emitStatusChange(process.sessionId, process.projectId, {
+      state: "idle",
+    });
+  }
+
+  private emitStatusChange(
+    sessionId: string,
+    projectId: string,
+    status: SessionStatus,
+  ): void {
+    if (!this.eventBus) return;
+
+    const event: SessionStatusEvent = {
+      type: "session-status-changed",
+      sessionId,
+      projectId,
+      status,
+      timestamp: new Date().toISOString(),
+    };
+    this.eventBus.emit(event);
   }
 }

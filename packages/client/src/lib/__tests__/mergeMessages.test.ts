@@ -688,4 +688,114 @@ describe("parent-aware matching", () => {
       expect(result.messages.some((m) => m.id === "temp-2")).toBe(true);
     });
   });
+
+  describe("race condition: DAG reordering", () => {
+    it("orders messages correctly when agent response arrives before user message", () => {
+      // Simulate the race condition:
+      // Tab 2 receives agent response via SSE before user message arrives via JSONL
+      const existing: Message[] = [
+        {
+          id: "agent-1",
+          type: "assistant",
+          content: "Hello! How can I help?",
+          parentUuid: "user-1", // Parent is user-1, which we haven't seen yet
+          _source: "sdk",
+        },
+      ];
+      const incoming: Message[] = [
+        {
+          id: "user-1",
+          type: "user",
+          message: { role: "user", content: "Hello" },
+          parentUuid: null, // Root message
+        },
+      ];
+
+      const result = mergeJSONLMessages(existing, incoming);
+
+      // After merge + DAG ordering, user message should come first
+      expect(result.messages).toHaveLength(2);
+      expect(result.messages[0]?.id).toBe("user-1");
+      expect(result.messages[1]?.id).toBe("agent-1");
+    });
+
+    it("orders longer conversation correctly when out of order", () => {
+      // Multi-turn conversation with completely reversed order
+      const existing: Message[] = [
+        {
+          id: "agent-2",
+          type: "assistant",
+          content: "Final response",
+          parentUuid: "user-2",
+          _source: "sdk",
+        },
+        {
+          id: "user-2",
+          type: "user",
+          message: { role: "user", content: "Thanks" },
+          parentUuid: "agent-1",
+          _source: "sdk",
+        },
+        {
+          id: "agent-1",
+          type: "assistant",
+          content: "First response",
+          parentUuid: "user-1",
+          _source: "sdk",
+        },
+      ];
+      const incoming: Message[] = [
+        {
+          id: "user-1",
+          type: "user",
+          message: { role: "user", content: "Hello" },
+          parentUuid: null,
+        },
+      ];
+
+      const result = mergeJSONLMessages(existing, incoming);
+
+      // Should be in conversation order
+      expect(result.messages.map((m) => m.id)).toEqual([
+        "user-1",
+        "agent-1",
+        "user-2",
+        "agent-2",
+      ]);
+    });
+
+    it("preserves order when already in correct order", () => {
+      const existing: Message[] = [
+        {
+          id: "user-1",
+          type: "user",
+          message: { role: "user", content: "Hello" },
+          parentUuid: null,
+        },
+        {
+          id: "agent-1",
+          type: "assistant",
+          content: "Hi!",
+          parentUuid: "user-1",
+        },
+      ];
+      const incoming: Message[] = [
+        {
+          id: "user-2",
+          type: "user",
+          message: { role: "user", content: "Thanks" },
+          parentUuid: "agent-1",
+        },
+      ];
+
+      const result = mergeJSONLMessages(existing, incoming);
+
+      // Order should be preserved
+      expect(result.messages.map((m) => m.id)).toEqual([
+        "user-1",
+        "agent-1",
+        "user-2",
+      ]);
+    });
+  });
 });
