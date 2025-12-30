@@ -87,6 +87,24 @@ export function useSession(projectId: string, sessionId: string) {
     });
   }, []);
 
+  // Remove an optimistic message by matching content (used when send fails)
+  const removeOptimisticMessage = useCallback((text: string) => {
+    setMessages((prev) => {
+      // Find the last temp message with matching content (iterate backwards)
+      for (let i = prev.length - 1; i >= 0; i--) {
+        const m = prev[i];
+        if (!m) continue;
+        if (
+          m.id.startsWith("temp-") &&
+          (m.message?.content === text || m.content === text)
+        ) {
+          return [...prev.slice(0, i), ...prev.slice(i + 1)];
+        }
+      }
+      return prev;
+    });
+  }, []);
+
   // Update lastMessageIdRef when messages change
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
@@ -346,11 +364,27 @@ export function useSession(projectId: string, sessionId: string) {
     [applyServerModeUpdate],
   );
 
+  // Handle SSE errors by checking if process is still alive
+  // If process died (idle timeout), transition to idle state
+  const handleSSEError = useCallback(async () => {
+    try {
+      const data = await api.getSession(projectId, sessionId);
+      if (data.status.state !== "owned") {
+        setStatus({ state: "idle" });
+        setProcessState("idle");
+      }
+    } catch {
+      // If session fetch fails, assume process is dead
+      setStatus({ state: "idle" });
+      setProcessState("idle");
+    }
+  }, [projectId, sessionId]);
+
   // Only connect to session stream when we own the session
   // External sessions are tracked via the activity stream instead
   const { connected } = useSSE(
     status.state === "owned" ? `/api/sessions/${sessionId}/stream` : null,
-    { onMessage: handleSSEMessage },
+    { onMessage: handleSSEMessage, onError: handleSSEError },
   );
 
   return {
@@ -369,5 +403,6 @@ export function useSession(projectId: string, sessionId: string) {
     setProcessState,
     setPermissionMode,
     addUserMessage,
+    removeOptimisticMessage,
   };
 }

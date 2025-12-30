@@ -60,7 +60,15 @@ export function createApp(options: AppOptions): Hono {
   app.route("/health", health);
 
   // Mount API routes
-  app.route("/api/projects", createProjectsRoutes({ scanner, readerFactory }));
+  app.route(
+    "/api/projects",
+    createProjectsRoutes({
+      scanner,
+      readerFactory,
+      supervisor,
+      externalTracker,
+    }),
+  );
   app.route(
     "/api",
     createSessionsRoutes({

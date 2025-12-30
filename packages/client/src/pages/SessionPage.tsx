@@ -44,10 +44,12 @@ function SessionPageContent({
     setProcessState,
     setPermissionMode,
     addUserMessage,
+    removeOptimisticMessage,
   } = useSession(projectId, sessionId);
   const [sending, setSending] = useState(false);
   const [project, setProject] = useState<Project | null>(null);
   const [scrollTrigger, setScrollTrigger] = useState(0);
+  const [restoredText, setRestoredText] = useState<string | null>(null);
 
   // Fetch project info for breadcrumb
   useEffect(() => {
@@ -56,6 +58,7 @@ function SessionPageContent({
 
   const handleSend = async (text: string) => {
     setSending(true);
+    setRestoredText(null); // Clear any previously restored text
     addUserMessage(text); // Optimistic display with temp ID
     setProcessState("running"); // Optimistic: show processing indicator immediately
     setScrollTrigger((prev) => prev + 1); // Force scroll to bottom
@@ -76,7 +79,20 @@ function SessionPageContent({
       }
     } catch (err) {
       console.error("Failed to send:", err);
-      setProcessState("idle"); // Reset on error
+      // Check if process is dead (404)
+      const is404 =
+        err instanceof Error &&
+        (err.message.includes("404") ||
+          err.message.includes("No active process"));
+      if (is404) {
+        // Process died - transition to idle, remove optimistic message, restore text
+        setStatus({ state: "idle" });
+        setProcessState("idle");
+        removeOptimisticMessage(text);
+        setRestoredText(text);
+      } else {
+        setProcessState("idle");
+      }
     } finally {
       setSending(false);
     }
@@ -163,6 +179,7 @@ function SessionPageContent({
             isRunning={status.state === "owned"}
             isThinking={processState === "running"}
             onStop={handleAbort}
+            restoredText={restoredText}
           />
         )}
       </footer>

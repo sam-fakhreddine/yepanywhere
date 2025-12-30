@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useState } from "react";
+import { type KeyboardEvent, useEffect, useState } from "react";
 import { ENTER_SENDS_MESSAGE } from "../constants";
 import type { PermissionMode } from "../types";
 
@@ -26,6 +26,7 @@ interface Props {
   isRunning?: boolean;
   isThinking?: boolean;
   onStop?: () => void;
+  restoredText?: string | null; // Text to restore after failed send
 }
 
 export function MessageInput({
@@ -38,8 +39,16 @@ export function MessageInput({
   isRunning,
   isThinking,
   onStop,
+  restoredText,
 }: Props) {
   const [text, setText] = useState("");
+
+  // Restore text when a send fails (e.g., process died)
+  useEffect(() => {
+    if (restoredText) {
+      setText(restoredText);
+    }
+  }, [restoredText]);
 
   const handleSubmit = () => {
     if (text.trim() && !disabled) {

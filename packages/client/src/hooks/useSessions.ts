@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { Project, SessionSummary } from "../types";
-import { type FileChangeEvent, useFileActivity } from "./useFileActivity";
+import {
+  type FileChangeEvent,
+  type SessionStatusEvent,
+  useFileActivity,
+} from "./useFileActivity";
 
 const REFETCH_DEBOUNCE_MS = 500;
 
@@ -54,9 +58,26 @@ export function useSessions(projectId: string | undefined) {
     [projectId, debouncedRefetch],
   );
 
-  // Subscribe to file activity
+  // Handle session status changes (real-time updates without refetch)
+  const handleSessionStatusChange = useCallback(
+    (event: SessionStatusEvent) => {
+      if (event.projectId !== projectId) return;
+
+      setSessions((prev) =>
+        prev.map((session) =>
+          session.id === event.sessionId
+            ? { ...session, status: event.status }
+            : session,
+        ),
+      );
+    },
+    [projectId],
+  );
+
+  // Subscribe to file activity and status changes
   useFileActivity({
     onFileChange: handleFileChange,
+    onSessionStatusChange: handleSessionStatusChange,
   });
 
   // Initial fetch
