@@ -42,12 +42,15 @@ interface Props {
   messages: Message[];
   isStreaming?: boolean;
   isProcessing?: boolean;
+  /** Increment this to force scroll to bottom (e.g., when user sends a message) */
+  scrollTrigger?: number;
 }
 
 export const MessageList = memo(function MessageList({
   messages,
   isStreaming = false,
   isProcessing = false,
+  scrollTrigger = 0,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -85,13 +88,21 @@ export const MessageList = memo(function MessageList({
     return () => container.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
-  // Only auto-scroll if user is near the bottom
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on render item changes is intentional
+  // Force scroll to bottom when scrollTrigger changes (user sent a message)
+  useEffect(() => {
+    if (scrollTrigger > 0) {
+      shouldAutoScrollRef.current = true;
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [scrollTrigger]);
+
+  // Auto-scroll when content changes or processing starts (if near bottom)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on render item/processing changes is intentional
   useEffect(() => {
     if (shouldAutoScrollRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [renderItems]);
+  }, [renderItems, isProcessing]);
 
   return (
     <div className="message-list" ref={containerRef}>

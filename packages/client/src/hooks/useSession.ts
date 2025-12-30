@@ -209,6 +209,11 @@ export function useSession(projectId: string, sessionId: string) {
               : rawContent;
 
           setMessages((prev) => {
+            // Dedupe by message ID - skip if we already have this message
+            if (prev.some((m) => m.id === id)) {
+              return prev;
+            }
+
             // For user messages, check if we have a temp message with same content
             if (role === "user") {
               const tempIdx = prev.findIndex(
@@ -232,7 +237,7 @@ export function useSession(projectId: string, sessionId: string) {
                 return updated;
               }
             }
-            // Otherwise add new message
+            // Add new message
             return [
               ...prev,
               {

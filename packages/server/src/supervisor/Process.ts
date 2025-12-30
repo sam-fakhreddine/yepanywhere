@@ -172,21 +172,41 @@ export class Process {
   }
 
   /**
+   * Add initial user message to history without queuing to SDK.
+   * Used for real SDK sessions where the initial message is passed directly
+   * to the SDK but needs to be in history for SSE replay to late-joining clients.
+   */
+  addInitialUserMessage(text: string): void {
+    const uuid = randomUUID();
+    const sdkMessage = {
+      type: "user",
+      uuid,
+      message: { role: "user", content: text },
+    } as SDKMessage;
+
+    this.messageHistory.push(sdkMessage);
+    this.emit({ type: "message", message: sdkMessage });
+  }
+
+  /**
    * Queue a message to be sent to the SDK.
    * For real SDK, pushes to MessageQueue.
    * For mock SDK, uses legacy queue behavior.
    */
   queueMessage(message: UserMessage): number {
-    // Emit user message to SSE subscribers so other clients see it immediately
+    // Create user message with UUID
     const uuid = randomUUID();
-    this.emit({
-      type: "message",
-      message: {
-        type: "user",
-        uuid,
-        message: { role: "user", content: message.text },
-      },
-    });
+    const sdkMessage = {
+      type: "user",
+      uuid,
+      message: { role: "user", content: message.text },
+    } as SDKMessage;
+
+    // Add to history so late-joining clients see it in replay
+    this.messageHistory.push(sdkMessage);
+
+    // Emit to current SSE subscribers so other clients see it immediately
+    this.emit({ type: "message", message: sdkMessage });
 
     if (this.messageQueue) {
       return this.messageQueue.push(message);

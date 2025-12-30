@@ -44,6 +44,7 @@ function SessionPageContent({
   } = useSession(projectId, sessionId);
   const [sending, setSending] = useState(false);
   const [project, setProject] = useState<Project | null>(null);
+  const [scrollTrigger, setScrollTrigger] = useState(0);
 
   // Fetch project info for breadcrumb
   useEffect(() => {
@@ -54,6 +55,7 @@ function SessionPageContent({
     setSending(true);
     addUserMessage(text); // Optimistic display with temp ID
     setProcessState("running"); // Optimistic: show processing indicator immediately
+    setScrollTrigger((prev) => prev + 1); // Force scroll to bottom
     try {
       if (status.state === "idle") {
         // Resume the session with current permission mode
@@ -118,6 +120,7 @@ function SessionPageContent({
         <MessageList
           messages={messages}
           isProcessing={status.state === "owned" && processState === "running"}
+          scrollTrigger={scrollTrigger}
         />
       </main>
 
