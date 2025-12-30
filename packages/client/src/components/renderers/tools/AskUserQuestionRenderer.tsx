@@ -133,14 +133,13 @@ export const askUserQuestionRenderer: ToolRenderer<
     return `${questions?.length || 0} question${questions?.length === 1 ? "" : "s"}`;
   },
 
-  getResultSummary(result, isError, input) {
+  getResultSummary(result: AskUserQuestionResult, isError: boolean): string {
     if (isError) return "Error";
-    const r = result as AskUserQuestionResult;
-    const i = input as AskUserQuestionInput;
-    const answered = Object.keys(r?.answers || {}).length;
+    const answered = Object.keys(result?.answers || {}).length;
+    const questionCount = result?.questions?.length || 0;
     // If no answers yet but we have questions, show question count instead
-    if (answered === 0 && i?.questions?.length) {
-      return `${i.questions.length} question${i.questions.length === 1 ? "" : "s"}`;
+    if (answered === 0 && questionCount > 0) {
+      return `${questionCount} question${questionCount === 1 ? "" : "s"}`;
     }
     return `${answered} answered`;
   },
