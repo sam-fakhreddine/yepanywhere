@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { Modal } from "../../ui/Modal";
 import type { RenderContext } from "../types";
 import type { EditInput, EditResult, PatchHunk, ToolRenderer } from "./types";
 
@@ -51,59 +52,14 @@ function EditToolUse({ input }: { input: EditInput }) {
 }
 
 /**
- * Full-screen modal for viewing complete diff
+ * Modal content for viewing complete diff
  */
-function DiffModal({
-  result,
-  onClose,
-}: {
-  result: EditResult;
-  onClose: () => void;
-}) {
-  const fileName = getFileName(result.filePath);
-
-  // Close on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
+function DiffModalContent({ result }: { result: EditResult }) {
   return (
-    <div
-      className="diff-modal-overlay"
-      onClick={onClose}
-      onKeyDown={(e) => e.key === "Escape" && onClose()}
-      role="presentation"
-    >
-      <div
-        className="diff-modal"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-      >
-        <div className="diff-modal-header">
-          <span className="file-path">{fileName}</span>
-          <button
-            type="button"
-            className="diff-modal-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
-        <div className="diff-modal-content">
-          <div className="diff-view">
-            {result.structuredPatch.map((hunk, i) => (
-              <DiffHunk key={`modal-hunk-${hunk.oldStart}-${i}`} hunk={hunk} />
-            ))}
-          </div>
-        </div>
-      </div>
+    <div className="diff-view">
+      {result.structuredPatch.map((hunk, i) => (
+        <DiffHunk key={`modal-hunk-${hunk.oldStart}-${i}`} hunk={hunk} />
+      ))}
     </div>
   );
 }
@@ -233,7 +189,14 @@ function EditToolResult({
         </div>
       </div>
       {showModal && (
-        <DiffModal result={result} onClose={() => setShowModal(false)} />
+        <Modal
+          title={
+            <span className="file-path">{getFileName(result.filePath)}</span>
+          }
+          onClose={() => setShowModal(false)}
+        >
+          <DiffModalContent result={result} />
+        </Modal>
       )}
     </>
   );

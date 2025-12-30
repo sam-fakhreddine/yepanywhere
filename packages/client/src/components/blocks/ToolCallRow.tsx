@@ -21,6 +21,8 @@ export const ToolCallRow = memo(function ToolCallRow({
 }: Props) {
   // Check if this tool has interactive summary (no expand/collapse)
   const hasInteractiveSummary = toolRegistry.hasInteractiveSummary(toolName);
+  // Check if this tool has a collapsed preview
+  const hasCollapsedPreview = toolRegistry.hasCollapsedPreview(toolName);
 
   // Edit and TodoWrite tools are expanded by default
   const [expanded, setExpanded] = useState(
@@ -102,6 +104,19 @@ export const ToolCallRow = memo(function ToolCallRow({
           </span>
         )}
       </div>
+
+      {/* Collapsed preview - shown when collapsed and tool supports it */}
+      {!expanded && !hasInteractiveSummary && hasCollapsedPreview && (
+        <div className="tool-row-collapsed-preview">
+          {toolRegistry.renderCollapsedPreview(
+            toolName,
+            toolInput,
+            structuredResult,
+            toolResult?.isError ?? false,
+            renderContext,
+          )}
+        </div>
+      )}
 
       {expanded && !hasInteractiveSummary && (
         <div className="tool-row-content">

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { Modal } from "../../ui/Modal";
 import type {
   ImageFile,
   ReadInput,
@@ -33,77 +34,44 @@ function ReadToolUse({ input }: { input: ReadInput }) {
 }
 
 /**
- * Modal for viewing file contents
+ * Modal content for viewing file contents
  */
-function FileContentModal({
-  file,
-  onClose,
-}: {
-  file: TextFile;
-  onClose: () => void;
-}) {
-  const fileName = getFileName(file.filePath);
+function FileModalContent({ file }: { file: TextFile }) {
   const lines = file.content.split("\n");
-  const showRange = file.startLine > 1 || file.numLines < file.totalLines;
-
-  // Close on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
 
   return (
-    <div
-      className="diff-modal-overlay"
-      onClick={onClose}
-      onKeyDown={(e) => e.key === "Escape" && onClose()}
-      role="presentation"
-    >
-      <div
-        className="diff-modal"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-      >
-        <div className="diff-modal-header">
-          <span className="file-path">
-            {fileName}
-            {showRange && (
-              <span className="file-range">
-                {" "}
-                (lines {file.startLine}-{file.startLine + file.numLines - 1} of{" "}
-                {file.totalLines})
-              </span>
-            )}
-          </span>
-          <button
-            type="button"
-            className="diff-modal-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
-        <div className="diff-modal-content">
-          <div className="file-content-with-lines">
-            <div className="line-numbers">
-              {lines.map((_, i) => {
-                const lineNum = file.startLine + i;
-                return <div key={`line-${lineNum}`}>{lineNum}</div>;
-              })}
-            </div>
-            <pre className="line-content">
-              <code>{file.content}</code>
-            </pre>
-          </div>
-        </div>
+    <div className="file-content-with-lines">
+      <div className="line-numbers">
+        {lines.map((_, i) => {
+          const lineNum = file.startLine + i;
+          return <div key={`line-${lineNum}`}>{lineNum}</div>;
+        })}
       </div>
+      <pre className="line-content">
+        <code>{file.content}</code>
+      </pre>
     </div>
+  );
+}
+
+/**
+ * Build modal title for file with optional range info
+ */
+function FileModalTitle({ file }: { file: TextFile }) {
+  const fileName = getFileName(file.filePath);
+  const showRange = file.startLine > 1 || file.numLines < file.totalLines;
+
+  return (
+    <span className="file-path">
+      {fileName}
+      {showRange && (
+        <span className="file-range">
+          {" "}
+          (lines {file.startLine}-{file.startLine + file.numLines - 1} of{" "}
+          {file.totalLines})
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -134,7 +102,12 @@ function TextFileResult({ file }: { file: TextFile }) {
         </button>
       </div>
       {showModal && (
-        <FileContentModal file={file} onClose={() => setShowModal(false)} />
+        <Modal
+          title={<FileModalTitle file={file} />}
+          onClose={() => setShowModal(false)}
+        >
+          <FileModalContent file={file} />
+        </Modal>
       )}
     </>
   );
@@ -236,7 +209,12 @@ function ReadInteractiveSummary({
         <span className="file-line-count-inline">{file.numLines} lines</span>
       </button>
       {showModal && (
-        <FileContentModal file={file} onClose={() => setShowModal(false)} />
+        <Modal
+          title={<FileModalTitle file={file} />}
+          onClose={() => setShowModal(false)}
+        >
+          <FileModalContent file={file} />
+        </Modal>
       )}
     </>
   );

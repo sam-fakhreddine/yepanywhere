@@ -1,8 +1,74 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { Modal } from "../../ui/Modal";
 import type { RenderContext } from "../types";
 import type { BashInput, BashResult, ToolRenderer } from "./types";
 
 const MAX_LINES_COLLAPSED = 20;
+const PREVIEW_LINES = 4;
+const PREVIEW_MAX_CHARS = 400; // 4 * 100 chars
+
+/**
+ * Modal content for viewing full bash input and output
+ */
+function BashModalContent({
+  input,
+  result,
+  isError,
+}: {
+  input: BashInput;
+  result: BashResult | undefined;
+  isError: boolean;
+}) {
+  const stdout = result?.stdout || "";
+  const stderr = result?.stderr || "";
+
+  return (
+    <div className="bash-modal-sections">
+      <div className="bash-modal-section">
+        <div className="bash-modal-label">Command</div>
+        <pre className="bash-modal-code">
+          <code>{input.command}</code>
+        </pre>
+      </div>
+      {stdout && (
+        <div className="bash-modal-section">
+          <div className="bash-modal-label">Output</div>
+          <pre className="bash-modal-code">
+            <code>{stdout}</code>
+          </pre>
+        </div>
+      )}
+      {stderr && (
+        <div className="bash-modal-section">
+          <div className="bash-modal-label bash-modal-label-error">
+            {isError ? "Error" : "Stderr"}
+          </div>
+          <pre className="bash-modal-code bash-modal-code-error">
+            <code>{stderr}</code>
+          </pre>
+        </div>
+      )}
+      {!stdout && !stderr && result && !result.interrupted && (
+        <div className="bash-modal-section">
+          <div className="bash-modal-label">Output</div>
+          <div className="bash-modal-empty">No output</div>
+        </div>
+      )}
+      {result?.interrupted && (
+        <div className="bash-modal-section">
+          <span className="badge badge-warning">Interrupted</span>
+        </div>
+      )}
+      {result?.backgroundTaskId && (
+        <div className="bash-modal-section">
+          <span className="badge badge-info">
+            Background: {result.backgroundTaskId}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Bash tool use - shows command in code block
@@ -83,6 +149,107 @@ function BashToolResult({
   );
 }
 
+/**
+ * Truncate text to a maximum number of lines and characters
+ */
+function truncateOutput(text: string): { text: string; truncated: boolean } {
+  const lines = text.split("\n");
+  let result = "";
+  let charCount = 0;
+  let lineCount = 0;
+
+  for (const line of lines) {
+    if (lineCount >= PREVIEW_LINES || charCount >= PREVIEW_MAX_CHARS) {
+      return { text: result.trimEnd(), truncated: true };
+    }
+    const remaining = PREVIEW_MAX_CHARS - charCount;
+    if (line.length > remaining) {
+      result += `${line.slice(0, remaining)}...`;
+      return { text: result.trimEnd(), truncated: true };
+    }
+    result += `${line}\n`;
+    charCount += line.length + 1;
+    lineCount++;
+  }
+
+  return { text: result.trimEnd(), truncated: false };
+}
+
+/**
+ * Collapsed preview showing IN (command) and OUT (first few lines)
+ * Clicking opens a modal with the full output
+ */
+function BashCollapsedPreview({
+  input,
+  result,
+  isError,
+}: {
+  input: BashInput;
+  result: BashResult | undefined;
+  isError: boolean;
+}) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const output = result?.stdout || result?.stderr || "";
+  const { text: previewText, truncated } = truncateOutput(output);
+  const hasOutput = previewText.length > 0;
+
+  const handleClick = useCallback(() => {
+    setIsModalOpen(true);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    setIsModalOpen(false);
+  }, []);
+
+  return (
+    <>
+      <button
+        type="button"
+        className="bash-collapsed-preview"
+        onClick={handleClick}
+      >
+        <div className="bash-preview-row">
+          <span className="bash-preview-label">IN</span>
+          <code className="bash-preview-command">{input.command}</code>
+        </div>
+        {hasOutput && (
+          <div className="bash-preview-row bash-preview-output-row">
+            <span className="bash-preview-label">OUT</span>
+            <div
+              className={`bash-preview-output ${truncated ? "bash-preview-truncated" : ""} ${isError || result?.stderr ? "bash-preview-error" : ""}`}
+            >
+              <pre>
+                <code>{previewText}</code>
+              </pre>
+              {truncated && <div className="bash-preview-fade" />}
+            </div>
+          </div>
+        )}
+        {!hasOutput && result && !result.interrupted && (
+          <div className="bash-preview-row">
+            <span className="bash-preview-label">OUT</span>
+            <span className="bash-preview-empty">No output</span>
+          </div>
+        )}
+        {result?.interrupted && (
+          <div className="bash-preview-row">
+            <span className="bash-preview-label">OUT</span>
+            <span className="bash-preview-interrupted">Interrupted</span>
+          </div>
+        )}
+      </button>
+      {isModalOpen && (
+        <Modal
+          title={input.description || "Bash Command"}
+          onClose={handleClose}
+        >
+          <BashModalContent input={input} result={result} isError={isError} />
+        </Modal>
+      )}
+    </>
+  );
+}
+
 export const bashRenderer: ToolRenderer<BashInput, BashResult> = {
   tool: "Bash",
 
@@ -95,15 +262,29 @@ export const bashRenderer: ToolRenderer<BashInput, BashResult> = {
   },
 
   getUseSummary(input) {
-    const cmd = (input as BashInput).command;
-    return cmd.length > 60 ? `${cmd.slice(0, 57)}...` : cmd;
+    const i = input as BashInput;
+    // Show description if available, otherwise truncated command
+    if (i.description) {
+      return i.description;
+    }
+    return i.command.length > 60 ? `${i.command.slice(0, 57)}...` : i.command;
   },
 
   getResultSummary(result, isError) {
     const r = result as BashResult;
     if (r?.interrupted) return "Interrupted";
     if (isError || r?.stderr) return "Error";
-    const lines = r?.stdout?.split("\n").length || 0;
-    return `${lines} lines`;
+    // Return empty string - the preview shows the output
+    return "";
+  },
+
+  renderCollapsedPreview(input, result, isError, _context) {
+    return (
+      <BashCollapsedPreview
+        input={input as BashInput}
+        result={result as BashResult | undefined}
+        isError={isError}
+      />
+    );
   },
 };

@@ -43,6 +43,25 @@ class ToolRendererRegistry {
     return typeof renderer.renderInteractiveSummary === "function";
   }
 
+  hasCollapsedPreview(toolName: string): boolean {
+    const renderer = this.get(toolName);
+    return typeof renderer.renderCollapsedPreview === "function";
+  }
+
+  renderCollapsedPreview(
+    toolName: string,
+    input: unknown,
+    result: unknown,
+    isError: boolean,
+    context: RenderContext,
+  ): ReactNode {
+    const renderer = this.get(toolName);
+    if (renderer.renderCollapsedPreview) {
+      return renderer.renderCollapsedPreview(input, result, isError, context);
+    }
+    return null;
+  }
+
   renderInteractiveSummary(
     toolName: string,
     input: unknown,

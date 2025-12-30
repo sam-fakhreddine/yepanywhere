@@ -316,4 +316,14 @@ export interface ToolRenderer<TInput = unknown, TResult = unknown> {
     isError: boolean,
     context: RenderContext,
   ): ReactNode;
+  /**
+   * Render a preview shown in the collapsed state (below the header).
+   * Used to show a condensed view of input/output without expanding.
+   */
+  renderCollapsedPreview?(
+    input: TInput,
+    result: TResult | undefined,
+    isError: boolean,
+    context: RenderContext,
+  ): ReactNode;
 }
