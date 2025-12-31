@@ -640,6 +640,45 @@ h2 {
    Tool Approval Panel - VSCode-style approval with options
    ========================================================================== */
 
+/* Wrapper for the approval panel with floating toggle */
+.tool-approval-wrapper {
+  position: relative;
+}
+
+/* Floating toggle button above the panel */
+.tool-approval-toggle {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  width: 32px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-code);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.tool-approval-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.tool-approval-toggle svg {
+  transition: transform 0.2s ease;
+}
+
+.tool-approval-toggle svg.chevron-up {
+  transform: rotate(180deg);
+}
+
 .tool-approval-panel {
   display: flex;
   flex-direction: column;
@@ -1191,5 +1230,211 @@ h2 {
 
   .reload-banner-shortcut {
     display: none;
+  }
+}
+
+/* ==========================================================================
+   Session Metadata UI (rename, archive, filter)
+   ========================================================================== */
+
+/* Session title row with action buttons */
+.session-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.session-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.session-action-btn:hover {
+  opacity: 1;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.session-action-btn.active {
+  opacity: 1;
+  color: var(--app-claude-orange);
+}
+
+/* Archived badge */
+.archived-badge {
+  font-size: var(--font-size-xs);
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  margin-left: var(--space-1);
+  white-space: nowrap;
+}
+
+/* Rename modal */
+.rename-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 300px;
+}
+
+.rename-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-code);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+}
+
+.rename-input:focus {
+  outline: none;
+  border-color: var(--focus-border);
+}
+
+.rename-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s;
+}
+
+.btn-primary {
+  background: var(--app-claude-clay-button-orange);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--app-claude-orange);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #404040;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Filter bar */
+.filter-bar {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-search {
+  flex: 1;
+  min-width: 200px;
+  max-width: 400px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-code);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.filter-search:focus {
+  outline: none;
+  border-color: var(--focus-border);
+}
+
+.filter-search::placeholder {
+  color: var(--text-dimmed);
+}
+
+.filter-chips {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.filter-chip {
+  padding: var(--space-1) var(--space-3);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.filter-chip:hover {
+  background: #404040;
+  color: var(--text-primary);
+}
+
+.filter-chip.active {
+  background: var(--app-claude-orange);
+  border-color: var(--app-claude-orange);
+  color: white;
+}
+
+/* Archived session in list */
+.session-list li.archived > a {
+  opacity: 0.6;
+}
+
+.session-list li.archived > a strong {
+  color: var(--text-muted);
+}
+
+.no-results {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Mobile adjustments for session metadata UI */
+@media (max-width: 600px) {
+  .session-title-row {
+    flex-wrap: wrap;
+  }
+
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-search {
+    max-width: none;
+  }
+
+  .rename-modal-content {
+    min-width: auto;
   }
 }

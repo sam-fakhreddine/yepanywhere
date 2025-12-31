@@ -129,4 +129,13 @@ export const api = {
     fetchJSON<{
       lastSeen: Record<string, { timestamp: string; messageId?: string }>;
     }>("/notifications/last-seen"),
+
+  updateSessionMetadata: (
+    sessionId: string,
+    updates: { title?: string; archived?: boolean },
+  ) =>
+    fetchJSON<{ updated: boolean }>(`/sessions/${sessionId}/metadata`, {
+      method: "PUT",
+      body: JSON.stringify(updates),
+    }),
 };

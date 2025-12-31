@@ -23,6 +23,7 @@ export function ToolApprovalPanel({
   const [submitting, setSubmitting] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
   const feedbackInputRef = useRef<HTMLInputElement>(null);
 
   const isEditTool = request.toolName && EDIT_TOOLS.includes(request.toolName);
@@ -132,80 +133,111 @@ export function ToolApprovalPanel({
     : request.prompt;
 
   return (
-    <div className="tool-approval-panel">
-      <div className="tool-approval-header">
-        <span className="tool-approval-question">
-          Allow <span className="tool-approval-name">{request.toolName}</span>{" "}
-          {summary}?
-        </span>
-      </div>
-
-      <div className="tool-approval-options">
-        <button
-          type="button"
-          className="tool-approval-option primary"
-          onClick={handleApprove}
-          disabled={submitting}
+    <div className="tool-approval-wrapper">
+      {/* Floating toggle button */}
+      <button
+        type="button"
+        className="tool-approval-toggle"
+        onClick={() => setCollapsed(!collapsed)}
+        aria-label={
+          collapsed ? "Expand approval panel" : "Collapse approval panel"
+        }
+        aria-expanded={!collapsed}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={collapsed ? "chevron-up" : "chevron-down"}
+          aria-hidden="true"
         >
-          <kbd>1</kbd>
-          <span>Yes</span>
-        </button>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
 
-        {isEditTool && onApproveAcceptEdits && (
-          <button
-            type="button"
-            className="tool-approval-option"
-            onClick={handleApproveAcceptEdits}
-            disabled={submitting}
-          >
-            <kbd>2</kbd>
-            <span>Yes, and don't ask again</span>
-          </button>
-        )}
+      {!collapsed && (
+        <div className="tool-approval-panel">
+          <div className="tool-approval-header">
+            <span className="tool-approval-question">
+              Allow{" "}
+              <span className="tool-approval-name">{request.toolName}</span>{" "}
+              {summary}?
+            </span>
+          </div>
 
-        <button
-          type="button"
-          className="tool-approval-option"
-          onClick={handleDeny}
-          disabled={submitting}
-        >
-          <kbd>{isEditTool && onApproveAcceptEdits ? "3" : "2"}</kbd>
-          <span>No</span>
-        </button>
-
-        {onDenyWithFeedback && !showFeedback && (
-          <button
-            type="button"
-            className="tool-approval-option feedback-toggle"
-            onClick={() => setShowFeedback(true)}
-            disabled={submitting}
-          >
-            <span>Tell Claude what to do instead</span>
-          </button>
-        )}
-
-        {onDenyWithFeedback && showFeedback && (
-          <div className="tool-approval-feedback">
-            <input
-              ref={feedbackInputRef}
-              type="text"
-              placeholder="Tell Claude what to do instead..."
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              disabled={submitting}
-              className="tool-approval-feedback-input"
-            />
+          <div className="tool-approval-options">
             <button
               type="button"
-              className="tool-approval-feedback-submit"
-              onClick={handleDenyWithFeedback}
-              disabled={submitting || !feedback.trim()}
+              className="tool-approval-option primary"
+              onClick={handleApprove}
+              disabled={submitting}
             >
-              Send
+              <kbd>1</kbd>
+              <span>Yes</span>
             </button>
+
+            {isEditTool && onApproveAcceptEdits && (
+              <button
+                type="button"
+                className="tool-approval-option"
+                onClick={handleApproveAcceptEdits}
+                disabled={submitting}
+              >
+                <kbd>2</kbd>
+                <span>Yes, and don't ask again</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="tool-approval-option"
+              onClick={handleDeny}
+              disabled={submitting}
+            >
+              <kbd>{isEditTool && onApproveAcceptEdits ? "3" : "2"}</kbd>
+              <span>No</span>
+            </button>
+
+            {onDenyWithFeedback && !showFeedback && (
+              <button
+                type="button"
+                className="tool-approval-option feedback-toggle"
+                onClick={() => setShowFeedback(true)}
+                disabled={submitting}
+              >
+                <span>Tell Claude what to do instead</span>
+              </button>
+            )}
+
+            {onDenyWithFeedback && showFeedback && (
+              <div className="tool-approval-feedback">
+                <input
+                  ref={feedbackInputRef}
+                  type="text"
+                  placeholder="Tell Claude what to do instead..."
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  disabled={submitting}
+                  className="tool-approval-feedback-input"
+                />
+                <button
+                  type="button"
+                  className="tool-approval-feedback-submit"
+                  onClick={handleDenyWithFeedback}
+                  disabled={submitting || !feedback.trim()}
+                >
+                  Send
+                </button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

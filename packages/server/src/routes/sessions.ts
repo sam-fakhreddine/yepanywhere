@@ -1,5 +1,6 @@
 import { isUrlProjectId } from "@claude-anywhere/shared";
 import { Hono } from "hono";
+import type { SessionMetadataService } from "../metadata/index.js";
 import type { NotificationService } from "../notifications/index.js";
 import type { ProjectScanner } from "../projects/scanner.js";
 import type { PermissionMode, SDKMessage, UserMessage } from "../sdk/types.js";
@@ -14,6 +15,7 @@ export interface SessionsDeps {
   readerFactory: (sessionDir: string) => SessionReader;
   externalTracker?: ExternalSessionTracker;
   notificationService?: NotificationService;
+  sessionMetadataService?: SessionMetadataService;
 }
 
 interface StartSessionBody {
@@ -432,6 +434,37 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
     }
 
     return c.json({ lastSeen: deps.notificationService.getAllLastSeen() });
+  });
+
+  // PUT /api/sessions/:sessionId/metadata - Update session metadata (title, archived)
+  routes.put("/sessions/:sessionId/metadata", async (c) => {
+    const sessionId = c.req.param("sessionId");
+
+    if (!deps.sessionMetadataService) {
+      return c.json({ error: "Session metadata service not available" }, 503);
+    }
+
+    let body: { title?: string; archived?: boolean } = {};
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON body" }, 400);
+    }
+
+    // At least one field must be provided
+    if (body.title === undefined && body.archived === undefined) {
+      return c.json(
+        { error: "At least title or archived must be provided" },
+        400,
+      );
+    }
+
+    await deps.sessionMetadataService.updateMetadata(sessionId, {
+      title: body.title,
+      archived: body.archived,
+    });
+
+    return c.json({ updated: true });
   });
 
   return routes;

@@ -52,6 +52,11 @@ export interface SessionSummary {
   lastSeenAt?: string;
   /** Whether session has new content since last viewed */
   hasUnread?: boolean;
+  // Metadata fields (added from SessionMetadataService)
+  /** Custom title that overrides auto-generated title */
+  customTitle?: string;
+  /** Whether the session is archived (hidden from default list) */
+  isArchived?: boolean;
 }
 
 /**

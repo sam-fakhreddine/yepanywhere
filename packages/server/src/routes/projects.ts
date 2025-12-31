@@ -1,5 +1,6 @@
 import { isUrlProjectId } from "@claude-anywhere/shared";
 import { Hono } from "hono";
+import type { SessionMetadataService } from "../metadata/index.js";
 import type { NotificationService } from "../notifications/index.js";
 import type { ProjectScanner } from "../projects/scanner.js";
 import type { SessionReader } from "../sessions/reader.js";
@@ -13,6 +14,7 @@ export interface ProjectsDeps {
   supervisor?: Supervisor;
   externalTracker?: ExternalSessionTracker;
   notificationService?: NotificationService;
+  sessionMetadataService?: SessionMetadataService;
 }
 
 interface ProjectActivityCounts {
@@ -64,7 +66,7 @@ async function getProjectActivityCounts(
 export function createProjectsRoutes(deps: ProjectsDeps): Hono {
   const routes = new Hono();
 
-  // Helper to enrich sessions with real status and notification state
+  // Helper to enrich sessions with real status, notification state, and metadata
   function enrichSessions(sessions: SessionSummary[]): SessionSummary[] {
     return sessions.map((session) => {
       const process = deps.supervisor?.getProcessForSession(session.id);
@@ -101,12 +103,19 @@ export function createProjectsRoutes(deps: ProjectsDeps): Hono {
         ? deps.notificationService.hasUnread(session.id, session.updatedAt)
         : undefined;
 
+      // Get session metadata (custom title, archived status)
+      const metadata = deps.sessionMetadataService?.getMetadata(session.id);
+      const customTitle = metadata?.customTitle;
+      const isArchived = metadata?.isArchived;
+
       return {
         ...session,
         status,
         pendingInputType,
         lastSeenAt,
         hasUnread,
+        customTitle,
+        isArchived,
       };
     });
   }

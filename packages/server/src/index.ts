@@ -4,6 +4,7 @@ import { createNodeWebSocket } from "@hono/node-ws";
 import { Hono } from "hono";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { SessionMetadataService } from "./metadata/index.js";
 import { NotificationService } from "./notifications/index.js";
 import { detectClaudeCli } from "./sdk/cli-detection.js";
 import { RealClaudeSDK } from "./sdk/real.js";
@@ -55,12 +56,14 @@ const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({
   app: wsApp,
 });
 
-// Create and initialize NotificationService
+// Create and initialize services
 const notificationService = new NotificationService({ eventBus });
+const sessionMetadataService = new SessionMetadataService();
 
 async function startServer() {
-  // Initialize notification service (loads state from disk)
+  // Initialize services (loads state from disk)
   await notificationService.initialize();
+  await sessionMetadataService.initialize();
 
   // Create the app with real SDK and WebSocket support
   const app = createApp({
@@ -71,6 +74,7 @@ async function startServer() {
     eventBus,
     upgradeWebSocket,
     notificationService,
+    sessionMetadataService,
   });
 
   const server = serve({ fetch: app.fetch, port: config.port }, (info) => {

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { SessionMetadataService } from "./metadata/index.js";
 import { corsMiddleware, requireCustomHeader } from "./middleware/security.js";
 import type { NotificationService } from "./notifications/index.js";
 import { ProjectScanner } from "./projects/scanner.js";
@@ -34,6 +35,8 @@ export interface AppOptions {
   upgradeWebSocket?: UploadDeps["upgradeWebSocket"];
   /** NotificationService for tracking session read state */
   notificationService?: NotificationService;
+  /** SessionMetadataService for custom titles and archive status */
+  sessionMetadataService?: SessionMetadataService;
 }
 
 export function createApp(options: AppOptions): Hono {
@@ -85,6 +88,7 @@ export function createApp(options: AppOptions): Hono {
       supervisor,
       externalTracker,
       notificationService: options.notificationService,
+      sessionMetadataService: options.sessionMetadataService,
     }),
   );
   app.route(
@@ -95,6 +99,7 @@ export function createApp(options: AppOptions): Hono {
       readerFactory,
       externalTracker,
       notificationService: options.notificationService,
+      sessionMetadataService: options.sessionMetadataService,
     }),
   );
   app.route("/api/processes", createProcessesRoutes({ supervisor }));

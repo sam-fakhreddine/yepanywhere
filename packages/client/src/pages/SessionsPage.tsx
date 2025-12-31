@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useState } from "react";
+import { type KeyboardEvent, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { SessionStatusBadge } from "../components/StatusBadge";
@@ -14,6 +14,42 @@ export function SessionsPage() {
     `draft-new-session-${projectId}`,
   );
   const [starting, setStarting] = useState(false);
+
+  // Filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+
+  // Filter sessions based on search and archive status
+  const filteredSessions = useMemo(() => {
+    return sessions.filter((session) => {
+      // Filter by archived status
+      if (!showArchived && session.isArchived) {
+        return false;
+      }
+
+      // Filter by search query
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const title = (
+          session.customTitle ??
+          session.title ??
+          ""
+        ).toLowerCase();
+        const fullTitle = (session.fullTitle ?? "").toLowerCase();
+        if (!title.includes(query) && !fullTitle.includes(query)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [sessions, searchQuery, showArchived]);
+
+  // Count archived sessions for badge
+  const archivedCount = useMemo(
+    () => sessions.filter((s) => s.isArchived).length,
+    [sessions],
+  );
 
   const handleStartSession = async () => {
     if (!projectId || !newMessage.trim()) return;
@@ -81,15 +117,44 @@ export function SessionsPage() {
       </div>
 
       <h2>Sessions</h2>
+
+      {/* Filter bar */}
+      <div className="filter-bar">
+        <input
+          type="text"
+          className="filter-search"
+          placeholder="Search sessions..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        <div className="filter-chips">
+          <button
+            type="button"
+            className={`filter-chip ${showArchived ? "active" : ""}`}
+            onClick={() => setShowArchived(!showArchived)}
+          >
+            Archived{archivedCount > 0 && ` (${archivedCount})`}
+          </button>
+        </div>
+      </div>
+
       {sessions.length === 0 ? (
         <p>No sessions yet</p>
+      ) : filteredSessions.length === 0 ? (
+        <p className="no-results">No sessions match your filters</p>
       ) : (
         <ul className="session-list">
-          {sessions.map((session) => (
-            <li key={session.id}>
+          {filteredSessions.map((session) => (
+            <li
+              key={session.id}
+              className={session.isArchived ? "archived" : ""}
+            >
               <Link to={`/projects/${projectId}/sessions/${session.id}`}>
                 <strong title={session.fullTitle || undefined}>
-                  {session.title || "Untitled"}
+                  {session.customTitle ?? session.title ?? "Untitled"}
+                  {session.isArchived && (
+                    <span className="archived-badge">Archived</span>
+                  )}
                 </strong>
                 <span className="meta">
                   {session.messageCount} messages
