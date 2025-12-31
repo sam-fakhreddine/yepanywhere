@@ -79,6 +79,21 @@ export const api = {
       body: JSON.stringify({ message, mode, attachments }),
     }),
 
+  /**
+   * Create a session without sending an initial message.
+   * Use this for two-phase flow: create session, upload files, then send message.
+   */
+  createSession: (projectId: string, mode?: PermissionMode) =>
+    fetchJSON<{
+      sessionId: string;
+      processId: string;
+      permissionMode: PermissionMode;
+      modeVersion: number;
+    }>(`/projects/${projectId}/sessions/create`, {
+      method: "POST",
+      body: JSON.stringify({ mode }),
+    }),
+
   resumeSession: (
     projectId: string,
     sessionId: string,

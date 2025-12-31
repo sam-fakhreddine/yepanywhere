@@ -22,12 +22,12 @@ export const exitPlanModeRenderer: ToolRenderer<
   },
 
   // Render inline without any tool-row wrapper - full control over rendering
-  renderInline(input, result, isError, status, _context) {
+  renderInline(input, result, isError, status) {
     const planInput = input as ExitPlanModeInput;
     const planResult = result as ExitPlanModeResult;
 
-    // Prefer input.plan (tool use) over result.plan
-    const plan = planInput?.plan || planResult?.plan;
+    // Get plan content from input (tool_use) or result (tool_result)
+    const plan: string | undefined = planInput?.plan || planResult?.plan;
 
     if (isError) {
       const errorResult = result as unknown as
@@ -42,17 +42,19 @@ export const exitPlanModeRenderer: ToolRenderer<
       );
     }
 
-    // Show loading state while pending
-    if (status === "pending") {
-      return <div className="exitplan-pending">Planning...</div>;
-    }
-
+    // Show "Planning..." only if we don't have plan content yet
     if (!plan) {
+      if (status === "pending") {
+        return <div className="exitplan-pending">Planning...</div>;
+      }
       return null;
     }
 
+    // Show the plan content (works for both pending and complete states)
     return (
-      <div className="exitplan-inline">
+      <div
+        className={`exitplan-inline ${status === "pending" ? "pending" : ""}`}
+      >
         <Markdown remarkPlugins={[remarkGfm]}>{plan}</Markdown>
       </div>
     );

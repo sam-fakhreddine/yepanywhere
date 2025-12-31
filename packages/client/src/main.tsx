@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { App } from "./App";
 import { initializeFontSize } from "./hooks/useFontSize";
 import { ActivityPage } from "./pages/ActivityPage";
+import { NewSessionPage } from "./pages/NewSessionPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { SessionPage } from "./pages/SessionPage";
 import { SessionsPage } from "./pages/SessionsPage";
@@ -26,6 +27,10 @@ createRoot(rootElement).render(
           <Route path="/" element={<Navigate to="/projects" replace />} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/projects/:projectId" element={<SessionsPage />} />
+          <Route
+            path="/projects/:projectId/new-session"
+            element={<NewSessionPage />}
+          />
           <Route
             path="/projects/:projectId/sessions/:sessionId"
             element={<SessionPage />}

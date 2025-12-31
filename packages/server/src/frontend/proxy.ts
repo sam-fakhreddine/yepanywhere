@@ -64,7 +64,7 @@ export function createFrontendProxy(
     );
 
     proxyReq.on("error", (err) => {
-      console.error("[Proxy HTTP] Error:", err.message);
+      console.error("[Proxy] HTTP error:", err.message);
       if (!clientRes.headersSent) {
         clientRes.writeHead(502, { "Content-Type": "text/plain" });
         clientRes.end(`Vite dev server not available at ${target}`);
@@ -79,19 +79,12 @@ export function createFrontendProxy(
    * This is simpler and more reliable than http-proxy for WebSocket.
    */
   const ws = (req: IncomingMessage, clientSocket: Duplex, head: Buffer) => {
-    console.log("[Proxy WS] Connecting to Vite:", req.url);
-    console.log("[Proxy WS] Client socket writable:", clientSocket.writable);
-    console.log("[Proxy WS] Client socket readable:", clientSocket.readable);
-
-    // Check for immediate close/error on client socket
-    clientSocket.on("error", (err) => {
-      console.error("[Proxy WS] Client socket error (early):", err.message);
+    clientSocket.on("error", () => {
+      // Client disconnected - ignore
     });
 
     // Connect to Vite
     const serverSocket = net.connect(vitePort, viteHost, () => {
-      console.log("[Proxy WS] Connected to Vite, sending upgrade request");
-
       // Build the upgrade request with modified headers
       const headers = { ...req.headers };
       // Change Origin to match Vite's expected origin
@@ -110,50 +103,29 @@ export function createFrontendProxy(
       }
       upgradeReq += "\r\n";
 
-      console.log("[Proxy WS] Sending upgrade request to Vite");
       serverSocket.write(upgradeReq);
       if (head.length > 0) {
         serverSocket.write(head);
       }
 
-      // Log the first response from Vite for debugging
-      let firstData = true;
-      serverSocket.on("data", (chunk) => {
-        if (firstData) {
-          firstData = false;
-          const preview = chunk.toString(
-            "utf8",
-            0,
-            Math.min(200, chunk.length),
-          );
-          console.log("[Proxy WS] First data from Vite:", preview);
-        }
-      });
-
       // Pipe data bidirectionally
       serverSocket.pipe(clientSocket);
       clientSocket.pipe(serverSocket);
-
-      console.log("[Proxy WS] WebSocket proxy established");
     });
 
-    serverSocket.on("error", (err) => {
-      console.error("[Proxy WS] Server socket error:", err.message);
+    serverSocket.on("error", () => {
       clientSocket.end();
     });
 
-    clientSocket.on("error", (err) => {
-      console.error("[Proxy WS] Client socket error:", err.message);
+    clientSocket.on("error", () => {
       serverSocket.end();
     });
 
     serverSocket.on("close", () => {
-      console.log("[Proxy WS] Server socket closed");
       clientSocket.end();
     });
 
     clientSocket.on("close", () => {
-      console.log("[Proxy WS] Client socket closed");
       serverSocket.end();
     });
   };
@@ -231,23 +203,18 @@ export function attachUnifiedUpgradeHandler(
 
   server.on("upgrade", async (req, socket, head) => {
     const urlPath = req.url || "/";
-    console.log("[Upgrade] Received upgrade request for:", urlPath);
 
     // For non-API paths: proxy to Vite (if frontend proxy is enabled)
     if (!isApiPath(urlPath)) {
       if (frontendProxy) {
-        console.log("[Upgrade] Forwarding to Vite:", urlPath);
         frontendProxy.ws(req, socket, head);
       } else {
-        console.log("[Upgrade] No frontend proxy, closing:", urlPath);
         socket.end("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
       }
       return;
     }
 
     // For API paths: route through Hono (replicate @hono/node-ws logic)
-    console.log("[Upgrade] Routing API WebSocket:", urlPath);
-
     const url = new URL(urlPath, "http://localhost");
     const headers = new Headers();
     for (const key in req.headers) {
@@ -278,7 +245,6 @@ export function attachUnifiedUpgradeHandler(
     const hasNewSymbols = symbolsAfter.length > symbolsBefore.length;
 
     if (!hasNewSymbols) {
-      console.log("[Upgrade] No WebSocket handler matched:", urlPath);
       socket.end(
         "HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
       );
@@ -286,7 +252,6 @@ export function attachUnifiedUpgradeHandler(
     }
 
     // Handle the upgrade with the ws library
-    console.log("[Upgrade] Handling WebSocket upgrade for:", urlPath);
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit("connection", ws, req);
     });
@@ -303,14 +268,11 @@ export function attachFrontendProxyUpgrade(
 ) {
   server.on("upgrade", (req, socket, head) => {
     const url = req.url || "/";
-    console.log("[Proxy Upgrade] Received upgrade request for:", url);
 
     if (isApiPath(url)) {
-      console.log("[Proxy Upgrade] Letting API WebSocket through:", url);
       return;
     }
 
-    console.log("[Proxy Upgrade] Forwarding to Vite:", url);
     frontendProxy.ws(req, socket, head);
   });
 }

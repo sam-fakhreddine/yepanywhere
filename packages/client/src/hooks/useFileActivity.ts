@@ -54,6 +54,18 @@ export interface ProcessStateEvent {
   timestamp: string;
 }
 
+export interface SessionMetadataChangedEvent {
+  type: "session-metadata-changed";
+  sessionId: string;
+  /** Updated title (if changed) */
+  title?: string;
+  /** Updated archived status (if changed) */
+  archived?: boolean;
+  /** Updated starred status (if changed) */
+  starred?: boolean;
+  timestamp: string;
+}
+
 interface UseFileActivityOptions {
   /** Maximum number of events to keep in buffer (default: 500) */
   maxEvents?: number;
@@ -69,6 +81,8 @@ interface UseFileActivityOptions {
   onSessionSeen?: (event: SessionSeenEvent) => void;
   /** Callback when a process state changes (running/waiting-input) */
   onProcessStateChange?: (event: ProcessStateEvent) => void;
+  /** Callback when session metadata changes (title, archived, starred) */
+  onSessionMetadataChange?: (event: SessionMetadataChangedEvent) => void;
 }
 
 const API_BASE = "/api";
@@ -83,6 +97,7 @@ export function useFileActivity(options: UseFileActivityOptions = {}) {
     onSessionCreated,
     onSessionSeen,
     onProcessStateChange,
+    onSessionMetadataChange,
   } = options;
 
   const [events, setEvents] = useState<FileChangeEvent[]>([]);
@@ -103,6 +118,8 @@ export function useFileActivity(options: UseFileActivityOptions = {}) {
   onSessionSeenRef.current = onSessionSeen;
   const onProcessStateChangeRef = useRef(onProcessStateChange);
   onProcessStateChangeRef.current = onProcessStateChange;
+  const onSessionMetadataChangeRef = useRef(onSessionMetadataChange);
+  onSessionMetadataChangeRef.current = onSessionMetadataChange;
 
   const connect = useCallback(() => {
     if (eventSourceRef.current) return;
@@ -176,6 +193,17 @@ export function useFileActivity(options: UseFileActivityOptions = {}) {
       }
     };
 
+    const handleSessionMetadataChange = (event: MessageEvent) => {
+      if (event.data === undefined || event.data === null) return;
+
+      try {
+        const data = JSON.parse(event.data) as SessionMetadataChangedEvent;
+        onSessionMetadataChangeRef.current?.(data);
+      } catch {
+        // Ignore malformed JSON
+      }
+    };
+
     es.addEventListener("connected", () => {
       // Connection acknowledged
     });
@@ -185,6 +213,10 @@ export function useFileActivity(options: UseFileActivityOptions = {}) {
     es.addEventListener("session-created", handleSessionCreated);
     es.addEventListener("session-seen", handleSessionSeen);
     es.addEventListener("process-state-changed", handleProcessStateChange);
+    es.addEventListener(
+      "session-metadata-changed",
+      handleSessionMetadataChange,
+    );
     es.addEventListener("heartbeat", () => {
       // Keep-alive, no action needed
     });

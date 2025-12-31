@@ -54,8 +54,10 @@ export class Process {
   /** In-memory message history for mock SDK (real SDK persists to disk) */
   private messageHistory: SDKMessage[] = [];
 
-  /** Pending tool approval request (from canUseTool callback) */
-  private pendingToolApproval: PendingToolApproval | null = null;
+  /** Pending tool approval requests (from canUseTool callback) - supports concurrent approvals */
+  private pendingToolApprovals: Map<string, PendingToolApproval> = new Map();
+  /** Order of pending approval request IDs for FIFO processing */
+  private pendingToolApprovalQueue: string[] = [];
 
   /** Current permission mode for tool approvals */
   private _permissionMode: PermissionMode = "default";
@@ -150,15 +152,16 @@ export class Process {
     this.clearIdleTimer();
     this.iteratorDone = true;
 
-    // Resolve any pending tool approval with denial
-    if (this.pendingToolApproval) {
-      this.pendingToolApproval.resolve({
+    // Resolve all pending tool approvals with denial
+    for (const pending of this.pendingToolApprovals.values()) {
+      pending.resolve({
         behavior: "deny",
         message: `Process terminated: ${reason}`,
         interrupt: true,
       });
-      this.pendingToolApproval = null;
     }
+    this.pendingToolApprovals.clear();
+    this.pendingToolApprovalQueue = [];
 
     this.setState({ type: "terminated", reason, error });
     this.emit({ type: "terminated", reason, error });
@@ -239,6 +242,36 @@ export class Process {
   }
 
   /**
+   * Format file size for display.
+   */
+  private formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024)
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  }
+
+  /**
+   * Build user message content that matches what MessageQueue sends to the SDK.
+   * This ensures SSE/history messages can be deduplicated against JSONL.
+   */
+  private buildUserMessageContent(message: UserMessage): string {
+    let text = message.text;
+
+    // Append attachment paths (same format as MessageQueue.toSDKMessage)
+    if (message.attachments?.length) {
+      const lines = message.attachments.map(
+        (f) =>
+          `- ${f.originalName} (${this.formatSize(f.size)}, ${f.mimeType}): ${f.path}`,
+      );
+      text += `\n\nUser uploaded files:\n${lines.join("\n")}`;
+    }
+
+    return text;
+  }
+
+  /**
    * Queue a message to be sent to the SDK.
    * For real SDK, pushes to MessageQueue.
    * For mock SDK, uses legacy queue behavior.
@@ -262,18 +295,22 @@ export class Process {
     const uuid = randomUUID();
     const messageWithUuid: UserMessage = { ...message, uuid };
 
+    // Build content that matches what the SDK will write to JSONL.
+    // This ensures SSE/history messages can be deduplicated against JSONL.
+    const content = this.buildUserMessageContent(message);
+
     const sdkMessage = {
       type: "user",
       uuid,
-      message: { role: "user", content: message.text },
+      message: { role: "user", content },
     } as SDKMessage;
 
-    // Only add to history for mock SDK (real SDK persists to disk, and clients
-    // load from disk via API - adding here would cause duplicate messages when
-    // SSE replays to late-joining clients who already loaded from disk)
-    if (!this.messageQueue) {
-      this.messageHistory.push(sdkMessage);
-    }
+    // Add to history for SSE replay to late-joining clients.
+    // The client-side deduplication (mergeSSEMessage, mergeJSONLMessages) handles
+    // any duplicates when JSONL is later fetched. This is especially important
+    // for the two-phase flow (createSession + queueMessage) where the client
+    // may connect before the JSONL is written.
+    this.messageHistory.push(sdkMessage);
 
     // Emit to current SSE subscribers so other clients see it immediately
     this.emit({ type: "message", message: sdkMessage });
@@ -369,18 +406,26 @@ export class Process {
       timestamp: new Date().toISOString(),
     };
 
-    // Transition to waiting-input state
-    this.setState({ type: "waiting-input", request });
+    // Add to the pending approvals map and queue
+    // The first pending approval is shown to the user, others wait in queue
+    const isFirstPending = this.pendingToolApprovals.size === 0;
 
     // Create a promise that will be resolved by respondToInput
     return new Promise<ToolApprovalResult>((resolve) => {
-      this.pendingToolApproval = { request, resolve };
+      this.pendingToolApprovals.set(request.id, { request, resolve });
+      this.pendingToolApprovalQueue.push(request.id);
 
       // Handle abort signal
       const onAbort = () => {
-        if (this.pendingToolApproval?.request.id === request.id) {
-          this.pendingToolApproval = null;
-          this.setState({ type: "running" });
+        if (this.pendingToolApprovals.has(request.id)) {
+          this.pendingToolApprovals.delete(request.id);
+          this.pendingToolApprovalQueue = this.pendingToolApprovalQueue.filter(
+            (id) => id !== request.id,
+          );
+          // If this was the current request being shown, emit the next one
+          if (isFirstPending) {
+            this.emitNextPendingApproval();
+          }
           resolve({
             behavior: "deny",
             message: "Operation aborted",
@@ -390,7 +435,29 @@ export class Process {
       };
 
       options.signal.addEventListener("abort", onAbort, { once: true });
+
+      // Only emit state change for the first pending approval
+      // Subsequent approvals wait in queue until the first is resolved
+      if (isFirstPending) {
+        this.setState({ type: "waiting-input", request });
+      }
     });
+  }
+
+  /**
+   * Emit the next pending approval to the client, or transition to running if none left.
+   */
+  private emitNextPendingApproval(): void {
+    const nextId = this.pendingToolApprovalQueue[0];
+    if (nextId !== undefined) {
+      const next = this.pendingToolApprovals.get(nextId);
+      if (next) {
+        this.setState({ type: "waiting-input", request: next.request });
+        return;
+      }
+    }
+    // No more pending approvals
+    this.setState({ type: "running" });
   }
 
   /**
@@ -405,11 +472,8 @@ export class Process {
     answers?: Record<string, string>,
     feedback?: string,
   ): boolean {
-    if (!this.pendingToolApproval) {
-      return false;
-    }
-
-    if (this.pendingToolApproval.request.id !== requestId) {
+    const pending = this.pendingToolApprovals.get(requestId);
+    if (!pending) {
       return false;
     }
 
@@ -427,7 +491,7 @@ export class Process {
 
     // If answers provided (AskUserQuestion), pass them as updatedInput
     if (answers && response === "approve") {
-      const originalInput = this.pendingToolApproval.request.toolInput as {
+      const originalInput = pending.request.toolInput as {
         questions?: unknown[];
       };
       result.updatedInput = {
@@ -436,20 +500,36 @@ export class Process {
       };
     }
 
-    this.pendingToolApproval.resolve(result);
-    this.pendingToolApproval = null;
+    // If EnterPlanMode is approved, switch to plan mode
+    if (
+      response === "approve" &&
+      pending.request.toolName === "EnterPlanMode"
+    ) {
+      this.setPermissionMode("plan");
+    }
 
-    // Transition back to running state
-    this.setState({ type: "running" });
+    // Resolve the promise and remove from tracking
+    pending.resolve(result);
+    this.pendingToolApprovals.delete(requestId);
+    this.pendingToolApprovalQueue = this.pendingToolApprovalQueue.filter(
+      (id) => id !== requestId,
+    );
+
+    // Emit the next pending approval, or transition to running if none left
+    this.emitNextPendingApproval();
 
     return true;
   }
 
   /**
-   * Get the pending input request, if any.
+   * Get the current pending input request (first in queue), if any.
    */
   getPendingInputRequest(): InputRequest | null {
-    return this.pendingToolApproval?.request ?? null;
+    const firstId = this.pendingToolApprovalQueue[0];
+    if (firstId === undefined) {
+      return null;
+    }
+    return this.pendingToolApprovals.get(firstId)?.request ?? null;
   }
 
   subscribe(listener: Listener): () => void {

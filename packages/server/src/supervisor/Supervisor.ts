@@ -10,6 +10,7 @@ import type {
   EventBus,
   ProcessStateEvent,
   ProcessStateType,
+  SessionAbortedEvent,
   SessionCreatedEvent,
   SessionStatusEvent,
   WorkerActivityEvent,
@@ -121,6 +122,102 @@ export class Supervisor {
       undefined,
       permissionMode,
     );
+  }
+
+  /**
+   * Create a session without sending an initial message.
+   * Used for two-phase flow: create session first, upload files, then send message.
+   * The agent will wait for a message to be pushed to the queue.
+   */
+  async createSession(
+    projectPath: string,
+    permissionMode?: PermissionMode,
+  ): Promise<Process | QueuedResponse> {
+    const projectId = encodeProjectId(projectPath);
+
+    // Check if at capacity
+    if (this.isAtCapacity()) {
+      // Try to preempt an idle worker
+      const preemptable = this.findPreemptableWorker();
+      if (preemptable) {
+        await this.preemptWorker(preemptable);
+        // Fall through to create session normally
+      } else {
+        // Queue the request - use empty message placeholder
+        const { queueId, position } = this.workerQueue.enqueue({
+          type: "new-session",
+          projectPath,
+          projectId,
+          message: { text: "" }, // Placeholder, will be replaced when first message sent
+          permissionMode,
+        });
+        return { queued: true, queueId, position };
+      }
+    }
+
+    // Use real SDK if available
+    if (this.realSdk) {
+      return this.createRealSession(projectPath, projectId, permissionMode);
+    }
+
+    // Fall back to legacy mock SDK - not supported for create-only
+    throw new Error(
+      "createSession requires real SDK - legacy mock SDK not supported",
+    );
+  }
+
+  /**
+   * Create a session using the real SDK without an initial message.
+   * The session is created and waits for a message to be queued.
+   */
+  private async createRealSession(
+    projectPath: string,
+    projectId: UrlProjectId,
+    permissionMode?: PermissionMode,
+  ): Promise<Process> {
+    if (!this.realSdk) {
+      throw new Error("realSdk is not available");
+    }
+
+    const processHolder: { process: Process | null } = { process: null };
+    const effectiveMode = permissionMode ?? this.defaultPermissionMode;
+
+    // Start session WITHOUT an initial message - agent will wait
+    const result = await this.realSdk.startSession({
+      cwd: projectPath,
+      // No initialMessage - queue will block until one is pushed
+      permissionMode: effectiveMode,
+      onToolApproval: async (toolName, input, opts) => {
+        if (!processHolder.process) {
+          return { behavior: "deny", message: "Process not ready" };
+        }
+        return processHolder.process.handleToolApproval(toolName, input, opts);
+      },
+    });
+
+    const { iterator, queue, abort } = result;
+
+    const tempSessionId = randomUUID();
+    const options: ProcessConstructorOptions = {
+      projectPath,
+      projectId,
+      sessionId: tempSessionId,
+      idleTimeoutMs: this.idleTimeoutMs,
+      queue,
+      abortFn: abort,
+      permissionMode: effectiveMode,
+    };
+
+    const process = new Process(iterator, options);
+    processHolder.process = process;
+
+    // Wait for the real session ID from the SDK
+    await process.waitForSessionId();
+
+    // Register as a new session
+    this.registerProcess(process, true);
+
+    return process;
   }
 
   /**
@@ -359,9 +456,25 @@ export class Supervisor {
     const process = this.processes.get(processId);
     if (!process) return false;
 
+    // Emit session-aborted event BEFORE aborting, so ExternalSessionTracker
+    // can set up the grace period before any file changes arrive
+    this.emitSessionAborted(process.sessionId, process.projectId);
+
     await process.abort();
     this.unregisterProcess(process);
     return true;
+  }
+
+  private emitSessionAborted(sessionId: string, projectId: UrlProjectId): void {
+    if (!this.eventBus) return;
+
+    const event: SessionAbortedEvent = {
+      type: "session-aborted",
+      sessionId,
+      projectId,
+      timestamp: new Date().toISOString(),
+    };
+    this.eventBus.emit(event);
   }
 
   private registerProcess(process: Process, isNewSession: boolean): void {

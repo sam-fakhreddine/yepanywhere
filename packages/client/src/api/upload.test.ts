@@ -317,34 +317,8 @@ describe("uploadChunks", () => {
   });
 });
 
-// Note: fileToChunks tests are skipped because jsdom doesn't support Blob.arrayBuffer()
-// This function is a thin wrapper around File.slice() and is tested via E2E tests
+// Note: fileToChunks is tested via E2E tests since jsdom doesn't support Blob.arrayBuffer()
 describe("fileToChunks", () => {
-  it.skip("yields chunks of specified size (requires browser File API)", async () => {
-    // Create a mock File
-    const content = new Uint8Array(150);
-    for (let i = 0; i < 150; i++) content[i] = i;
-    const file = new File([content], "test.bin", {
-      type: "application/octet-stream",
-    });
-
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of fileToChunks(file, 64)) {
-      chunks.push(chunk);
-    }
-
-    expect(chunks.length).toBe(3); // 64 + 64 + 22
-    expect(chunks[0]?.length).toBe(64);
-    expect(chunks[1]?.length).toBe(64);
-    expect(chunks[2]?.length).toBe(22);
-
-    // Verify content is preserved
-    expect(chunks[0]?.[0]).toBe(0);
-    expect(chunks[0]?.[63]).toBe(63);
-    expect(chunks[1]?.[0]).toBe(64);
-    expect(chunks[2]?.[0]).toBe(128);
-  });
-
   it("handles empty file", async () => {
     const file = new File([], "empty.txt", { type: "text/plain" });
 
@@ -354,34 +328,6 @@ describe("fileToChunks", () => {
     }
 
     expect(chunks.length).toBe(0);
-  });
-
-  it.skip("handles file smaller than chunk size (requires browser File API)", async () => {
-    const content = new Uint8Array([1, 2, 3, 4, 5]);
-    const file = new File([content], "small.bin");
-
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of fileToChunks(file, 64 * 1024)) {
-      chunks.push(chunk);
-    }
-
-    expect(chunks.length).toBe(1);
-    expect(chunks[0]?.length).toBe(5);
-    expect(chunks[0] && Array.from(chunks[0])).toEqual([1, 2, 3, 4, 5]);
-  });
-
-  it.skip("handles file exactly divisible by chunk size (requires browser File API)", async () => {
-    const content = new Uint8Array(128);
-    const file = new File([content], "exact.bin");
-
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of fileToChunks(file, 64)) {
-      chunks.push(chunk);
-    }
-
-    expect(chunks.length).toBe(2);
-    expect(chunks[0]?.length).toBe(64);
-    expect(chunks[1]?.length).toBe(64);
   });
 });
 

@@ -9,6 +9,7 @@ import type {
   BusEvent,
   EventBus,
   FileChangeEvent,
+  SessionAbortedEvent,
   SessionCreatedEvent,
   SessionStatusEvent,
 } from "../watcher/EventBus.js";
@@ -23,12 +24,17 @@ interface ExternalSessionInfo {
   timeoutId: ReturnType<typeof setTimeout>;
 }
 
+/** Default grace period after abort before external detection resumes (30 seconds) */
+const DEFAULT_ABORT_GRACE_MS = 30000;
+
 export interface ExternalSessionTrackerOptions {
   eventBus: EventBus;
   supervisor: Supervisor;
   scanner: ProjectScanner;
   /** Time in ms before external status decays to idle (default: 30000) */
   decayMs?: number;
+  /** Grace period in ms after abort before external detection resumes (default: 30000) */
+  abortGraceMs?: number;
   /** Optional callback to get session summary for new external sessions */
   getSessionSummary?: (
     sessionId: string,
@@ -45,10 +51,13 @@ export interface ExternalSessionTrackerOptions {
  */
 export class ExternalSessionTracker {
   private externalSessions: Map<string, ExternalSessionInfo> = new Map();
+  /** Sessions recently aborted by this server - grace period before external detection */
+  private recentlyAborted: Map<string, number> = new Map(); // sessionId -> timestamp
   private eventBus: EventBus;
   private supervisor: Supervisor;
   private scanner: ProjectScanner;
   private decayMs: number;
+  private abortGraceMs: number;
   private unsubscribe: (() => void) | null = null;
   private getSessionSummary?: (
     sessionId: string,
@@ -60,14 +69,21 @@ export class ExternalSessionTracker {
     this.supervisor = options.supervisor;
     this.scanner = options.scanner;
     this.decayMs = options.decayMs ?? 30000;
+    this.abortGraceMs = options.abortGraceMs ?? DEFAULT_ABORT_GRACE_MS;
     this.getSessionSummary = options.getSessionSummary;
 
-    // Subscribe to bus events, filter for file changes
+    // Subscribe to bus events
     this.unsubscribe = options.eventBus.subscribe((event: BusEvent) => {
       if (event.type === "file-change") {
         this.handleFileChange(event);
+      } else if (event.type === "session-aborted") {
+        this.handleSessionAborted(event);
       }
     });
+  }
+
+  private handleSessionAborted(event: SessionAbortedEvent): void {
+    this.markAborted(event.sessionId);
   }
 
   /**
@@ -111,6 +127,33 @@ export class ExternalSessionTracker {
   }
 
   /**
+   * Mark a session as recently aborted. During the grace period, file changes
+   * won't trigger external session detection (they're from our own cleanup).
+   * Called by Supervisor when a process is aborted.
+   */
+  markAborted(sessionId: string): void {
+    this.recentlyAborted.set(sessionId, Date.now());
+    // Also remove from external tracking if present (abort takes precedence)
+    this.removeExternal(sessionId);
+  }
+
+  /**
+   * Check if a session is within the abort grace period.
+   */
+  private isInAbortGracePeriod(sessionId: string): boolean {
+    const abortedAt = this.recentlyAborted.get(sessionId);
+    if (!abortedAt) return false;
+
+    const elapsed = Date.now() - abortedAt;
+    if (elapsed >= this.abortGraceMs) {
+      // Grace period expired - clean up
+      this.recentlyAborted.delete(sessionId);
+      return false;
+    }
+    return true;
+  }
+
+  /**
    * Get all currently external session IDs.
    */
   getExternalSessions(): string[] {
@@ -131,6 +174,7 @@ export class ExternalSessionTracker {
       clearTimeout(info.timeoutId);
     }
     this.externalSessions.clear();
+    this.recentlyAborted.clear();
   }
 
   private handleFileChange(event: FileChangeEvent): void {
@@ -154,7 +198,13 @@ export class ExternalSessionTracker {
       return;
     }
 
-    // We don't own it - mark as external
+    // Check if this session was recently aborted by us - ignore file changes
+    // during grace period (they're from our own process cleanup, not external)
+    if (this.isInAbortGracePeriod(sessionId)) {
+      return;
+    }
+
+    // We don't own it and it's not in grace period - mark as external
     this.markExternal(sessionId, dirProjectId);
   }
 

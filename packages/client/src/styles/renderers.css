@@ -833,7 +833,7 @@ details[open] .collapsible__icon {
 
 .modal-content {
   flex: 1;
-  overflow-y: auto;
+  overflow: auto;
   padding: 1rem;
 }
 

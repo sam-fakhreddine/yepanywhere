@@ -15,7 +15,7 @@ import { UploadManager } from "../uploads/index.js";
 /** Progress update interval in bytes (64KB) */
 const PROGRESS_INTERVAL_BYTES = 64 * 1024;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Complex third-party type from @hono/node-ws
 type UpgradeWebSocketFn = (createEvents: (c: Context) => WSEvents) => any;
 
 export interface UploadDeps {
@@ -40,10 +40,8 @@ export function createUploadRoutes(deps: UploadDeps): Hono {
   routes.get(
     "/projects/:projectId/sessions/:sessionId/upload/ws",
     deps.upgradeWebSocket((c) => {
-      console.log("[Upload WS] Route matched! Setting up WebSocket handler");
       const projectId = c.req.param("projectId");
       const sessionId = c.req.param("sessionId");
-      console.log("[Upload WS] Project:", projectId, "Session:", sessionId);
 
       // Track current upload for this connection
       let currentUploadId: string | null = null;
@@ -117,15 +115,6 @@ export function createUploadRoutes(deps: UploadDeps): Hono {
           stringData = bufferData.toString("utf8");
         }
 
-        console.log(
-          "[Upload WS] Message received, typeof:",
-          typeof data,
-          "isBuffer:",
-          Buffer.isBuffer(data),
-          "preview:",
-          stringData?.substring(0, 50),
-        );
-
         // Try to parse as JSON control message first
         let msg: UploadClientMessage | null = null;
         if (stringData) {
@@ -133,7 +122,6 @@ export function createUploadRoutes(deps: UploadDeps): Hono {
           if (trimmed.startsWith("{")) {
             try {
               msg = JSON.parse(trimmed) as UploadClientMessage;
-              console.log("[Upload WS] Parsed control message:", msg.type);
             } catch {
               // Not valid JSON - treat as binary data
               msg = null;
@@ -160,12 +148,9 @@ export function createUploadRoutes(deps: UploadDeps): Hono {
                 );
                 currentUploadId = uploadId;
                 lastProgressSent = 0;
-                console.log("[Upload WS] Upload started:", uploadId);
               } catch (err) {
                 const message =
-                  err instanceof Error
-                    ? err.message
-                    : "Failed to start upload";
+                  err instanceof Error ? err.message : "Failed to start upload";
                 sendError(ws, message, "START_ERROR");
               }
               break;
@@ -186,7 +171,6 @@ export function createUploadRoutes(deps: UploadDeps): Hono {
                 };
                 sendMessage(ws, complete);
                 currentUploadId = null;
-                console.log("[Upload WS] Upload completed:", file.name);
               } catch (err) {
                 const message =
                   err instanceof Error
@@ -203,7 +187,6 @@ export function createUploadRoutes(deps: UploadDeps): Hono {
               if (currentUploadId) {
                 await uploadManager.cancelUpload(currentUploadId);
                 currentUploadId = null;
-                console.log("[Upload WS] Upload cancelled");
               }
               break;
             }
@@ -231,10 +214,7 @@ export function createUploadRoutes(deps: UploadDeps): Hono {
             return;
           }
 
-          const bytesReceived = await uploadManager.writeChunk(
-            uploadId,
-            chunk,
-          );
+          const bytesReceived = await uploadManager.writeChunk(uploadId, chunk);
 
           // Send progress updates periodically
           if (bytesReceived - lastProgressSent >= PROGRESS_INTERVAL_BYTES) {
@@ -246,9 +226,7 @@ export function createUploadRoutes(deps: UploadDeps): Hono {
             lastProgressSent = bytesReceived;
           }
         } catch (err) {
-          console.error("[Upload WS] Write error:", err);
-          const message =
-            err instanceof Error ? err.message : "Write failed";
+          const message = err instanceof Error ? err.message : "Write failed";
           sendError(ws, message, "WRITE_ERROR");
           await uploadManager.cancelUpload(uploadId);
           currentUploadId = null;

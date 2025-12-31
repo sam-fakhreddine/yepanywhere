@@ -1,10 +1,11 @@
 import type { UploadedFile } from "@claude-anywhere/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, uploadFile } from "../api/client";
 import { MessageInput, type UploadProgress } from "../components/MessageInput";
 import { MessageList } from "../components/MessageList";
 import { QuestionAnswerPanel } from "../components/QuestionAnswerPanel";
+import { Sidebar } from "../components/Sidebar";
 import { StatusIndicator } from "../components/StatusIndicator";
 import { ToastContainer } from "../components/Toast";
 import { ToolApprovalPanel } from "../components/ToolApprovalPanel";
@@ -12,6 +13,7 @@ import { Modal } from "../components/ui/Modal";
 import type { DraftControls } from "../hooks/useDraftPersistence";
 import { useEngagementTracking } from "../hooks/useEngagementTracking";
 import { useSession } from "../hooks/useSession";
+import { useSessions } from "../hooks/useSessions";
 import { useToast } from "../hooks/useToast";
 import { preprocessMessages } from "../lib/preprocessMessages";
 import { type Project, getSessionDisplayTitle } from "../types";
@@ -27,7 +29,14 @@ export function SessionPage() {
     return <div className="error">Invalid session URL</div>;
   }
 
-  return <SessionPageContent projectId={projectId} sessionId={sessionId} />;
+  // Key ensures component remounts on session change, resetting all state
+  return (
+    <SessionPageContent
+      key={sessionId}
+      projectId={projectId}
+      sessionId={sessionId}
+    />
+  );
 }
 
 function SessionPageContent({
@@ -37,6 +46,7 @@ function SessionPageContent({
   projectId: string;
   sessionId: string;
 }) {
+  const navigate = useNavigate();
   const {
     session,
     messages,
@@ -54,9 +64,11 @@ function SessionPageContent({
     addUserMessage,
     removeOptimisticMessage,
   } = useSession(projectId, sessionId);
+  const { sessions: allSessions, processStates } = useSessions(projectId);
   const [sending, setSending] = useState(false);
   const [project, setProject] = useState<Project | null>(null);
   const [scrollTrigger, setScrollTrigger] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const draftControlsRef = useRef<DraftControls | null>(null);
   const handleDraftControlsReady = useCallback((controls: DraftControls) => {
     draftControlsRef.current = controls;
@@ -74,6 +86,7 @@ function SessionPageContent({
   const sessionMenuRef = useRef<HTMLDivElement>(null);
 
   // Local metadata state (for optimistic updates)
+  // Reset when session changes to avoid showing stale data from previous session
   const [localCustomTitle, setLocalCustomTitle] = useState<string | undefined>(
     undefined,
   );
@@ -83,6 +96,14 @@ function SessionPageContent({
   const [localIsStarred, setLocalIsStarred] = useState<boolean | undefined>(
     undefined,
   );
+
+  // Reset local metadata state when sessionId changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset on sessionId change
+  useEffect(() => {
+    setLocalCustomTitle(undefined);
+    setLocalIsArchived(undefined);
+    setLocalIsStarred(undefined);
+  }, [sessionId]);
 
   // File attachment state
   const [attachments, setAttachments] = useState<UploadedFile[]>([]);
@@ -373,13 +394,23 @@ function SessionPageContent({
   return (
     <div className="session-page">
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        projectId={projectId}
+        currentSessionId={sessionId}
+        sessions={allSessions}
+        processStates={processStates}
+        onNavigate={() => setSidebarOpen(false)}
+      />
       <header className="session-header">
         <div className="session-header-left">
-          <Link
-            to={`/projects/${projectId}`}
-            className="back-button"
-            title="Back to project"
-            aria-label="Back to project"
+          <button
+            type="button"
+            className="sidebar-toggle"
+            onClick={() => setSidebarOpen(true)}
+            title="Open sidebar"
+            aria-label="Open sidebar"
           >
             <svg
               width="20"
@@ -390,9 +421,11 @@ function SessionPageContent({
               strokeWidth="2"
               aria-hidden="true"
             >
-              <path d="M19 12H5M12 19l-7-7 7-7" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
-          </Link>
+          </button>
           <div className="session-title-row">
             {isStarred && (
               <svg
@@ -526,7 +559,11 @@ function SessionPageContent({
               className="rename-input"
               rows={3}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && e.metaKey && !isRenaming) {
+                if (
+                  e.key === "Enter" &&
+                  (e.metaKey || e.ctrlKey) &&
+                  !isRenaming
+                ) {
                   handleRename();
                 }
               }}
@@ -575,22 +612,26 @@ function SessionPageContent({
       </main>
 
       <footer className="session-input">
-        {pendingInputRequest && isAskUserQuestion && (
-          <QuestionAnswerPanel
-            request={pendingInputRequest}
-            onSubmit={handleQuestionSubmit}
-            onDeny={handleDeny}
-          />
-        )}
-        {pendingInputRequest && !isAskUserQuestion && (
-          <ToolApprovalPanel
-            request={pendingInputRequest}
-            onApprove={handleApprove}
-            onDeny={handleDeny}
-            onApproveAcceptEdits={handleApproveAcceptEdits}
-            onDenyWithFeedback={handleDenyWithFeedback}
-          />
-        )}
+        {pendingInputRequest &&
+          pendingInputRequest.sessionId === sessionId &&
+          isAskUserQuestion && (
+            <QuestionAnswerPanel
+              request={pendingInputRequest}
+              onSubmit={handleQuestionSubmit}
+              onDeny={handleDeny}
+            />
+          )}
+        {pendingInputRequest &&
+          pendingInputRequest.sessionId === sessionId &&
+          !isAskUserQuestion && (
+            <ToolApprovalPanel
+              request={pendingInputRequest}
+              onApprove={handleApprove}
+              onDeny={handleDeny}
+              onApproveAcceptEdits={handleApproveAcceptEdits}
+              onDenyWithFeedback={handleDenyWithFeedback}
+            />
+          )}
         <MessageInput
           onSend={handleSend}
           disabled={sending}

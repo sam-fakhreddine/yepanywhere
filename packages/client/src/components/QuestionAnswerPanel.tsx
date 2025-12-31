@@ -20,6 +20,7 @@ export function QuestionAnswerPanel({ request, onSubmit, onDeny }: Props) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [otherTexts, setOtherTexts] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   const otherInputRef = useRef<HTMLInputElement>(null);
 
@@ -165,135 +166,167 @@ export function QuestionAnswerPanel({ request, onSubmit, onDeny }: Props) {
 
   if (!questions.length) {
     return (
-      <div className="question-panel">
-        <div className="question-panel-empty">No questions to answer</div>
+      <div className="question-panel-wrapper">
+        <div className="question-panel">
+          <div className="question-panel-empty">No questions to answer</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="question-panel">
-      {/* Tab bar */}
-      <div className="question-tabs">
-        {questions.map((q, idx) => {
-          const isActive = idx === currentTab;
-          const isAnswered = !!answers[q.question];
-          return (
-            <button
-              key={q.question}
-              type="button"
-              className={`question-tab ${isActive ? "active" : ""} ${isAnswered ? "answered" : ""}`}
-              onClick={() => setCurrentTab(idx)}
-            >
-              {isAnswered && <span className="question-tab-check">✓</span>}
-              {q.header}
-            </button>
-          );
-        })}
-      </div>
+    <div className="question-panel-wrapper">
+      {/* Floating toggle button */}
+      <button
+        type="button"
+        className="question-panel-toggle"
+        onClick={() => setCollapsed(!collapsed)}
+        aria-label={
+          collapsed ? "Expand question panel" : "Collapse question panel"
+        }
+        aria-expanded={!collapsed}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={collapsed ? "chevron-up" : "chevron-down"}
+          aria-hidden="true"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
 
-      {/* Current question */}
-      {currentQuestion && (
-        <div className="question-content">
-          <div className="question-text">{currentQuestion.question}</div>
-
-          <div className="question-options-list">
-            {currentQuestion.options.map((option) => {
-              const isSelected = currentAnswer === option.label;
+      {!collapsed && (
+        <div className="question-panel">
+          {/* Tab bar */}
+          <div className="question-tabs">
+            {questions.map((q, idx) => {
+              const isActive = idx === currentTab;
+              const isAnswered = !!answers[q.question];
               return (
                 <button
-                  key={option.label}
+                  key={q.question}
                   type="button"
-                  className={`question-option-btn ${isSelected ? "selected" : ""}`}
-                  onClick={() => handleSelectOption(option.label)}
+                  className={`question-tab ${isActive ? "active" : ""} ${isAnswered ? "answered" : ""}`}
+                  onClick={() => setCurrentTab(idx)}
                 >
-                  <span className="question-option-radio">
-                    {currentQuestion.multiSelect
-                      ? isSelected
-                        ? "☑"
-                        : "☐"
-                      : isSelected
-                        ? "●"
-                        : "○"}
-                  </span>
-                  <div className="question-option-text">
-                    <span className="question-option-label">
-                      {option.label}
-                    </span>
-                    {option.description && (
-                      <span className="question-option-desc">
-                        {option.description}
-                      </span>
-                    )}
-                  </div>
+                  {isAnswered && <span className="question-tab-check">✓</span>}
+                  {q.header}
                 </button>
               );
             })}
+          </div>
 
-            {/* Other option */}
+          {/* Current question */}
+          {currentQuestion && (
+            <div className="question-content">
+              <div className="question-text">{currentQuestion.question}</div>
+
+              <div className="question-options-list">
+                {currentQuestion.options.map((option) => {
+                  const isSelected = currentAnswer === option.label;
+                  return (
+                    <button
+                      key={option.label}
+                      type="button"
+                      className={`question-option-btn ${isSelected ? "selected" : ""}`}
+                      onClick={() => handleSelectOption(option.label)}
+                    >
+                      <span className="question-option-radio">
+                        {currentQuestion.multiSelect
+                          ? isSelected
+                            ? "☑"
+                            : "☐"
+                          : isSelected
+                            ? "●"
+                            : "○"}
+                      </span>
+                      <div className="question-option-text">
+                        <span className="question-option-label">
+                          {option.label}
+                        </span>
+                        {option.description && (
+                          <span className="question-option-desc">
+                            {option.description}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {/* Other option */}
+                <button
+                  type="button"
+                  className={`question-option-btn other ${isOtherSelected ? "selected" : ""}`}
+                  onClick={() => handleSelectOption("__other__")}
+                >
+                  <span className="question-option-radio">
+                    {isOtherSelected ? "●" : "○"}
+                  </span>
+                  <div className="question-option-text">
+                    <span className="question-option-label">Other</span>
+                  </div>
+                </button>
+
+                {/* Other text input */}
+                {isOtherSelected && (
+                  <div className="question-other-input">
+                    <input
+                      ref={otherInputRef}
+                      type="text"
+                      placeholder="Type your answer..."
+                      value={otherTexts[currentQuestion.question] || ""}
+                      onChange={(e) => handleOtherTextChange(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="question-actions">
             <button
               type="button"
-              className={`question-option-btn other ${isOtherSelected ? "selected" : ""}`}
-              onClick={() => handleSelectOption("__other__")}
+              className="question-btn deny"
+              onClick={handleDeny}
+              disabled={submitting}
             >
-              <span className="question-option-radio">
-                {isOtherSelected ? "●" : "○"}
-              </span>
-              <div className="question-option-text">
-                <span className="question-option-label">Other</span>
-              </div>
+              Cancel
+              <kbd>esc</kbd>
             </button>
 
-            {/* Other text input */}
-            {isOtherSelected && (
-              <div className="question-other-input">
-                <input
-                  ref={otherInputRef}
-                  type="text"
-                  placeholder="Type your answer..."
-                  value={otherTexts[currentQuestion.question] || ""}
-                  onChange={(e) => handleOtherTextChange(e.target.value)}
-                />
-              </div>
+            {isLastQuestion ? (
+              <button
+                type="button"
+                className="question-btn submit"
+                onClick={handleSubmit}
+                disabled={!allAnswered || submitting}
+              >
+                Submit
+                <kbd>↵</kbd>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="question-btn next"
+                onClick={advanceToNext}
+                disabled={!currentAnswer || submitting}
+              >
+                Next
+                <kbd>↵</kbd>
+              </button>
             )}
           </div>
         </div>
       )}
-
-      {/* Actions */}
-      <div className="question-actions">
-        <button
-          type="button"
-          className="question-btn deny"
-          onClick={handleDeny}
-          disabled={submitting}
-        >
-          Cancel
-          <kbd>esc</kbd>
-        </button>
-
-        {isLastQuestion ? (
-          <button
-            type="button"
-            className="question-btn submit"
-            onClick={handleSubmit}
-            disabled={!allAnswered || submitting}
-          >
-            Submit
-            <kbd>↵</kbd>
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="question-btn next"
-            onClick={advanceToNext}
-            disabled={!currentAnswer || submitting}
-          >
-            Next
-            <kbd>↵</kbd>
-          </button>
-        )}
-      </div>
     </div>
   );
 }

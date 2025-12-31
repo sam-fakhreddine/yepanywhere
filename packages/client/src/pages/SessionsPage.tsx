@@ -2,6 +2,8 @@ import { type KeyboardEvent, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { ContextUsageIndicator } from "../components/ContextUsageIndicator";
+import { PageHeader } from "../components/PageHeader";
+import { Sidebar } from "../components/Sidebar";
 import { SessionStatusBadge } from "../components/StatusBadge";
 import { ENTER_SENDS_MESSAGE } from "../constants";
 import { useDraftPersistence } from "../hooks/useDraftPersistence";
@@ -32,6 +34,7 @@ export function SessionsPage() {
     `draft-new-session-${projectId}`,
   );
   const [starting, setStarting] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Filter state: "all" shows non-archived, "starred" shows only starred, "archived" shows only archived
   type FilterMode = "all" | "starred" | "archived";
@@ -119,139 +122,131 @@ export function SessionsPage() {
   if (error) return <div className="error">Error: {error.message}</div>;
 
   return (
-    <div className="page">
-      <nav className="breadcrumb">
-        <Link to="/projects">Projects</Link> / {project?.name}
-      </nav>
+    <div className="session-page">
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        projectId={projectId ?? ""}
+        sessions={sessions}
+        processStates={processStates}
+        onNavigate={() => setSidebarOpen(false)}
+      />
+      <PageHeader
+        title={project?.name ?? "Sessions"}
+        onOpenSidebar={() => setSidebarOpen(true)}
+      />
 
-      <div className="page-header">
-        <h1>{project?.name}</h1>
-        <Link to="/settings" className="settings-link" aria-label="Settings">
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
-        </Link>
-      </div>
-
-      <div className="new-session-form">
-        <textarea
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Start a new session..."
-          disabled={starting}
-          rows={3}
-        />
-        <button
-          type="button"
-          onClick={handleStartSession}
-          disabled={starting || !newMessage.trim()}
-          className="send-button"
-          aria-label="Start session"
-        >
-          <span className="send-icon">{starting ? "..." : "↑"}</span>
-        </button>
-      </div>
-
-      <h2>Sessions</h2>
-
-      {/* Filter bar */}
-      <div className="filter-bar">
-        <input
-          type="text"
-          className="filter-search"
-          placeholder="Search sessions..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-        <div className="filter-chips">
+      <main className="sessions-page-content">
+        <div className="new-session-form">
+          <textarea
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Start a new session..."
+            disabled={starting}
+            rows={3}
+          />
           <button
             type="button"
-            className={`filter-chip ${filterMode === "all" ? "active" : ""}`}
-            onClick={() => setFilterMode("all")}
+            onClick={handleStartSession}
+            disabled={starting || !newMessage.trim()}
+            className="send-button"
+            aria-label="Start session"
           >
-            All
-          </button>
-          <button
-            type="button"
-            className={`filter-chip ${filterMode === "starred" ? "active" : ""}`}
-            onClick={() => setFilterMode("starred")}
-          >
-            Starred{starredCount > 0 && ` (${starredCount})`}
-          </button>
-          <button
-            type="button"
-            className={`filter-chip ${filterMode === "archived" ? "active" : ""}`}
-            onClick={() => setFilterMode("archived")}
-          >
-            Archived{archivedCount > 0 && ` (${archivedCount})`}
+            <span className="send-icon">{starting ? "..." : "↑"}</span>
           </button>
         </div>
-      </div>
 
-      {sessions.length === 0 ? (
-        <p>No sessions yet</p>
-      ) : filteredSessions.length === 0 ? (
-        <p className="no-results">No sessions match your filters</p>
-      ) : (
-        <ul className="session-list">
-          {filteredSessions.map((session) => (
-            <li
-              key={session.id}
-              className={session.isArchived ? "archived" : ""}
+        <h2>Sessions</h2>
+
+        {/* Filter bar */}
+        <div className="filter-bar">
+          <input
+            type="text"
+            className="filter-search"
+            placeholder="Search sessions..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <div className="filter-chips">
+            <button
+              type="button"
+              className={`filter-chip ${filterMode === "all" ? "active" : ""}`}
+              onClick={() => setFilterMode("all")}
             >
-              <Link to={`/projects/${projectId}/sessions/${session.id}`}>
-                <strong title={session.fullTitle || undefined}>
-                  {session.isStarred && (
-                    <span className="star-indicator" aria-label="Starred">
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        aria-hidden="true"
-                      >
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                      </svg>
-                    </span>
-                  )}
-                  {getSessionDisplayTitle(session)}
-                  {session.isArchived && (
-                    <span className="archived-badge">Archived</span>
-                  )}
-                </strong>
-                <span className="meta">
-                  {formatRelativeTime(session.updatedAt)}
-                  <ContextUsageIndicator
-                    usage={session.contextUsage}
-                    size={14}
-                  />
-                  <SessionStatusBadge
-                    status={session.status}
-                    pendingInputType={session.pendingInputType}
-                    hasUnread={session.hasUnread}
-                    processState={
-                      processStates[session.id] ?? session.processState
-                    }
-                  />
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+              All
+            </button>
+            <button
+              type="button"
+              className={`filter-chip ${filterMode === "starred" ? "active" : ""}`}
+              onClick={() => setFilterMode("starred")}
+            >
+              Starred{starredCount > 0 && ` (${starredCount})`}
+            </button>
+            <button
+              type="button"
+              className={`filter-chip ${filterMode === "archived" ? "active" : ""}`}
+              onClick={() => setFilterMode("archived")}
+            >
+              Archived{archivedCount > 0 && ` (${archivedCount})`}
+            </button>
+          </div>
+        </div>
+
+        {sessions.length === 0 ? (
+          <p>No sessions yet</p>
+        ) : filteredSessions.length === 0 ? (
+          <p className="no-results">No sessions match your filters</p>
+        ) : (
+          <ul className="session-list">
+            {filteredSessions.map((session) => (
+              <li
+                key={session.id}
+                className={session.isArchived ? "archived" : ""}
+              >
+                <Link to={`/projects/${projectId}/sessions/${session.id}`}>
+                  <strong title={session.fullTitle || undefined}>
+                    {session.isStarred && (
+                      <span className="star-indicator" aria-label="Starred">
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          aria-hidden="true"
+                        >
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                        </svg>
+                      </span>
+                    )}
+                    {getSessionDisplayTitle(session)}
+                    {session.isArchived && (
+                      <span className="archived-badge">Archived</span>
+                    )}
+                  </strong>
+                  <span className="meta">
+                    {formatRelativeTime(session.updatedAt)}
+                    <ContextUsageIndicator
+                      usage={session.contextUsage}
+                      size={14}
+                    />
+                    <SessionStatusBadge
+                      status={session.status}
+                      pendingInputType={session.pendingInputType}
+                      hasUnread={session.hasUnread}
+                      processState={
+                        processStates[session.id] ?? session.processState
+                      }
+                    />
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </main>
     </div>
   );
 }

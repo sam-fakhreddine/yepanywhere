@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { type WriteStream, createWriteStream } from "node:fs";
 import { mkdir, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, extname, join } from "node:path";
+import { extname, join } from "node:path";
 import type { UploadedFile } from "@claude-anywhere/shared";
 
 /** Root directory for uploads */

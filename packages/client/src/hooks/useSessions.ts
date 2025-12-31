@@ -6,6 +6,7 @@ import {
   type ProcessStateEvent,
   type ProcessStateType,
   type SessionCreatedEvent,
+  type SessionMetadataChangedEvent,
   type SessionStatusEvent,
   useFileActivity,
 } from "./useFileActivity";
@@ -176,12 +177,33 @@ export function useSessions(projectId: string | undefined) {
     [projectId],
   );
 
+  // Handle session metadata changes (title, archived, starred)
+  const handleSessionMetadataChange = useCallback(
+    (event: SessionMetadataChangedEvent) => {
+      setSessions((prev) =>
+        prev.map((session) => {
+          if (session.id !== event.sessionId) return session;
+
+          // Update the session with changed metadata
+          return {
+            ...session,
+            ...(event.title !== undefined && { customTitle: event.title }),
+            ...(event.archived !== undefined && { isArchived: event.archived }),
+            ...(event.starred !== undefined && { isStarred: event.starred }),
+          };
+        }),
+      );
+    },
+    [],
+  );
+
   // Subscribe to file activity, status changes, session creation, and process state
   useFileActivity({
     onFileChange: handleFileChange,
     onSessionStatusChange: handleSessionStatusChange,
     onSessionCreated: handleSessionCreated,
     onProcessStateChange: handleProcessStateChange,
+    onSessionMetadataChange: handleSessionMetadataChange,
   });
 
   // Initial fetch

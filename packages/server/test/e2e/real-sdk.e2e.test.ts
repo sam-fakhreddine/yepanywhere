@@ -1,10 +1,12 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { detectClaudeCli } from "../../src/sdk/cli-detection.js";
+import { MessageQueue } from "../../src/sdk/messageQueue.js";
 import { RealClaudeSDK } from "../../src/sdk/real.js";
-import type { SDKMessage } from "../../src/sdk/types.js";
+import type { SDKMessage, UserMessage } from "../../src/sdk/types.js";
+import { Process } from "../../src/supervisor/Process.js";
 
 /**
  * E2E tests for the real Claude SDK.
@@ -209,4 +211,136 @@ describe("Real SDK E2E", () => {
     expect(messages.length).toBeGreaterThanOrEqual(1);
     expect(messages[0]?.type).toBe("system");
   }, 30000);
+
+  it("should echo back user message with attachments unchanged", async () => {
+    if (!cliAvailable) {
+      return; // Skip if CLI not installed
+    }
+
+    // Create a test file to simulate an attachment (use .txt to avoid image processing)
+    const attachmentPath = join(testDir, "data.txt");
+    writeFileSync(attachmentPath, "some test data content");
+
+    const messageWithAttachments: UserMessage = {
+      text: 'Say "got it" and nothing else',
+      attachments: [
+        {
+          id: "file-1",
+          originalName: "data.txt",
+          size: 1024,
+          mimeType: "text/plain",
+          path: attachmentPath,
+        },
+      ],
+    };
+
+    const { iterator, abort } = await sdk.startSession({
+      cwd: testDir,
+      initialMessage: messageWithAttachments,
+      permissionMode: "bypassPermissions",
+    });
+
+    // Also test what Process.buildUserMessageContent produces
+    const mockIterator = (async function* () {
+      yield { type: "system", subtype: "init", session_id: "test" } as SDKMessage;
+    })();
+    const testProcess = new Process(mockIterator, {
+      projectPath: testDir,
+      projectId: "test",
+      sessionId: "test",
+      idleTimeoutMs: 100,
+      queue: new MessageQueue(),
+    });
+    testProcess.queueMessage(messageWithAttachments);
+    const processContent = testProcess.getMessageHistory()[0]?.message?.content;
+
+    const messages: SDKMessage[] = [];
+    const timeout = setTimeout(() => abort(), 30000);
+
+    try {
+      for await (const message of iterator) {
+        messages.push(message);
+        logMessage(message);
+        log("[full message]", JSON.stringify(message, null, 2));
+        if (message.type === "result") break;
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    // Find the initial user message (not tool_result messages)
+    // The SDK should echo back user messages with role: "user"
+    const userMessage = messages.find(
+      (m) => m.type === "user" && m.message?.role === "user",
+    );
+
+    log("[all message types]", messages.map((m) => m.type));
+    log("[user message from SDK]", userMessage?.message?.content);
+    log("[user message from Process]", processContent);
+
+    // SDK doesn't echo user messages in the stream - they're written directly to JSONL
+    // We need to check the JSONL file to verify what got written
+
+    // Find the JSONL file in ~/.claude/projects/<projectId>/
+    const claudeDir = join(
+      process.env.HOME || "",
+      ".claude",
+      "projects",
+    );
+
+    // The session ID is in the init message
+    const initMessage = messages.find((m) => m.type === "system");
+    const sessionId = (initMessage as { session_id?: string })?.session_id;
+    log("[session_id]", sessionId);
+
+    // Find the project directory (base64 encoded path)
+    const projectDirs = readdirSync(claudeDir);
+    let jsonlContent = "";
+
+    for (const projectDir of projectDirs) {
+      const sessionsDir = join(claudeDir, projectDir);
+      try {
+        const files = readdirSync(sessionsDir);
+        const jsonlFile = files.find((f) => f === `${sessionId}.jsonl`);
+        if (jsonlFile) {
+          jsonlContent = readFileSync(join(sessionsDir, jsonlFile), "utf-8");
+          log("[found JSONL]", join(sessionsDir, jsonlFile));
+          break;
+        }
+      } catch {
+        // Not a directory or can't read
+      }
+    }
+
+    expect(jsonlContent).toBeTruthy();
+    log("[JSONL content]", jsonlContent);
+
+    // Parse JSONL and find user message
+    const jsonlMessages = jsonlContent
+      .split("\n")
+      .filter((line) => line.trim())
+      .map((line) => JSON.parse(line));
+
+    const jsonlUserMessage = jsonlMessages.find(
+      (m: { type: string }) => m.type === "user",
+    );
+    log("[JSONL user message]", JSON.stringify(jsonlUserMessage, null, 2));
+
+    expect(jsonlUserMessage).toBeDefined();
+    const jsonlUserContent = jsonlUserMessage?.message?.content;
+
+    // Verify our Process content is correct
+    expect(processContent).toContain('Say "got it" and nothing else');
+    expect(processContent).toContain("User uploaded files:");
+    expect(processContent).toContain("data.txt");
+    expect(processContent).toContain("1.0 KB");
+    expect(processContent).toContain("text/plain");
+
+    // THE CRITICAL TEST: Verify JSONL content matches what Process produces
+    // This is what deduplication relies on
+    log("[comparing]");
+    log("  JSONL:", jsonlUserContent);
+    log("  Process:", processContent);
+    expect(jsonlUserContent).toBe(processContent);
+  }, 60000);
 });

@@ -1,5 +1,11 @@
 import type { UploadedFile } from "@claude-anywhere/shared";
-import { type KeyboardEvent, useCallback, useEffect, useRef } from "react";
+import {
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { ENTER_SENDS_MESSAGE } from "../constants";
 import {
   type DraftControls,
@@ -82,7 +88,7 @@ export function MessageInput({
   isThinking,
   onStop,
   draftKey,
-  collapsed,
+  collapsed: externalCollapsed,
   onDraftControlsReady,
   contextUsage,
   projectId,
@@ -94,6 +100,11 @@ export function MessageInput({
 }: Props) {
   const [text, setText, controls] = useDraftPersistence(draftKey);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // User-controlled collapse state (independent of external collapse from approval panel)
+  const [userCollapsed, setUserCollapsed] = useState(false);
+
+  // Panel is collapsed if user collapsed it OR if externally collapsed (approval panel showing)
+  const collapsed = userCollapsed || externalCollapsed;
 
   const canAttach = !!(projectId && sessionId && onAttach);
 
@@ -150,114 +161,155 @@ export function MessageInput({
   };
 
   return (
-    <div
-      className={`message-input ${collapsed ? "message-input-collapsed" : ""}`}
-    >
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={
-          collapsed ? "Continue typing while responding above..." : placeholder
-        }
-        disabled={disabled}
-        rows={collapsed ? 1 : 3}
-      />
+    <div className="message-input-wrapper">
+      {/* Floating toggle button - only show when user can control collapse (not externally collapsed) */}
+      {!externalCollapsed && (
+        <button
+          type="button"
+          className="message-input-toggle"
+          onClick={() => setUserCollapsed(!userCollapsed)}
+          aria-label={
+            userCollapsed ? "Expand message input" : "Collapse message input"
+          }
+          aria-expanded={!userCollapsed}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={userCollapsed ? "chevron-up" : "chevron-down"}
+            aria-hidden="true"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      )}
+      <div
+        className={`message-input ${collapsed ? "message-input-collapsed" : ""}`}
+      >
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={
+            externalCollapsed
+              ? "Continue typing while responding above..."
+              : placeholder
+          }
+          disabled={disabled}
+          rows={collapsed ? 1 : 3}
+        />
 
-      {/* Attachment chips - show below textarea when not collapsed */}
-      {!collapsed && (attachments.length > 0 || uploadProgress.length > 0) && (
-        <div className="attachment-list">
-          {attachments.map((file) => (
-            <div key={file.id} className="attachment-chip">
-              <span className="attachment-name" title={file.path}>
-                {file.originalName}
-              </span>
-              <span className="attachment-size">{formatSize(file.size)}</span>
+        {/* Attachment chips - show below textarea when not collapsed */}
+        {!collapsed &&
+          (attachments.length > 0 || uploadProgress.length > 0) && (
+            <div className="attachment-list">
+              {attachments.map((file) => (
+                <div key={file.id} className="attachment-chip">
+                  <span className="attachment-name" title={file.path}>
+                    {file.originalName}
+                  </span>
+                  <span className="attachment-size">
+                    {formatSize(file.size)}
+                  </span>
+                  <button
+                    type="button"
+                    className="attachment-remove"
+                    onClick={() => onRemoveAttachment?.(file.id)}
+                    aria-label={`Remove ${file.originalName}`}
+                  >
+                    x
+                  </button>
+                </div>
+              ))}
+              {uploadProgress.map((progress) => (
+                <div
+                  key={progress.fileId}
+                  className="attachment-chip uploading"
+                >
+                  <span className="attachment-name">{progress.fileName}</span>
+                  <span className="attachment-progress">
+                    {progress.percent}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          style={{ display: "none" }}
+          onChange={handleFileSelect}
+        />
+
+        {!collapsed && (
+          <div className="message-input-toolbar">
+            <div className="message-input-left">
               <button
                 type="button"
-                className="attachment-remove"
-                onClick={() => onRemoveAttachment?.(file.id)}
-                aria-label={`Remove ${file.originalName}`}
+                className="mode-button"
+                onClick={handleModeClick}
+                disabled={!onModeChange}
+                title="Click to cycle through permission modes"
               >
-                x
+                <span className={`mode-dot mode-${mode}`} />
+                {MODE_LABELS[mode]}
+                {isModePending && (
+                  <span className="mode-pending-hint">
+                    (set on next message)
+                  </span>
+                )}
               </button>
-            </div>
-          ))}
-          {uploadProgress.map((progress) => (
-            <div key={progress.fileId} className="attachment-chip uploading">
-              <span className="attachment-name">{progress.fileName}</span>
-              <span className="attachment-progress">{progress.percent}%</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        style={{ display: "none" }}
-        onChange={handleFileSelect}
-      />
-
-      {!collapsed && (
-        <div className="message-input-toolbar">
-          <div className="message-input-left">
-            <button
-              type="button"
-              className="mode-button"
-              onClick={handleModeClick}
-              disabled={!onModeChange}
-              title="Click to cycle through permission modes"
-            >
-              <span className={`mode-dot mode-${mode}`} />
-              {MODE_LABELS[mode]}
-              {isModePending && (
-                <span className="mode-pending-hint">(set on next message)</span>
-              )}
-            </button>
-            <button
-              type="button"
-              className="attach-button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={!canAttach}
-              title={
-                canAttach
-                  ? "Attach files"
-                  : "Send a message first to enable attachments"
-              }
-            >
-              <span className="attach-icon">+</span>
-              {attachments.length > 0 && (
-                <span className="attach-count">{attachments.length}</span>
-              )}
-            </button>
-          </div>
-          <div className="message-input-actions">
-            <ContextUsageIndicator usage={contextUsage} size={16} />
-            {isRunning && onStop && isThinking && (
               <button
                 type="button"
-                onClick={onStop}
-                className="stop-button"
-                aria-label="Stop"
+                className="attach-button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!canAttach}
+                title={
+                  canAttach
+                    ? "Attach files"
+                    : "Send a message first to enable attachments"
+                }
               >
-                <span className="stop-icon" />
+                <span className="attach-icon">+</span>
+                {attachments.length > 0 && (
+                  <span className="attach-count">{attachments.length}</span>
+                )}
               </button>
-            )}
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={disabled || !text.trim()}
-              className="send-button"
-              aria-label="Send"
-            >
-              <span className="send-icon">↑</span>
-            </button>
+            </div>
+            <div className="message-input-actions">
+              <ContextUsageIndicator usage={contextUsage} size={16} />
+              {isRunning && onStop && isThinking && (
+                <button
+                  type="button"
+                  onClick={onStop}
+                  className="stop-button"
+                  aria-label="Stop"
+                >
+                  <span className="stop-icon" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={disabled || !text.trim()}
+                className="send-button"
+                aria-label="Send"
+              >
+                <span className="send-icon">↑</span>
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

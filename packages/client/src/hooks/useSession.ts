@@ -184,6 +184,10 @@ export function useSession(projectId: string, sessionId: string) {
           return result.messages;
         });
       }
+      // Update session metadata (including title) which may have changed
+      setSession((prev) =>
+        prev ? { ...prev, ...data.session, messages: prev.messages } : prev,
+      );
       setStatus(data.status);
     } catch {
       // Silent fail for incremental updates
@@ -213,7 +217,20 @@ export function useSession(projectId: string, sessionId: string) {
     }
   }, [fetchNewMessages]);
 
-  // Handle file changes for external sessions
+  // Fetch session metadata only (title, etc.) - used when we need metadata
+  // updates but already have messages from SSE
+  const fetchSessionMetadata = useCallback(async () => {
+    try {
+      const data = await api.getSession(projectId, sessionId);
+      setSession((prev) =>
+        prev ? { ...prev, ...data.session, messages: prev.messages } : prev,
+      );
+    } catch {
+      // Silent fail for metadata updates
+    }
+  }, [projectId, sessionId]);
+
+  // Handle file changes - triggers metadata refetch for all sessions
   const handleFileChange = useCallback(
     (event: FileChangeEvent) => {
       // Only care about session files
@@ -231,15 +248,17 @@ export function useSession(projectId: string, sessionId: string) {
         return;
       }
 
-      // Skip if we own the session (we get updates via SSE stream)
+      // For owned sessions: SSE provides real-time messages, but we still need
+      // to fetch session metadata (like title) which isn't streamed
       if (status.state === "owned") {
+        fetchSessionMetadata();
         return;
       }
 
-      // Throttled refetch for external sessions
+      // For external/idle sessions: fetch both messages and metadata
       throttledFetch();
     },
-    [sessionId, status.state, throttledFetch],
+    [sessionId, status.state, throttledFetch, fetchSessionMetadata],
   );
 
   // Listen for session status changes via SSE

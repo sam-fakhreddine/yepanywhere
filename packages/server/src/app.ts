@@ -113,6 +113,7 @@ export function createApp(
       externalTracker,
       notificationService: options.notificationService,
       sessionMetadataService: options.sessionMetadataService,
+      eventBus: options.eventBus,
     }),
   );
   app.route("/api/processes", createProcessesRoutes({ supervisor }));

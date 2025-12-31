@@ -112,6 +112,27 @@ export interface WorkerActivityEvent {
   timestamp: string;
 }
 
+/** Event emitted when session metadata changes (title, archived, starred) */
+export interface SessionMetadataChangedEvent {
+  type: "session-metadata-changed";
+  sessionId: string;
+  /** Updated title (if changed) */
+  title?: string;
+  /** Updated archived status (if changed) */
+  archived?: boolean;
+  /** Updated starred status (if changed) */
+  starred?: boolean;
+  timestamp: string;
+}
+
+/** Event emitted when a session process is aborted by this server */
+export interface SessionAbortedEvent {
+  type: "session-aborted";
+  sessionId: string;
+  projectId: UrlProjectId;
+  timestamp: string;
+}
+
 /** Union of all event types that can be emitted through the bus */
 export type BusEvent =
   | FileChangeEvent
@@ -124,7 +145,9 @@ export type BusEvent =
   | QueueRequestAddedEvent
   | QueuePositionChangedEvent
   | QueueRequestRemovedEvent
-  | WorkerActivityEvent;
+  | WorkerActivityEvent
+  | SessionMetadataChangedEvent
+  | SessionAbortedEvent;
 
 export type EventHandler<T = BusEvent> = (event: T) => void;
 

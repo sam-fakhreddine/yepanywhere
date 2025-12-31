@@ -10,6 +10,7 @@ import type { Process } from "../supervisor/Process.js";
 import type { Supervisor } from "../supervisor/Supervisor.js";
 import type { QueuedResponse } from "../supervisor/WorkerQueue.js";
 import type { ContentBlock, Message } from "../supervisor/types.js";
+import type { EventBus } from "../watcher/index.js";
 
 /**
  * Type guard to check if a result is a QueuedResponse
@@ -27,6 +28,7 @@ export interface SessionsDeps {
   externalTracker?: ExternalSessionTracker;
   notificationService?: NotificationService;
   sessionMetadataService?: SessionMetadataService;
+  eventBus?: EventBus;
 }
 
 interface StartSessionBody {
@@ -34,6 +36,10 @@ interface StartSessionBody {
   images?: string[];
   documents?: string[];
   attachments?: UploadedFile[];
+  mode?: PermissionMode;
+}
+
+interface CreateSessionBody {
   mode?: PermissionMode;
 }
 
@@ -232,6 +238,44 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
     }
 
     // Started immediately
+    return c.json({
+      sessionId: result.sessionId,
+      processId: result.id,
+      permissionMode: result.permissionMode,
+      modeVersion: result.modeVersion,
+    });
+  });
+
+  // POST /api/projects/:projectId/sessions/create - Create session without starting agent
+  // Used for two-phase flow: create session first, upload files, then send first message
+  routes.post("/projects/:projectId/sessions/create", async (c) => {
+    const projectId = c.req.param("projectId");
+
+    // Validate projectId format at API boundary
+    if (!isUrlProjectId(projectId)) {
+      return c.json({ error: "Invalid project ID format" }, 400);
+    }
+
+    const project = await deps.scanner.getProject(projectId);
+    if (!project) {
+      return c.json({ error: "Project not found" }, 404);
+    }
+
+    let body: CreateSessionBody = {};
+    try {
+      body = await c.req.json<CreateSessionBody>();
+    } catch {
+      // Body is optional for this endpoint
+    }
+
+    const result = await deps.supervisor.createSession(project.path, body.mode);
+
+    // Check if request was queued
+    if (isQueuedResponse(result)) {
+      return c.json(result, 202); // 202 Accepted - queued for processing
+    }
+
+    // Created immediately - session exists and is ready for uploads
     return c.json({
       sessionId: result.sessionId,
       processId: result.id,
@@ -509,6 +553,18 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
       archived: body.archived,
       starred: body.starred,
     });
+
+    // Emit SSE event so sidebar and other clients can update
+    if (deps.eventBus) {
+      deps.eventBus.emit({
+        type: "session-metadata-changed",
+        sessionId,
+        title: body.title,
+        archived: body.archived,
+        starred: body.starred,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     return c.json({ updated: true });
   });

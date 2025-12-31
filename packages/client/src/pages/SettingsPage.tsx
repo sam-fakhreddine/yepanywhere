@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { PageHeader } from "../components/PageHeader";
 import {
   FONT_SIZES,
   type FontSize,
@@ -38,99 +38,103 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="page">
-      <nav className="breadcrumb">
-        <Link to="/projects">Projects</Link> / Settings
-      </nav>
+    <div className="session-page">
+      <PageHeader title="Settings" />
 
-      <h1>Settings</h1>
-
-      <section className="settings-section">
-        <h2>Appearance</h2>
-        <div className="settings-group">
-          <div className="settings-item">
-            <div className="settings-item-info">
-              <strong>Font Size</strong>
-              <p>Adjust the text size throughout the application.</p>
-            </div>
-            <div className="font-size-selector">
-              {FONT_SIZES.map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  className={`font-size-option ${fontSize === size ? "active" : ""}`}
-                  onClick={() => setFontSize(size)}
-                >
-                  {getFontSizeLabel(size)}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="settings-section">
-        <h2>Development</h2>
-
-        {isManualReloadMode ? (
+      <main className="sessions-page-content">
+        <section className="settings-section">
+          <h2>Appearance</h2>
           <div className="settings-group">
             <div className="settings-item">
               <div className="settings-item-info">
-                <strong>Restart Server</strong>
-                <p>
-                  Restart the backend server to pick up code changes.
-                  {pendingReloads.backend && (
-                    <span className="settings-pending"> (changes pending)</span>
-                  )}
-                </p>
-                {unsafeToRestart && (
-                  <p className="settings-warning">
-                    {workerActivity.activeWorkers} active session
-                    {workerActivity.activeWorkers !== 1 ? "s" : ""} will be
-                    interrupted
-                  </p>
-                )}
+                <strong>Font Size</strong>
+                <p>Adjust the text size throughout the application.</p>
               </div>
-              <button
-                type="button"
-                className={`settings-button ${unsafeToRestart ? "settings-button-danger" : ""}`}
-                onClick={handleRestartServer}
-                disabled={restarting}
-              >
-                {restarting
-                  ? "Restarting..."
-                  : unsafeToRestart
-                    ? "Restart Anyway"
-                    : "Restart Server"}
-              </button>
-            </div>
-
-            <div className="settings-item">
-              <div className="settings-item-info">
-                <strong>Reload Frontend</strong>
-                <p>
-                  Refresh the browser to pick up frontend changes.
-                  {pendingReloads.frontend && (
-                    <span className="settings-pending"> (changes pending)</span>
-                  )}
-                </p>
+              <div className="font-size-selector">
+                {FONT_SIZES.map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    className={`font-size-option ${fontSize === size ? "active" : ""}`}
+                    onClick={() => setFontSize(size)}
+                  >
+                    {getFontSizeLabel(size)}
+                  </button>
+                ))}
               </div>
-              <button
-                type="button"
-                className="settings-button"
-                onClick={handleReloadFrontend}
-              >
-                Reload Frontend
-              </button>
             </div>
           </div>
-        ) : (
-          <p className="settings-info">
-            Manual reload mode is not enabled. The server automatically restarts
-            when code changes.
-          </p>
-        )}
-      </section>
+        </section>
+
+        <section className="settings-section">
+          <h2>Development</h2>
+
+          {isManualReloadMode ? (
+            <div className="settings-group">
+              <div className="settings-item">
+                <div className="settings-item-info">
+                  <strong>Restart Server</strong>
+                  <p>
+                    Restart the backend server to pick up code changes.
+                    {pendingReloads.backend && (
+                      <span className="settings-pending">
+                        {" "}
+                        (changes pending)
+                      </span>
+                    )}
+                  </p>
+                  {unsafeToRestart && (
+                    <p className="settings-warning">
+                      {workerActivity.activeWorkers} active session
+                      {workerActivity.activeWorkers !== 1 ? "s" : ""} will be
+                      interrupted
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className={`settings-button ${unsafeToRestart ? "settings-button-danger" : ""}`}
+                  onClick={handleRestartServer}
+                  disabled={restarting}
+                >
+                  {restarting
+                    ? "Restarting..."
+                    : unsafeToRestart
+                      ? "Restart Anyway"
+                      : "Restart Server"}
+                </button>
+              </div>
+
+              <div className="settings-item">
+                <div className="settings-item-info">
+                  <strong>Reload Frontend</strong>
+                  <p>
+                    Refresh the browser to pick up frontend changes.
+                    {pendingReloads.frontend && (
+                      <span className="settings-pending">
+                        {" "}
+                        (changes pending)
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="settings-button"
+                  onClick={handleReloadFrontend}
+                >
+                  Reload Frontend
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="settings-info">
+              Manual reload mode is not enabled. The server automatically
+              restarts when code changes.
+            </p>
+          )}
+        </section>
+      </main>
     </div>
   );
 }

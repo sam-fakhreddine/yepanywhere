@@ -108,7 +108,7 @@ export type CanUseTool = (
 
 export interface StartSessionOptions {
   cwd: string;
-  initialMessage: UserMessage;
+  initialMessage?: UserMessage;
   resumeSessionId?: string;
   permissionMode?: PermissionMode;
   onToolApproval?: CanUseTool;

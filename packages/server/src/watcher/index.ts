@@ -7,6 +7,7 @@ export type {
   SourceChangeEvent,
   ProcessStateEvent,
   ProcessStateType,
+  SessionMetadataChangedEvent,
   BusEvent,
   EventHandler,
 } from "./EventBus.js";

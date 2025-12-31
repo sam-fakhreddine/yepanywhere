@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
+import { SessionMetadataService } from "../src/metadata/index.js";
 import { MockClaudeSDK, createMockScenario } from "../src/sdk/mock.js";
 import { encodeProjectId } from "../src/supervisor/types.js";
 import { EventBus } from "../src/watcher/EventBus.js";
@@ -155,6 +156,120 @@ describe("Activity Stream SSE", () => {
     expect(processStateEvents[0]?.data).toMatchObject({
       type: "process-state-changed",
       processState: "running",
+    });
+
+    // Cleanup
+    reader.cancel();
+  });
+
+  it("emits session-metadata-changed event when session metadata is updated", async () => {
+    const eventBus = new EventBus();
+    const metadataDir = join(testDir, "metadata");
+    await mkdir(metadataDir, { recursive: true });
+    const sessionMetadataService = new SessionMetadataService({
+      dataDir: metadataDir,
+    });
+    await sessionMetadataService.initialize();
+
+    const app = createApp({
+      sdk: mockSdk,
+      projectsDir: testDir,
+      eventBus,
+      sessionMetadataService,
+    });
+
+    // Start the activity stream
+    const streamRes = await app.request("/api/activity/stream", {
+      headers: { "X-Claude-Anywhere": "true" },
+    });
+
+    expect(streamRes.status).toBe(200);
+
+    // Get the readable stream
+    const reader = streamRes.body?.getReader();
+    expect(reader).toBeDefined();
+    if (!reader) throw new Error("No reader");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const events: Array<{ event: string; data: unknown }> = [];
+
+    // Helper to parse SSE events from buffer
+    const parseEvents = () => {
+      const lines = buffer.split("\n");
+      let currentEvent = "";
+      let currentData = "";
+
+      for (const line of lines) {
+        if (line.startsWith("event:")) {
+          currentEvent = line.slice(6).trim();
+        } else if (line.startsWith("data:")) {
+          currentData = line.slice(5).trim();
+        } else if (line === "" && currentEvent && currentData) {
+          try {
+            events.push({ event: currentEvent, data: JSON.parse(currentData) });
+          } catch {
+            events.push({ event: currentEvent, data: currentData });
+          }
+          currentEvent = "";
+          currentData = "";
+        }
+      }
+    };
+
+    // Read first chunk (should have connected event)
+    const { value: chunk1 } = await reader.read();
+    buffer += decoder.decode(chunk1, { stream: true });
+    parseEvents();
+
+    expect(events.some((e) => e.event === "connected")).toBe(true);
+
+    // Now update session metadata - this should emit session-metadata-changed
+    const updateRes = await app.request(
+      "/api/sessions/sess-existing/metadata",
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Claude-Anywhere": "true",
+        },
+        body: JSON.stringify({ title: "My Custom Title" }),
+      },
+    );
+
+    expect(updateRes.status).toBe(200);
+
+    // Give a small delay for events to be emitted
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Read more from the stream
+    const readWithTimeout = async (timeoutMs: number) => {
+      const timeoutPromise = new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), timeoutMs),
+      );
+      const readPromise = reader.read();
+      return Promise.race([readPromise, timeoutPromise]);
+    };
+
+    // Try to read a few more chunks
+    for (let i = 0; i < 3; i++) {
+      const result = await readWithTimeout(100);
+      if (result && !result.done && result.value) {
+        buffer += decoder.decode(result.value, { stream: true });
+        parseEvents();
+      }
+    }
+
+    // Check for session-metadata-changed event
+    const metadataEvents = events.filter(
+      (e) => e.event === "session-metadata-changed",
+    );
+
+    expect(metadataEvents.length).toBeGreaterThanOrEqual(1);
+    expect(metadataEvents[0]?.data).toMatchObject({
+      type: "session-metadata-changed",
+      sessionId: "sess-existing",
+      title: "My Custom Title",
     });
 
     // Cleanup

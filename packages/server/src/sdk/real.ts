@@ -33,8 +33,11 @@ export class RealClaudeSDK implements RealClaudeSDKInterface {
     const queue = new MessageQueue();
     const abortController = new AbortController();
 
-    // Push the initial message into the queue
-    queue.push(options.initialMessage);
+    // Push the initial message into the queue (if provided)
+    // If no message, the agent will wait until one is pushed
+    if (options.initialMessage) {
+      queue.push(options.initialMessage);
+    }
 
     // Wrap our canUseTool to match SDK's expected type
     // Capture onToolApproval in local const to satisfy TypeScript
