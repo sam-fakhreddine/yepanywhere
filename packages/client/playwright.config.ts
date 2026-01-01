@@ -41,7 +41,7 @@ export default defineConfig({
         },
         // Start backend mock server (serves API + proxies to Vite)
         {
-          command: `PORT=${serverPort} VITE_PORT=${vitePort} pnpm --filter @claude-anywhere/server dev:mock`,
+          command: `PORT=${serverPort} VITE_PORT=${vitePort} LOG_FILE=e2e-server.log pnpm --filter @claude-anywhere/server dev:mock`,
           port: serverPort,
           reuseExistingServer: !process.env.CI,
         },

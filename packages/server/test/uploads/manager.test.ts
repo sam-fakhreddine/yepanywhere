@@ -108,7 +108,7 @@ describe("UploadManager", () => {
 
   beforeEach(async () => {
     tempDir = join(tmpdir(), `upload-test-${randomUUID()}`);
-    manager = new UploadManager(tempDir);
+    manager = new UploadManager({ uploadsDir: tempDir });
   });
 
   afterEach(async () => {

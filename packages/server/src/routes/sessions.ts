@@ -13,7 +13,10 @@ import type { PermissionMode, SDKMessage, UserMessage } from "../sdk/types.js";
 import type { SessionReader } from "../sessions/reader.js";
 import type { ExternalSessionTracker } from "../supervisor/ExternalSessionTracker.js";
 import type { Process } from "../supervisor/Process.js";
-import type { Supervisor } from "../supervisor/Supervisor.js";
+import type {
+  QueueFullResponse,
+  Supervisor,
+} from "../supervisor/Supervisor.js";
 import type { QueuedResponse } from "../supervisor/WorkerQueue.js";
 import type { ContentBlock, Message } from "../supervisor/types.js";
 import type { EventBus } from "../watcher/index.js";
@@ -22,9 +25,18 @@ import type { EventBus } from "../watcher/index.js";
  * Type guard to check if a result is a QueuedResponse
  */
 function isQueuedResponse(
-  result: Process | QueuedResponse,
+  result: Process | QueuedResponse | QueueFullResponse,
 ): result is QueuedResponse {
   return "queued" in result && result.queued === true;
+}
+
+/**
+ * Type guard to check if a result is a QueueFullResponse
+ */
+function isQueueFullResponse(
+  result: Process | QueuedResponse | QueueFullResponse,
+): result is QueueFullResponse {
+  return "error" in result && result.error === "queue_full";
 }
 
 export interface SessionsDeps {
@@ -253,6 +265,14 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
       { model, maxThinkingTokens },
     );
 
+    // Check if queue is full
+    if (isQueueFullResponse(result)) {
+      return c.json(
+        { error: "Queue is full", maxQueueSize: result.maxQueueSize },
+        503,
+      );
+    }
+
     // Check if request was queued
     if (isQueuedResponse(result)) {
       return c.json(result, 202); // 202 Accepted - queued for processing
@@ -307,6 +327,14 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
         maxThinkingTokens,
       },
     );
+
+    // Check if queue is full
+    if (isQueueFullResponse(result)) {
+      return c.json(
+        { error: "Queue is full", maxQueueSize: result.maxQueueSize },
+        503,
+      );
+    }
 
     // Check if request was queued
     if (isQueuedResponse(result)) {
@@ -373,6 +401,14 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
       body.mode,
       { model, maxThinkingTokens },
     );
+
+    // Check if queue is full
+    if (isQueueFullResponse(result)) {
+      return c.json(
+        { error: "Queue is full", maxQueueSize: result.maxQueueSize },
+        503,
+      );
+    }
 
     // Check if request was queued
     if (isQueuedResponse(result)) {

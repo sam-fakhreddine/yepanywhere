@@ -42,21 +42,46 @@ export interface QueuedResponse {
   position: number;
 }
 
+/** Result when enqueue fails due to queue being full */
+export interface QueueFullError {
+  error: "queue_full";
+  maxQueueSize: number;
+}
+
+/** Result of enqueue operation */
+export type EnqueueResult =
+  | { queueId: string; position: number; promise: Promise<QueuedRequestResult> }
+  | QueueFullError;
+
+/**
+ * Type guard to check if enqueue result is an error
+ */
+export function isQueueFullError(
+  result: EnqueueResult,
+): result is QueueFullError {
+  return "error" in result && result.error === "queue_full";
+}
+
 export interface WorkerQueueOptions {
   eventBus?: EventBus;
+  /** Maximum queue size. 0 = unlimited (default) */
+  maxQueueSize?: number;
 }
 
 export class WorkerQueue {
   private queue: QueuedRequest[] = [];
   private eventBus?: EventBus;
+  private maxQueueSize: number;
 
   constructor(options: WorkerQueueOptions = {}) {
     this.eventBus = options.eventBus;
+    this.maxQueueSize = options.maxQueueSize ?? 0;
   }
 
   /**
    * Add a request to the queue.
    * Returns queue ID, position, and a promise that resolves when the request is started or cancelled.
+   * Returns QueueFullError if the queue is at capacity.
    */
   enqueue(params: {
     type: QueuedRequestType;
@@ -65,11 +90,12 @@ export class WorkerQueue {
     sessionId?: string;
     message: UserMessage;
     permissionMode?: PermissionMode;
-  }): {
-    queueId: string;
-    position: number;
-    promise: Promise<QueuedRequestResult>;
-  } {
+  }): EnqueueResult {
+    // Check queue size limit
+    if (this.maxQueueSize > 0 && this.queue.length >= this.maxQueueSize) {
+      return { error: "queue_full", maxQueueSize: this.maxQueueSize };
+    }
+
     const queueId = randomUUID();
 
     let resolvePromise!: (result: QueuedRequestResult) => void;

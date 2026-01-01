@@ -21,11 +21,15 @@ type UpgradeWebSocketFn = (createEvents: (c: Context) => WSEvents) => any;
 export interface UploadDeps {
   scanner: ProjectScanner;
   upgradeWebSocket: UpgradeWebSocketFn;
+  /** Maximum upload file size in bytes. 0 = unlimited */
+  maxUploadSizeBytes?: number;
 }
 
 export function createUploadRoutes(deps: UploadDeps): Hono {
   const routes = new Hono();
-  const uploadManager = new UploadManager();
+  const uploadManager = new UploadManager({
+    maxUploadSizeBytes: deps.maxUploadSizeBytes,
+  });
 
   const sendMessage = (ws: WSContext, msg: UploadServerMessage) => {
     ws.send(JSON.stringify(msg));

@@ -1,3 +1,4 @@
+import { useNotifyInApp } from "../hooks/useNotifyInApp";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 
 /**
@@ -15,6 +16,7 @@ export function PushNotificationToggle() {
     unsubscribe,
     sendTest,
   } = usePushNotifications();
+  const { notifyInApp, setNotifyInApp } = useNotifyInApp();
 
   const handleToggle = async () => {
     if (isSubscribed) {
@@ -76,20 +78,39 @@ export function PushNotificationToggle() {
       </div>
 
       {isSubscribed && (
-        <div className="settings-item">
-          <div className="settings-item-info">
-            <strong>Test Notification</strong>
-            <p>Send a test notification to verify push is working.</p>
+        <>
+          <div className="settings-item">
+            <div className="settings-item-info">
+              <strong>Notify When In App</strong>
+              <p>
+                Show notifications even when the app is open, as long as you're
+                not viewing that session.
+              </p>
+            </div>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={notifyInApp}
+                onChange={(e) => setNotifyInApp(e.target.checked)}
+              />
+              <span className="toggle-slider" />
+            </label>
           </div>
-          <button
-            type="button"
-            className="settings-button"
-            onClick={sendTest}
-            disabled={isLoading}
-          >
-            {isLoading ? "Sending..." : "Send Test"}
-          </button>
-        </div>
+          <div className="settings-item">
+            <div className="settings-item-info">
+              <strong>Test Notification</strong>
+              <p>Send a test notification to verify push is working.</p>
+            </div>
+            <button
+              type="button"
+              className="settings-button"
+              onClick={sendTest}
+              disabled={isLoading}
+            >
+              {isLoading ? "Sending..." : "Send Test"}
+            </button>
+          </div>
+        </>
       )}
     </>
   );

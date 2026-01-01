@@ -4,6 +4,7 @@
  * Handles:
  * - push: Receives push events and shows notifications
  * - notificationclick: Handles user clicking on notifications
+ * - message: Receives settings updates from main thread
  *
  * Payload types (from server):
  * - pending-input: Session needs approval or user question
@@ -12,6 +13,11 @@
  * - test: Test notification
  */
 
+// Settings synced from main thread
+const settings = {
+  notifyInApp: false, // When true, notify even when app is focused (if session not viewed)
+};
+
 // Skip waiting and claim clients immediately on install/activate
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -19,6 +25,19 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
+});
+
+/**
+ * Handle settings updates from main thread
+ */
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "setting-update") {
+    const { key, value } = event.data;
+    if (key in settings) {
+      settings[key] = value;
+      console.log(`[SW] Setting updated: ${key} = ${value}`);
+    }
+  }
 });
 
 /**
@@ -42,13 +61,14 @@ self.addEventListener("push", (event) => {
 });
 
 async function handlePush(data) {
-  // Check if any app window is focused - skip notification if so
+  // Check app window state for notification suppression
   const clients = await self.clients.matchAll({
     type: "window",
     includeUncontrolled: true,
   });
 
-  const hasFocusedClient = clients.some((client) => client.focused);
+  const focusedClients = clients.filter((client) => client.focused);
+  const hasFocusedClient = focusedClients.length > 0;
 
   // Handle dismiss payload - close matching notification
   if (data.type === "dismiss") {
@@ -61,10 +81,40 @@ async function handlePush(data) {
     return;
   }
 
-  // Skip showing notification if app is in foreground
+  // Test notifications always show (user explicitly requested them)
+  if (data.type === "test") {
+    return self.registration.showNotification("Claude Anywhere", {
+      body: data.message || "Test notification",
+      tag: "test",
+      icon: "/icon-192.png",
+      badge: "/badge-96.png",
+      requireInteraction: true,
+    });
+  }
+
+  // Determine if we should suppress notification
   if (hasFocusedClient) {
-    console.log("[SW] App is focused, skipping notification");
-    return;
+    if (settings.notifyInApp) {
+      // Check if any focused client is viewing THIS session
+      const sessionId = data.sessionId;
+      const isSessionOpen =
+        sessionId &&
+        focusedClients.some((client) => {
+          return client.url?.includes(`/sessions/${sessionId}`);
+        });
+
+      if (isSessionOpen) {
+        console.log(
+          "[SW] Session is open in focused window, skipping notification",
+        );
+        return;
+      }
+      // Session not open - continue to show notification
+    } else {
+      // notifyInApp disabled - skip if any window focused
+      console.log("[SW] App is focused, skipping notification");
+      return;
+    }
   }
 
   // Handle different notification types
@@ -76,14 +126,6 @@ async function handlePush(data) {
     return showSessionHaltedNotification(data);
   }
 
-  if (data.type === "test") {
-    return self.registration.showNotification("Claude Anywhere", {
-      body: data.message || "Test notification",
-      tag: "test",
-      icon: "/favicon.ico",
-    });
-  }
-
   console.warn("[SW] Unknown push type:", data.type);
 }
 
@@ -92,8 +134,8 @@ function showPendingInputNotification(data) {
   const options = {
     body: data.summary || "Waiting for input",
     tag: `session-${data.sessionId}`,
-    icon: "/favicon.ico",
-    badge: "/favicon.ico",
+    icon: "/icon-192.png",
+    badge: "/badge-96.png",
     data: {
       sessionId: data.sessionId,
       projectId: data.projectId,
@@ -101,11 +143,15 @@ function showPendingInputNotification(data) {
       requestId: data.requestId,
     },
     requireInteraction: true,
-    actions: [
+  };
+
+  // Only show Approve/Deny buttons for tool approvals
+  if (data.inputType === "tool-approval") {
+    options.actions = [
       { action: "approve", title: "Approve" },
       { action: "deny", title: "Deny" },
-    ],
-  };
+    ];
+  }
 
   return self.registration.showNotification(title, options);
 }
@@ -122,7 +168,8 @@ function showSessionHaltedNotification(data) {
   const options = {
     body,
     tag: `session-halted-${data.sessionId}`,
-    icon: "/favicon.ico",
+    icon: "/icon-192.png",
+    badge: "/badge-96.png",
     data: {
       sessionId: data.sessionId,
       projectId: data.projectId,
@@ -148,12 +195,13 @@ self.addEventListener("notificationclick", (event) => {
 async function handleNotificationClick(action, data) {
   const { sessionId, projectId, requestId } = data;
 
-  // Handle approve/deny actions via API
+  // Handle approve/deny actions via API (don't open the app)
   if ((action === "approve" || action === "deny") && requestId) {
     try {
       const response = await fetch(`/api/sessions/${sessionId}/input`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // Include cookies for auth
         body: JSON.stringify({
           requestId,
           response: action,
@@ -165,20 +213,24 @@ async function handleNotificationClick(action, data) {
         console.log(
           `[SW] Successfully sent '${action}' for session ${sessionId}`,
         );
-        return;
+        return; // Don't open the app
       }
 
-      // API call failed - fall through to open the session
-      console.warn(
-        `[SW] API call failed for '${action}', opening session instead`,
+      // API call failed - log the error but don't open the app
+      const errorText = await response.text().catch(() => "unknown");
+      console.error(
+        `[SW] API call failed for '${action}': ${response.status} ${errorText}`,
       );
+      // Don't fall through - the user explicitly chose an action, not to open the app
+      return;
     } catch (e) {
       console.error("[SW] Failed to send action:", e);
-      // Fall through to open the session
+      // Don't fall through - the user explicitly chose an action, not to open the app
+      return;
     }
   }
 
-  // Open the session (default action or fallback on error)
+  // Open the session (only when clicking notification body, not action buttons)
   return openSession(sessionId, projectId);
 }
 

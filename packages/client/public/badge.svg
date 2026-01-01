@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <!-- Simple monochrome A in diamond for badge -->
+  <path d="M48 4 L92 36 L48 92 L4 36 Z" fill="white"/>
+  <path d="M48 20 L30 72 L38 72 L42 60 L54 60 L58 72 L66 72 L48 20 Z M45 52 L48 40 L51 52 Z" fill="black"/>
+</svg>

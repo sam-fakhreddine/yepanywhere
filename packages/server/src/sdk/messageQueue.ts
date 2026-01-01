@@ -2,6 +2,75 @@ import type { SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { UserMessage } from "./types.js";
 
 /**
+ * Detect the media type from base64 image data.
+ * Supports data URLs (data:image/png;base64,...) and raw base64 with magic byte detection.
+ */
+function detectImageMediaType(base64Data: string): string {
+  // Check for data URL format first
+  const dataUrlMatch = base64Data.match(/^data:([^;]+);base64,/);
+  if (dataUrlMatch?.[1]) {
+    return dataUrlMatch[1];
+  }
+
+  // For raw base64, decode first few bytes and check magic bytes
+  try {
+    // Get the raw base64 portion (remove any data URL prefix if it wasn't matched above)
+    const rawBase64 = base64Data.replace(/^data:[^;]+;base64,/, "");
+    // Decode first 16 bytes to check magic bytes
+    const bytes = Buffer.from(rawBase64.slice(0, 24), "base64");
+
+    // PNG: 89 50 4E 47 0D 0A 1A 0A
+    if (
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47
+    ) {
+      return "image/png";
+    }
+
+    // JPEG: FF D8 FF
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+      return "image/jpeg";
+    }
+
+    // GIF: 47 49 46 38 (GIF8)
+    if (
+      bytes[0] === 0x47 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x46 &&
+      bytes[3] === 0x38
+    ) {
+      return "image/gif";
+    }
+
+    // WebP: 52 49 46 46 ... 57 45 42 50 (RIFF...WEBP)
+    if (
+      bytes[0] === 0x52 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x46 &&
+      bytes[3] === 0x46 &&
+      bytes[8] === 0x57 &&
+      bytes[9] === 0x45 &&
+      bytes[10] === 0x42 &&
+      bytes[11] === 0x50
+    ) {
+      return "image/webp";
+    }
+
+    // BMP: 42 4D (BM)
+    if (bytes[0] === 0x42 && bytes[1] === 0x4d) {
+      return "image/bmp";
+    }
+  } catch {
+    // If decoding fails, fall back to PNG
+  }
+
+  // Default to PNG if detection fails
+  return "image/png";
+}
+
+/**
  * MessageQueue provides an async generator pattern for queuing user messages
  * to be sent to the Claude SDK.
  *
@@ -92,12 +161,16 @@ export class MessageQueue {
 
       // Add images as base64 content blocks
       for (const image of msg.images ?? []) {
+        // Detect media type from the image data
+        const mediaType = detectImageMediaType(image);
+        // Strip data URL prefix if present to get raw base64
+        const rawBase64 = image.replace(/^data:[^;]+;base64,/, "");
         content.push({
           type: "image",
           source: {
             type: "base64",
-            media_type: "image/png", // TODO: detect actual media type
-            data: image,
+            media_type: mediaType,
+            data: rawBase64,
           },
         });
       }

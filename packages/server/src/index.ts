@@ -10,6 +10,11 @@ import {
   createFrontendProxy,
   createStaticRoutes,
 } from "./frontend/index.js";
+import {
+  getLogFilePath,
+  initLogger,
+  interceptConsole,
+} from "./logging/index.js";
 import { SessionMetadataService } from "./metadata/index.js";
 import { NotificationService } from "./notifications/index.js";
 import { ProjectScanner } from "./projects/scanner.js";
@@ -20,6 +25,22 @@ import { RealClaudeSDK } from "./sdk/real.js";
 import { EventBus, FileWatcher, SourceWatcher } from "./watcher/index.js";
 
 const config = loadConfig();
+
+// Initialize logging early to capture all output
+initLogger({
+  logDir: config.logDir,
+  logFile: config.logFile,
+  logLevel: config.logLevel,
+  logToFile: config.logToFile,
+  logToConsole: config.logToConsole,
+  prettyPrint: process.env.NODE_ENV !== "production",
+});
+interceptConsole();
+
+// Log the log file location for discoverability
+console.log(
+  `[Logging] Log file: ${getLogFilePath({ logDir: config.logDir, logFile: config.logFile })}`,
+);
 
 // Check for Claude CLI
 const cliInfo = detectClaudeCli();
@@ -124,6 +145,7 @@ async function startServer() {
   const uploadRoutes = createUploadRoutes({
     scanner: uploadScanner,
     upgradeWebSocket,
+    maxUploadSizeBytes: config.maxUploadSizeBytes,
   });
   app.route("/api", uploadRoutes);
 

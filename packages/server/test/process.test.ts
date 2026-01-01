@@ -366,7 +366,7 @@ describe("Process", () => {
       expect(result.behavior).toBe("allow");
     });
 
-    it("handleToolApproval denies most tools in plan mode", async () => {
+    it("handleToolApproval auto-allows read-only tools in plan mode", async () => {
       const iterator = createMockIterator([]);
       const process = new Process(iterator, {
         projectPath: "/test",
@@ -377,14 +377,48 @@ describe("Process", () => {
       });
 
       const abortController = new AbortController();
-      const result = await process.handleToolApproval(
+
+      // Read-only tools should be auto-allowed in plan mode
+      for (const tool of ["Read", "Glob", "Grep", "WebFetch", "WebSearch"]) {
+        const result = await process.handleToolApproval(
+          tool,
+          {},
+          { signal: abortController.signal },
+        );
+        expect(result.behavior).toBe("allow");
+      }
+    });
+
+    it("handleToolApproval prompts user for mutating tools in plan mode", async () => {
+      const iterator = createMockIterator([]);
+      const process = new Process(iterator, {
+        projectPath: "/test",
+        projectId: "proj-1",
+        sessionId: "sess-1",
+        idleTimeoutMs: 100,
+        permissionMode: "plan",
+      });
+
+      const abortController = new AbortController();
+
+      // Edit should prompt the user, not auto-deny
+      const approvalPromise = process.handleToolApproval(
         "Edit",
         { file: "test.ts" },
         { signal: abortController.signal },
       );
 
+      // Should be in waiting-input state (prompting user)
+      expect(process.state.type).toBe("waiting-input");
+
+      // Simulate user denying
+      const pendingRequest = process.getPendingInputRequest();
+      expect(pendingRequest).not.toBeNull();
+      expect(pendingRequest?.toolName).toBe("Edit");
+      process.respondToInput(pendingRequest?.id ?? "", "deny");
+
+      const result = await approvalPromise;
       expect(result.behavior).toBe("deny");
-      expect(result.message).toContain("Plan mode");
     });
 
     it("handleToolApproval prompts user for ExitPlanMode in plan mode (not auto-approve)", async () => {

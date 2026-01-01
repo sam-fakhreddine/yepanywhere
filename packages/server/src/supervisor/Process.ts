@@ -364,12 +364,21 @@ export class Process {
         return { behavior: "allow" };
 
       case "plan": {
-        // ExitPlanMode and AskUserQuestion should prompt the user
-        // ExitPlanMode: user must approve the plan before exiting plan mode
-        // AskUserQuestion: clarifying questions are valid during planning
-        if (toolName === "ExitPlanMode" || toolName === "AskUserQuestion") {
-          break; // Fall through to ask user for approval
+        // Read-only tools are auto-allowed - essential for creating good plans
+        const readOnlyTools = [
+          "Read",
+          "Glob",
+          "Grep",
+          "LSP",
+          "WebFetch",
+          "WebSearch",
+          "Task", // Subagent exploration
+          "TaskOutput", // Reading subagent results
+        ];
+        if (readOnlyTools.includes(toolName)) {
+          return { behavior: "allow" };
         }
+
         // Allow Write to .claude/plans/ directory for saving plans
         if (toolName === "Write") {
           const filePath = (input as { file_path?: string })?.file_path ?? "";
@@ -377,8 +386,18 @@ export class Process {
             return { behavior: "allow" };
           }
         }
-        // Deny all other tools - planning only
-        return { behavior: "deny", message: "Plan mode - tools not executed" };
+
+        // ExitPlanMode and AskUserQuestion should prompt the user
+        // ExitPlanMode: user must approve the plan before exiting plan mode
+        // AskUserQuestion: clarifying questions are valid during planning
+        if (toolName === "ExitPlanMode" || toolName === "AskUserQuestion") {
+          break; // Fall through to ask user for approval
+        }
+
+        // Other tools (Bash, Edit, Write to non-plan files, etc.) - prompt user
+        // Agent typically won't use these in plan mode, but if they have a good
+        // reason (e.g., checking git log, verifying dependencies), let them ask
+        break; // Fall through to ask user for approval
       }
 
       case "acceptEdits": {

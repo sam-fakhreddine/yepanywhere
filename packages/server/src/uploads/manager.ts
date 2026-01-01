@@ -92,21 +92,30 @@ export async function getUploadDir(
   return dir;
 }
 
+export interface UploadManagerOptions {
+  uploadsDir?: string;
+  /** Maximum upload file size in bytes. 0 = unlimited */
+  maxUploadSizeBytes?: number;
+}
+
 /**
  * Manages file upload operations with streaming to disk.
  */
 export class UploadManager {
   private uploads = new Map<string, UploadState>();
   private uploadsDir: string;
+  private maxUploadSizeBytes: number;
 
-  constructor(uploadsDir: string = UPLOADS_DIR) {
-    this.uploadsDir = uploadsDir;
+  constructor(options: UploadManagerOptions = {}) {
+    this.uploadsDir = options.uploadsDir ?? UPLOADS_DIR;
+    this.maxUploadSizeBytes = options.maxUploadSizeBytes ?? 0;
   }
 
   /**
    * Start a new upload.
    *
    * @returns Upload ID for tracking this upload
+   * @throws Error if file size exceeds maxUploadSizeBytes limit
    */
   async startUpload(
     encodedProjectPath: string,
@@ -115,6 +124,12 @@ export class UploadManager {
     expectedSize: number,
     mimeType: string,
   ): Promise<{ uploadId: string; state: UploadState }> {
+    // Check file size limit
+    if (this.maxUploadSizeBytes > 0 && expectedSize > this.maxUploadSizeBytes) {
+      const maxMB = Math.round(this.maxUploadSizeBytes / (1024 * 1024));
+      throw new Error(`File size exceeds maximum allowed size of ${maxMB}MB`);
+    }
+
     const uploadDir = await getUploadDir(
       encodedProjectPath,
       sessionId,
@@ -142,6 +157,7 @@ export class UploadManager {
   /**
    * Write a chunk of data to the upload.
    * Opens the write stream on first chunk (lazy initialization).
+   * @throws Error if writing would exceed maxUploadSizeBytes limit
    */
   async writeChunk(uploadId: string, chunk: Buffer): Promise<number> {
     const state = this.uploads.get(uploadId);
@@ -151,6 +167,15 @@ export class UploadManager {
 
     if (state.status === "cancelled" || state.status === "error") {
       throw new Error(`Upload is ${state.status}`);
+    }
+
+    // Check if this chunk would exceed the size limit
+    if (this.maxUploadSizeBytes > 0) {
+      const newTotal = state.bytesReceived + chunk.length;
+      if (newTotal > this.maxUploadSizeBytes) {
+        const maxMB = Math.round(this.maxUploadSizeBytes / (1024 * 1024));
+        throw new Error(`Upload exceeds maximum allowed size of ${maxMB}MB`);
+      }
     }
 
     // Lazy-create write stream on first chunk

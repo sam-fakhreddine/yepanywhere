@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { App } from "./App";
 import { initializeFontSize } from "./hooks/useFontSize";
+import { initializeTheme } from "./hooks/useTheme";
 import { ActivityPage } from "./pages/ActivityPage";
 import { NewSessionPage } from "./pages/NewSessionPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
@@ -11,7 +12,8 @@ import { SessionsPage } from "./pages/SessionsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import "./styles/index.css";
 
-// Apply saved font size preference before React renders to avoid flash
+// Apply saved preferences before React renders to avoid flash
+initializeTheme();
 initializeFontSize();
 
 const rootElement = document.getElementById("root");

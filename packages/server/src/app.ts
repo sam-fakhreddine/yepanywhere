@@ -50,6 +50,10 @@ export interface AppOptions {
   frontendProxy?: FrontendProxy;
   /** PushService for web push notifications */
   pushService?: PushService;
+  /** Maximum upload file size in bytes. 0 = unlimited */
+  maxUploadSizeBytes?: number;
+  /** Maximum queue size for pending requests. 0 = unlimited */
+  maxQueueSize?: number;
 }
 
 export function createApp(
@@ -71,6 +75,7 @@ export function createApp(
     eventBus: options.eventBus,
     maxWorkers: options.maxWorkers,
     idlePreemptThresholdMs: options.idlePreemptThresholdMs,
+    maxQueueSize: options.maxQueueSize,
   });
   const readerFactory = (sessionDir: string) =>
     new SessionReader({ sessionDir });
@@ -140,6 +145,7 @@ export function createApp(
       createUploadRoutes({
         scanner,
         upgradeWebSocket: options.upgradeWebSocket,
+        maxUploadSizeBytes: options.maxUploadSizeBytes,
       }),
     );
   }

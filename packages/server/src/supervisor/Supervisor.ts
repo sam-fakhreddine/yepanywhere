@@ -21,6 +21,7 @@ import {
   type QueuedRequestInfo,
   type QueuedResponse,
   WorkerQueue,
+  isQueueFullError,
 } from "./WorkerQueue.js";
 import {
   DEFAULT_IDLE_PREEMPT_THRESHOLD_MS,
@@ -41,6 +42,12 @@ export interface ModelSettings {
   maxThinkingTokens?: number;
 }
 
+/** Error response when queue is full */
+export interface QueueFullResponse {
+  error: "queue_full";
+  maxQueueSize: number;
+}
+
 export interface SupervisorOptions {
   /** Legacy SDK interface for mock SDK */
   sdk?: ClaudeSDK;
@@ -55,6 +62,8 @@ export interface SupervisorOptions {
   maxWorkers?: number;
   /** Idle threshold in milliseconds for preemption. Workers idle longer than this can be preempted. */
   idlePreemptThresholdMs?: number;
+  /** Maximum queue size. 0 = unlimited (default) */
+  maxQueueSize?: number;
 }
 
 export class Supervisor {
@@ -79,7 +88,10 @@ export class Supervisor {
     this.maxWorkers = options.maxWorkers ?? 0; // 0 = unlimited
     this.idlePreemptThresholdMs =
       options.idlePreemptThresholdMs ?? DEFAULT_IDLE_PREEMPT_THRESHOLD_MS;
-    this.workerQueue = new WorkerQueue({ eventBus: options.eventBus });
+    this.workerQueue = new WorkerQueue({
+      eventBus: options.eventBus,
+      maxQueueSize: options.maxQueueSize,
+    });
 
     if (!this.sdk && !this.realSdk) {
       throw new Error("Either sdk or realSdk must be provided");
@@ -91,7 +103,7 @@ export class Supervisor {
     message: UserMessage,
     permissionMode?: PermissionMode,
     modelSettings?: ModelSettings,
-  ): Promise<Process | QueuedResponse> {
+  ): Promise<Process | QueuedResponse | QueueFullResponse> {
     const projectId = encodeProjectId(projectPath);
 
     // Check if at capacity
@@ -103,14 +115,21 @@ export class Supervisor {
         // Fall through to start session normally
       } else {
         // Queue the request
-        const { queueId, position } = this.workerQueue.enqueue({
+        const result = this.workerQueue.enqueue({
           type: "new-session",
           projectPath,
           projectId,
           message,
           permissionMode,
         });
-        return { queued: true, queueId, position };
+        if (isQueueFullError(result)) {
+          return result;
+        }
+        return {
+          queued: true,
+          queueId: result.queueId,
+          position: result.position,
+        };
       }
     }
 
@@ -145,7 +164,7 @@ export class Supervisor {
     projectPath: string,
     permissionMode?: PermissionMode,
     modelSettings?: ModelSettings,
-  ): Promise<Process | QueuedResponse> {
+  ): Promise<Process | QueuedResponse | QueueFullResponse> {
     const projectId = encodeProjectId(projectPath);
 
     // Check if at capacity
@@ -157,14 +176,21 @@ export class Supervisor {
         // Fall through to create session normally
       } else {
         // Queue the request - use empty message placeholder
-        const { queueId, position } = this.workerQueue.enqueue({
+        const result = this.workerQueue.enqueue({
           type: "new-session",
           projectPath,
           projectId,
           message: { text: "" }, // Placeholder, will be replaced when first message sent
           permissionMode,
         });
-        return { queued: true, queueId, position };
+        if (isQueueFullError(result)) {
+          return result;
+        }
+        return {
+          queued: true,
+          queueId: result.queueId,
+          position: result.position,
+        };
       }
     }
 
@@ -369,7 +395,7 @@ export class Supervisor {
     message: UserMessage,
     permissionMode?: PermissionMode,
     modelSettings?: ModelSettings,
-  ): Promise<Process | QueuedResponse> {
+  ): Promise<Process | QueuedResponse | QueueFullResponse> {
     // Check if already have a process for this session
     const existingProcessId = this.sessionToProcess.get(sessionId);
     if (existingProcessId) {
@@ -417,7 +443,7 @@ export class Supervisor {
         // Fall through to start session normally
       } else {
         // Queue the request
-        const { queueId, position } = this.workerQueue.enqueue({
+        const result = this.workerQueue.enqueue({
           type: "resume-session",
           projectPath,
           projectId,
@@ -425,7 +451,14 @@ export class Supervisor {
           message,
           permissionMode,
         });
-        return { queued: true, queueId, position };
+        if (isQueueFullError(result)) {
+          return result;
+        }
+        return {
+          queued: true,
+          queueId: result.queueId,
+          position: result.position,
+        };
       }
     }
 

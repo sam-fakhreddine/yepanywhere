@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { NavigationSidebar } from "../components/NavigationSidebar";
 import { PageHeader } from "../components/PageHeader";
 import { PushNotificationToggle } from "../components/PushNotificationToggle";
 import {
@@ -13,8 +14,11 @@ import {
   THINKING_LEVEL_OPTIONS,
   useModelSettings,
 } from "../hooks/useModelSettings";
+import { usePwaInstall } from "../hooks/usePwaInstall";
 import { useReloadNotifications } from "../hooks/useReloadNotifications";
+import { useSidebarPreference } from "../hooks/useSidebarPreference";
 import { useStreamingEnabled } from "../hooks/useStreamingEnabled";
+import { THEMES, type Theme, getThemeLabel, useTheme } from "../hooks/useTheme";
 
 export function SettingsPage() {
   const {
@@ -27,6 +31,7 @@ export function SettingsPage() {
     workerActivity,
   } = useReloadNotifications();
   const { fontSize, setFontSize } = useFontSize();
+  const { theme, setTheme } = useTheme();
   const { streamingEnabled, setStreamingEnabled } = useStreamingEnabled();
   const {
     model,
@@ -36,10 +41,13 @@ export function SettingsPage() {
     thinkingEnabled,
     setThinkingEnabled,
   } = useModelSettings();
+  const { canInstall, isInstalled, install } = usePwaInstall();
   const [restarting, setRestarting] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Desktop layout hook
+  // Desktop layout hooks
   const isWideScreen = useMediaQuery("(min-width: 1100px)");
+  const { isExpanded, toggleExpanded } = useSidebarPreference();
 
   // When SSE reconnects after restart, re-enable the button
   useEffect(() => {
@@ -58,16 +66,101 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="session-page">
+    <div className={`session-page ${isWideScreen ? "desktop-layout" : ""}`}>
+      {/* Desktop sidebar - always visible on wide screens */}
+      {isWideScreen && (
+        <aside
+          className={`sidebar-desktop ${!isExpanded ? "sidebar-collapsed" : ""}`}
+        >
+          <NavigationSidebar
+            isOpen={true}
+            onClose={() => {}}
+            isDesktop={true}
+            isCollapsed={!isExpanded}
+            onToggleExpanded={toggleExpanded}
+          />
+        </aside>
+      )}
+
+      {/* Mobile sidebar - modal overlay */}
+      {!isWideScreen && (
+        <NavigationSidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Main content wrapper for desktop centering */}
-      <div className={isWideScreen ? "main-content-wrapper" : undefined}>
-        <div className={isWideScreen ? "main-content-constrained" : undefined}>
-          <PageHeader title="Settings" />
+      <div
+        className={
+          isWideScreen ? "main-content-wrapper" : "main-content-mobile"
+        }
+      >
+        <div
+          className={
+            isWideScreen
+              ? "main-content-constrained"
+              : "main-content-mobile-inner"
+          }
+        >
+          <PageHeader
+            title="Settings"
+            onOpenSidebar={() => setSidebarOpen(true)}
+            hideSettingsLink
+          />
 
           <main className="sessions-page-content">
+            {/* Only show App section if install is possible or already installed */}
+            {(canInstall || isInstalled) && (
+              <section className="settings-section">
+                <h2>App</h2>
+                <div className="settings-group">
+                  <div className="settings-item">
+                    <div className="settings-item-info">
+                      <strong>Install App</strong>
+                      <p>
+                        {isInstalled
+                          ? "Claude Anywhere is installed on your device."
+                          : "Add Claude Anywhere to your home screen for quick access."}
+                      </p>
+                    </div>
+                    {isInstalled ? (
+                      <span className="settings-status-badge">Installed</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="settings-button"
+                        onClick={install}
+                      >
+                        Install
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+
             <section className="settings-section">
               <h2>Appearance</h2>
               <div className="settings-group">
+                <div className="settings-item">
+                  <div className="settings-item-info">
+                    <strong>Theme</strong>
+                    <p>Choose your preferred color scheme.</p>
+                  </div>
+                  <div className="font-size-selector">
+                    {THEMES.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        className={`font-size-option ${theme === t ? "active" : ""}`}
+                        onClick={() => setTheme(t)}
+                      >
+                        {getThemeLabel(t)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="settings-item">
                   <div className="settings-item-info">
                     <strong>Font Size</strong>

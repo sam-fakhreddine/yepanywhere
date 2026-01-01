@@ -167,8 +167,18 @@ export function SessionsPage() {
       )}
 
       {/* Main content wrapper for desktop centering */}
-      <div className={isWideScreen ? "main-content-wrapper" : undefined}>
-        <div className={isWideScreen ? "main-content-constrained" : undefined}>
+      <div
+        className={
+          isWideScreen ? "main-content-wrapper" : "main-content-mobile"
+        }
+      >
+        <div
+          className={
+            isWideScreen
+              ? "main-content-constrained"
+              : "main-content-mobile-inner"
+          }
+        >
           <PageHeader
             title={project?.name ?? "Sessions"}
             onOpenSidebar={() => setSidebarOpen(true)}

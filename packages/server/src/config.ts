@@ -1,5 +1,6 @@
 import * as os from "node:os";
 import * as path from "node:path";
+import type { Level as LogLevel } from "pino";
 import type { PermissionMode } from "./sdk/types.js";
 
 /**
@@ -26,6 +27,20 @@ export interface Config {
   vitePort: number;
   /** Path to built client dist directory */
   clientDistPath: string;
+  /** Maximum upload file size in bytes. 0 = unlimited (default: 100MB) */
+  maxUploadSizeBytes: number;
+  /** Maximum queue size for pending requests. 0 = unlimited (default: 100) */
+  maxQueueSize: number;
+  /** Directory for log files. Default: .claude-anywhere/logs */
+  logDir: string;
+  /** Log filename. Default: server.log */
+  logFile: string;
+  /** Minimum log level. Default: info */
+  logLevel: LogLevel;
+  /** Whether to log to file. Default: true */
+  logToFile: boolean;
+  /** Whether to log to console. Default: true */
+  logToConsole: boolean;
 }
 
 /**
@@ -57,6 +72,19 @@ export function loadConfig(): Config {
     clientDistPath:
       process.env.CLIENT_DIST_PATH ??
       path.resolve(import.meta.dirname, "../../client/dist"),
+    // Default 100MB max upload size
+    maxUploadSizeBytes:
+      parseIntOrDefault(process.env.MAX_UPLOAD_SIZE_MB, 100) * 1024 * 1024,
+    // Default 100 max queue size
+    maxQueueSize: parseIntOrDefault(process.env.MAX_QUEUE_SIZE, 100),
+    // Logging configuration
+    logDir:
+      process.env.LOG_DIR ??
+      path.join(process.cwd(), ".claude-anywhere", "logs"),
+    logFile: process.env.LOG_FILE ?? "server.log",
+    logLevel: parseLogLevel(process.env.LOG_LEVEL),
+    logToFile: process.env.LOG_TO_FILE !== "false",
+    logToConsole: process.env.LOG_TO_CONSOLE !== "false",
   };
 }
 
@@ -80,4 +108,22 @@ function parsePermissionMode(value: string | undefined): PermissionMode {
     return value;
   }
   return "default";
+}
+
+/**
+ * Parse log level from string or return default.
+ */
+function parseLogLevel(value: string | undefined): LogLevel {
+  const validLevels: LogLevel[] = [
+    "fatal",
+    "error",
+    "warn",
+    "info",
+    "debug",
+    "trace",
+  ];
+  if (value && validLevels.includes(value as LogLevel)) {
+    return value as LogLevel;
+  }
+  return "info";
 }
