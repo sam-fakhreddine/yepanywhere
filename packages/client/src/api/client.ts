@@ -83,6 +83,15 @@ export const api = {
       `/projects/${projectId}/sessions/${sessionId}/agents/${agentId}`,
     ),
 
+  /**
+   * Get mappings of toolUseId → agentId for all agent files.
+   * Used to find agent sessions for pending Tasks on page reload.
+   */
+  getAgentMappings: (projectId: string, sessionId: string) =>
+    fetchJSON<{ mappings: Array<{ toolUseId: string; agentId: string }> }>(
+      `/projects/${projectId}/sessions/${sessionId}/agents`,
+    ),
+
   startSession: (
     projectId: string,
     message: string,

@@ -8,6 +8,7 @@ import { QuestionAnswerPanel } from "../components/QuestionAnswerPanel";
 import { StatusIndicator } from "../components/StatusIndicator";
 import { ToastContainer } from "../components/Toast";
 import { ToolApprovalPanel } from "../components/ToolApprovalPanel";
+import { AgentContentProvider } from "../contexts/AgentContentContext";
 import type { DraftControls } from "../hooks/useDraftPersistence";
 import { useEngagementTracking } from "../hooks/useEngagementTracking";
 import { getModelSetting, getThinkingSetting } from "../hooks/useModelSettings";
@@ -57,6 +58,8 @@ function SessionPageContent({
   const {
     session,
     messages,
+    agentContent,
+    setAgentContent,
     status,
     processState,
     pendingInputRequest,
@@ -604,14 +607,25 @@ function SessionPageContent({
           </div>
         )}
 
-        <main className="session-messages">
-          <MessageList
-            messages={messages}
-            isProcessing={
-              status.state === "owned" && processState === "running"
-            }
-            scrollTrigger={scrollTrigger}
-          />
+        <main
+          className="session-messages"
+          data-project-id={projectId}
+          data-session-id={sessionId}
+        >
+          <AgentContentProvider
+            agentContent={agentContent}
+            setAgentContent={setAgentContent}
+            projectId={projectId}
+            sessionId={sessionId}
+          >
+            <MessageList
+              messages={messages}
+              isProcessing={
+                status.state === "owned" && processState === "running"
+              }
+              scrollTrigger={scrollTrigger}
+            />
+          </AgentContentProvider>
         </main>
 
         <footer className="session-input">

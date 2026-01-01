@@ -115,6 +115,27 @@ function sdkMessagesToClientMessages(sdkMessages: SDKMessage[]): Message[] {
 export function createSessionsRoutes(deps: SessionsDeps): Hono {
   const routes = new Hono();
 
+  // GET /api/projects/:projectId/sessions/:sessionId/agents - Get agent mappings
+  // Used to find agent sessions for pending Tasks on page reload
+  routes.get("/projects/:projectId/sessions/:sessionId/agents", async (c) => {
+    const projectId = c.req.param("projectId");
+
+    // Validate projectId format at API boundary
+    if (!isUrlProjectId(projectId)) {
+      return c.json({ error: "Invalid project ID format" }, 400);
+    }
+
+    const project = await deps.scanner.getProject(projectId);
+    if (!project) {
+      return c.json({ error: "Project not found" }, 404);
+    }
+
+    const reader = deps.readerFactory(project.sessionDir);
+    const mappings = await reader.getAgentMappings();
+
+    return c.json({ mappings });
+  });
+
   // GET /api/projects/:projectId/sessions/:sessionId/agents/:agentId - Get agent session content
   // Used for lazy-loading completed Tasks
   routes.get(

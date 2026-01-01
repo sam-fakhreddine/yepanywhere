@@ -36,6 +36,15 @@ export interface AgentSession {
   status: AgentStatus;
 }
 
+/**
+ * Mapping of toolUseId to agentId.
+ * Used to find agent sessions for pending Tasks on page reload.
+ */
+export interface AgentMapping {
+  toolUseId: string;
+  agentId: string;
+}
+
 // JSONL content block format from claude-code - loosely typed to preserve all fields
 interface RawContentBlock {
   type: string;
@@ -64,6 +73,8 @@ interface RawSessionMessage {
   uuid?: string;
   parentUuid?: string | null;
   toolUseResult?: unknown;
+  // Agent session parent reference (links to Task tool_use id)
+  parent_tool_use_id?: string;
   // Allow any additional fields from JSONL
   [key: string]: unknown;
 }
@@ -271,6 +282,61 @@ export class SessionReader {
       // File doesn't exist or not readable - agent is pending
       return { messages: [], status: "pending" };
     }
+  }
+
+  /**
+   * Get mappings of toolUseId → agentId for all agent files in the session directory.
+   *
+   * This is used to find agent sessions for pending Tasks on page reload.
+   * It scans all agent-*.jsonl files and extracts the parent_tool_use_id from
+   * the first message or system message.
+   *
+   * @returns Array of toolUseId → agentId mappings
+   */
+  async getAgentMappings(): Promise<AgentMapping[]> {
+    const mappings: AgentMapping[] = [];
+
+    try {
+      const files = await readdir(this.sessionDir);
+      const agentFiles = files.filter(
+        (f) => f.startsWith("agent-") && f.endsWith(".jsonl"),
+      );
+
+      for (const file of agentFiles) {
+        // Extract agentId from filename: agent-{agentId}.jsonl
+        const agentId = file.slice(6, -6); // Remove "agent-" prefix and ".jsonl" suffix
+        const filePath = join(this.sessionDir, file);
+
+        try {
+          const content = await readFile(filePath, "utf-8");
+          const trimmed = content.trim();
+          if (!trimmed) continue;
+
+          // Check first few lines for parent_tool_use_id
+          const lines = trimmed.split("\n").slice(0, 5);
+          for (const line of lines) {
+            try {
+              const msg = JSON.parse(line) as RawSessionMessage;
+              if (msg.parent_tool_use_id) {
+                mappings.push({
+                  toolUseId: msg.parent_tool_use_id,
+                  agentId,
+                });
+                break;
+              }
+            } catch {
+              // Skip malformed lines
+            }
+          }
+        } catch {
+          // Skip unreadable files
+        }
+      }
+    } catch {
+      // Directory doesn't exist or not readable
+    }
+
+    return mappings;
   }
 
   /**

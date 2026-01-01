@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { mergeJSONLMessages, mergeSSEMessage } from "../lib/mergeMessages";
+import { findPendingTasks } from "../lib/pendingTasks";
 import type {
   ContentBlock,
   InputRequest,
@@ -167,11 +168,15 @@ export function useSession(
     }
   }, [messages]);
 
+  // Track if we've loaded pending agents for this session
+  const pendingAgentsLoadedRef = useRef<string | null>(null);
+
   // Load initial data
   useEffect(() => {
     setLoading(true);
     // Reset agentContent when switching sessions
     setAgentContent({});
+    pendingAgentsLoadedRef.current = null;
     api
       .getSession(projectId, sessionId)
       .then((data) => {
@@ -198,6 +203,75 @@ export function useSession(
       .catch(setError)
       .finally(() => setLoading(false));
   }, [projectId, sessionId, applyServerModeUpdate]);
+
+  // Load pending agent content on session load
+  // This handles page reload while Tasks are running: loads agent content-so-far
+  useEffect(() => {
+    // Only run once per session after initial load
+    if (loading || pendingAgentsLoadedRef.current === sessionId) return;
+    if (messages.length === 0) return;
+
+    const loadPendingAgents = async () => {
+      // Mark as loaded to prevent re-running
+      pendingAgentsLoadedRef.current = sessionId;
+
+      // Find pending Tasks (tool_use without matching tool_result)
+      const pendingTasks = findPendingTasks(messages);
+      if (pendingTasks.length === 0) return;
+
+      try {
+        // Get agent mappings (toolUseId → agentId)
+        const { mappings } = await api.getAgentMappings(projectId, sessionId);
+        const toolUseToAgent = new Map(
+          mappings.map((m) => [m.toolUseId, m.agentId]),
+        );
+
+        // Load content for each pending task that has an agent file
+        for (const task of pendingTasks) {
+          const agentId = toolUseToAgent.get(task.toolUseId);
+          if (!agentId) continue;
+
+          try {
+            const agentData = await api.getAgentSession(
+              projectId,
+              sessionId,
+              agentId,
+            );
+
+            // Merge into agentContent state, deduping by message ID
+            setAgentContent((prev) => {
+              const existing = prev[agentId];
+              if (existing && existing.messages.length > 0) {
+                // Already have content (maybe from SSE), merge without duplicates
+                const existingIds = new Set(existing.messages.map((m) => m.id));
+                const newMessages = agentData.messages.filter(
+                  (m) => !existingIds.has(m.id),
+                );
+                return {
+                  ...prev,
+                  [agentId]: {
+                    messages: [...existing.messages, ...newMessages],
+                    status: agentData.status,
+                  },
+                };
+              }
+              // No existing content, use loaded data
+              return {
+                ...prev,
+                [agentId]: agentData,
+              };
+            });
+          } catch {
+            // Skip agents that can't be loaded
+          }
+        }
+      } catch {
+        // Silent fail for agent mappings - not critical
+      }
+    };
+
+    loadPendingAgents();
+  }, [loading, messages, projectId, sessionId]);
 
   // Fetch only new messages (incremental update)
   const fetchNewMessages = useCallback(async () => {
@@ -631,6 +705,7 @@ export function useSession(
     session,
     messages,
     agentContent, // Subagent messages keyed by agentId (for Task tool)
+    setAgentContent, // Setter for merging lazy-loaded agent content
     status,
     processState,
     pendingInputRequest,

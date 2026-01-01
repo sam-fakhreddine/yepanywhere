@@ -4,6 +4,7 @@ import type { ProcessStateType } from "../hooks/useFileActivity";
 import { type SessionSummary, getSessionDisplayTitle } from "../types";
 
 const SWIPE_THRESHOLD = 50; // Minimum distance to trigger close
+const SWIPE_ENGAGE_THRESHOLD = 15; // Minimum horizontal distance before swipe engages
 
 // Time threshold for stable sorting: sessions within this window use ID as tiebreaker
 // This prevents rapid shuffling when multiple active sessions update frequently
@@ -57,29 +58,59 @@ export function Sidebar({
   const navigate = useNavigate();
   const sidebarRef = useRef<HTMLElement>(null);
   const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const swipeEngaged = useRef<boolean>(false);
   const [swipeOffset, setSwipeOffset] = useState(0);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0]?.clientX ?? null;
+    touchStartY.current = e.touches[0]?.clientY ?? null;
+    swipeEngaged.current = false;
     setSwipeOffset(0);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStartX.current === null) return;
+    if (touchStartX.current === null || touchStartY.current === null) return;
     const currentX = e.touches[0]?.clientX;
-    if (currentX === undefined) return;
-    const diff = currentX - touchStartX.current;
+    const currentY = e.touches[0]?.clientY;
+    if (currentX === undefined || currentY === undefined) return;
+
+    const diffX = currentX - touchStartX.current;
+    const diffY = currentY - touchStartY.current;
+
+    // If not yet engaged, check if we should engage the swipe
+    if (!swipeEngaged.current) {
+      const absDiffX = Math.abs(diffX);
+      const absDiffY = Math.abs(diffY);
+
+      // Engage swipe only if:
+      // 1. Horizontal movement exceeds threshold
+      // 2. Horizontal movement is greater than vertical (user is swiping, not scrolling)
+      // 3. Movement is to the left (closing gesture)
+      if (
+        absDiffX > SWIPE_ENGAGE_THRESHOLD &&
+        absDiffX > absDiffY &&
+        diffX < 0
+      ) {
+        swipeEngaged.current = true;
+      } else {
+        return; // Not engaged yet, don't track offset
+      }
+    }
+
     // Only allow swiping left (negative offset)
-    if (diff < 0) {
-      setSwipeOffset(diff);
+    if (diffX < 0) {
+      setSwipeOffset(diffX);
     }
   };
 
   const handleTouchEnd = () => {
-    if (swipeOffset < -SWIPE_THRESHOLD) {
+    if (swipeEngaged.current && swipeOffset < -SWIPE_THRESHOLD) {
       onClose();
     }
     touchStartX.current = null;
+    touchStartY.current = null;
+    swipeEngaged.current = false;
     setSwipeOffset(0);
   };
 

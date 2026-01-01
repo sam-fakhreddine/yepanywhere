@@ -456,4 +456,139 @@ describe("SessionReader", () => {
       expect(result.status).toBe("completed");
     });
   });
+
+  describe("getAgentMappings", () => {
+    it("returns mappings of toolUseId to agentId", async () => {
+      // Create agent files with parent_tool_use_id
+      const agent1 = [
+        JSON.stringify({
+          type: "system",
+          uuid: "sys-1",
+          parent_tool_use_id: "tool-use-abc",
+        }),
+        JSON.stringify({
+          type: "user",
+          uuid: "msg-1",
+          message: { content: "Hello" },
+        }),
+      ].join("\n");
+      await writeFile(join(testDir, "agent-abc123.jsonl"), agent1);
+
+      const agent2 = [
+        JSON.stringify({
+          type: "system",
+          uuid: "sys-2",
+          parent_tool_use_id: "tool-use-def",
+        }),
+        JSON.stringify({
+          type: "user",
+          uuid: "msg-2",
+          message: { content: "World" },
+        }),
+      ].join("\n");
+      await writeFile(join(testDir, "agent-def456.jsonl"), agent2);
+
+      const mappings = await reader.getAgentMappings();
+
+      expect(mappings).toHaveLength(2);
+      expect(mappings).toContainEqual({
+        toolUseId: "tool-use-abc",
+        agentId: "abc123",
+      });
+      expect(mappings).toContainEqual({
+        toolUseId: "tool-use-def",
+        agentId: "def456",
+      });
+    });
+
+    it("returns empty array when no agent files exist", async () => {
+      const mappings = await reader.getAgentMappings();
+      expect(mappings).toHaveLength(0);
+    });
+
+    it("skips agent files without parent_tool_use_id", async () => {
+      // Agent file without parent_tool_use_id
+      const agent1 = [
+        JSON.stringify({
+          type: "system",
+          uuid: "sys-1",
+        }),
+        JSON.stringify({
+          type: "user",
+          uuid: "msg-1",
+          message: { content: "Hello" },
+        }),
+      ].join("\n");
+      await writeFile(join(testDir, "agent-noparent.jsonl"), agent1);
+
+      // Agent file with parent_tool_use_id
+      const agent2 = [
+        JSON.stringify({
+          type: "system",
+          uuid: "sys-2",
+          parent_tool_use_id: "tool-use-xyz",
+        }),
+      ].join("\n");
+      await writeFile(join(testDir, "agent-hasparent.jsonl"), agent2);
+
+      const mappings = await reader.getAgentMappings();
+
+      expect(mappings).toHaveLength(1);
+      expect(mappings[0]).toEqual({
+        toolUseId: "tool-use-xyz",
+        agentId: "hasparent",
+      });
+    });
+
+    it("handles empty agent files", async () => {
+      await writeFile(join(testDir, "agent-empty.jsonl"), "");
+
+      const mappings = await reader.getAgentMappings();
+      expect(mappings).toHaveLength(0);
+    });
+
+    it("ignores non-agent JSONL files", async () => {
+      // Create a regular session file
+      const session = [
+        JSON.stringify({
+          type: "user",
+          uuid: "msg-1",
+          parent_tool_use_id: "should-be-ignored",
+          message: { content: "Hello" },
+        }),
+      ].join("\n");
+      await writeFile(join(testDir, "session123.jsonl"), session);
+
+      const mappings = await reader.getAgentMappings();
+      expect(mappings).toHaveLength(0);
+    });
+
+    it("finds parent_tool_use_id even if not on first line", async () => {
+      // parent_tool_use_id on third line
+      const agent = [
+        JSON.stringify({
+          type: "system",
+          uuid: "sys-1",
+        }),
+        JSON.stringify({
+          type: "config",
+          uuid: "cfg-1",
+        }),
+        JSON.stringify({
+          type: "init",
+          uuid: "init-1",
+          parent_tool_use_id: "tool-use-later",
+        }),
+      ].join("\n");
+      await writeFile(join(testDir, "agent-later.jsonl"), agent);
+
+      const mappings = await reader.getAgentMappings();
+
+      expect(mappings).toHaveLength(1);
+      expect(mappings[0]).toEqual({
+        toolUseId: "tool-use-later",
+        agentId: "later",
+      });
+    });
+  });
 });
