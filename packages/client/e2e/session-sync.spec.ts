@@ -8,7 +8,7 @@ test.describe("Session Sync", () => {
 
     // Start a session
     await page.fill(".new-session-form textarea", "Hello from reload test");
-    await page.click(".new-session-form .submit-button");
+    await page.click(".new-session-form .send-button");
 
     // Wait for assistant response
     await expect(page.locator(".assistant-turn")).toBeVisible({
@@ -54,7 +54,7 @@ test.describe("Session Sync", () => {
 
     // Start a session in the first tab
     await page.fill(".new-session-form textarea", "Hello from first tab");
-    await page.click(".new-session-form .submit-button");
+    await page.click(".new-session-form .send-button");
 
     // Wait for assistant response
     await expect(page.locator(".assistant-turn")).toBeVisible({
@@ -102,7 +102,7 @@ test.describe("Session Sync", () => {
 
     // Start a session in the first tab
     await page.fill(".new-session-form textarea", "Initial message");
-    await page.click(".new-session-form .submit-button");
+    await page.click(".new-session-form .send-button");
 
     // Wait for assistant response and idle status (status indicator hidden when idle)
     await expect(page.locator(".assistant-turn")).toBeVisible({

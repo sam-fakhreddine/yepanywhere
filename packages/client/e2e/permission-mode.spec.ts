@@ -8,7 +8,7 @@ test.describe("Permission Mode", () => {
 
     // Start a session first
     await page.fill(".new-session-form textarea", "Test message");
-    await page.click(".new-session-form .submit-button");
+    await page.click(".new-session-form .send-button");
 
     // Wait for session page to load
     await expect(page.locator(".session-messages")).toBeVisible();
@@ -19,14 +19,14 @@ test.describe("Permission Mode", () => {
     await expect(modeButton).toContainText("Ask before edits");
   });
 
-  test("cycles through permission modes on click", async ({ page }) => {
+  test("can select permission modes from dropdown", async ({ page }) => {
     await page.goto("/projects");
     await page.waitForSelector(".project-list a");
     await page.locator(".project-list a").first().click();
 
     // Start a session
     await page.fill(".new-session-form textarea", "Test message");
-    await page.click(".new-session-form .submit-button");
+    await page.click(".new-session-form .send-button");
 
     await expect(page.locator(".session-messages")).toBeVisible();
 
@@ -35,20 +35,24 @@ test.describe("Permission Mode", () => {
     // Initial state: Ask before edits
     await expect(modeButton).toContainText("Ask before edits");
 
-    // Click to cycle to: Edit automatically
+    // Open dropdown and select Edit automatically
     await modeButton.click();
+    await page.locator(".mode-selector-option", { hasText: "Edit automatically" }).click();
     await expect(modeButton).toContainText("Edit automatically");
 
-    // Click to cycle to: Plan mode
+    // Open dropdown and select Plan mode
     await modeButton.click();
+    await page.locator(".mode-selector-option", { hasText: "Plan mode" }).click();
     await expect(modeButton).toContainText("Plan mode");
 
-    // Click to cycle to: Bypass permissions
+    // Open dropdown and select Bypass permissions
     await modeButton.click();
+    await page.locator(".mode-selector-option", { hasText: "Bypass permissions" }).click();
     await expect(modeButton).toContainText("Bypass permissions");
 
-    // Click to cycle back to: Ask before edits
+    // Open dropdown and select Ask before edits
     await modeButton.click();
+    await page.locator(".mode-selector-option", { hasText: "Ask before edits" }).click();
     await expect(modeButton).toContainText("Ask before edits");
   });
 
@@ -58,26 +62,29 @@ test.describe("Permission Mode", () => {
     await page.locator(".project-list a").first().click();
 
     await page.fill(".new-session-form textarea", "Test message");
-    await page.click(".new-session-form .submit-button");
+    await page.click(".new-session-form .send-button");
 
     await expect(page.locator(".session-messages")).toBeVisible();
 
     const modeButton = page.locator(".mode-button");
-    const modeDot = page.locator(".mode-dot");
+    const modeDot = modeButton.locator(".mode-dot");
 
     // Initial state should have default class
     await expect(modeDot).toHaveClass(/mode-default/);
 
-    // Cycle to acceptEdits
+    // Select acceptEdits
     await modeButton.click();
+    await page.locator(".mode-selector-option", { hasText: "Edit automatically" }).click();
     await expect(modeDot).toHaveClass(/mode-acceptEdits/);
 
-    // Cycle to plan
+    // Select plan
     await modeButton.click();
+    await page.locator(".mode-selector-option", { hasText: "Plan mode" }).click();
     await expect(modeDot).toHaveClass(/mode-plan/);
 
-    // Cycle to bypassPermissions
+    // Select bypassPermissions
     await modeButton.click();
+    await page.locator(".mode-selector-option", { hasText: "Bypass permissions" }).click();
     await expect(modeDot).toHaveClass(/mode-bypassPermissions/);
   });
 
@@ -90,7 +97,7 @@ test.describe("Permission Mode", () => {
 
     // Start a session
     await page.fill(".new-session-form textarea", "Test message");
-    await page.click(".new-session-form .submit-button");
+    await page.click(".new-session-form .send-button");
 
     await expect(page.locator(".session-messages")).toBeVisible();
 
@@ -99,8 +106,9 @@ test.describe("Permission Mode", () => {
     // Initial state: Ask before edits
     await expect(modeButton).toContainText("Ask before edits");
 
-    // Switch to "Edit automatically"
+    // Open dropdown and select "Edit automatically"
     await modeButton.click();
+    await page.locator(".mode-selector-option", { hasText: "Edit automatically" }).click();
     await expect(modeButton).toContainText("Edit automatically");
 
     // Send a follow-up message to persist the mode change to the server
@@ -123,14 +131,14 @@ test.describe("Permission Mode", () => {
     await expect(modeButton).toContainText("Edit automatically");
   });
 
-  test("rapid mode toggling settles to final state", async ({ page }) => {
+  test("rapid mode selection settles to final state", async ({ page }) => {
     await page.goto("/projects");
     await page.waitForSelector(".project-list a");
     await page.locator(".project-list a").first().click();
 
     // Start a session
     await page.fill(".new-session-form textarea", "Test message");
-    await page.click(".new-session-form .submit-button");
+    await page.click(".new-session-form .send-button");
 
     await expect(page.locator(".session-messages")).toBeVisible();
 
@@ -139,16 +147,20 @@ test.describe("Permission Mode", () => {
     // Initial state: Ask before edits (default)
     await expect(modeButton).toContainText("Ask before edits");
 
-    // Rapidly click mode button multiple times
-    await modeButton.click(); // -> Edit automatically
-    await modeButton.click(); // -> Plan mode
-    await modeButton.click(); // -> Bypass permissions
-    await modeButton.click(); // -> Ask before edits
+    // Rapidly select different modes
+    await modeButton.click();
+    await page.locator(".mode-selector-option", { hasText: "Edit automatically" }).click();
+
+    await modeButton.click();
+    await page.locator(".mode-selector-option", { hasText: "Plan mode" }).click();
+
+    await modeButton.click();
+    await page.locator(".mode-selector-option", { hasText: "Ask before edits" }).click();
 
     // Wait a bit for any async operations to settle
     await page.waitForTimeout(200);
 
-    // Final state should be "Ask before edits" (cycled back)
+    // Final state should be "Ask before edits"
     await expect(modeButton).toContainText("Ask before edits");
 
     // Refresh and verify mode persisted
@@ -164,16 +176,15 @@ test.describe("Permission Mode", () => {
 
     // Start a session with a message
     await page.fill(".new-session-form textarea", "Test message for sync");
-    await page.click(".new-session-form .submit-button");
+    await page.click(".new-session-form .send-button");
 
     await expect(page.locator(".session-messages")).toBeVisible();
 
     const modeButton = page.locator(".mode-button");
 
-    // Change mode to "Bypass permissions"
-    await modeButton.click(); // -> Edit automatically
-    await modeButton.click(); // -> Plan mode
-    await modeButton.click(); // -> Bypass permissions
+    // Change mode to "Bypass permissions" via dropdown
+    await modeButton.click();
+    await page.locator(".mode-selector-option", { hasText: "Bypass permissions" }).click();
     await expect(modeButton).toContainText("Bypass permissions");
 
     // Send another message to establish the mode on server

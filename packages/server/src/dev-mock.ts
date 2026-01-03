@@ -133,6 +133,15 @@ const scanner = new ProjectScanner();
 const uploadRoutes = createUploadRoutes({ scanner, upgradeWebSocket });
 app.route("/api", uploadRoutes);
 
+// Add mock auth status endpoint (auth disabled for testing)
+app.get("/api/auth/status", (c) => {
+  return c.json({
+    enabled: false,
+    authenticated: true,
+    setupRequired: false,
+  });
+});
+
 // Add frontend proxy as the final catch-all (AFTER all API routes including uploads)
 if (frontendProxy) {
   const proxy = frontendProxy;

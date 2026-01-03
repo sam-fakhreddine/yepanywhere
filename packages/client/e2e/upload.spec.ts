@@ -17,7 +17,7 @@ test.describe("File Upload", () => {
 
     // Start a new session
     await page.fill(".new-session-form textarea", "Hello Claude");
-    await page.click(".new-session-form .submit-button");
+    await page.click(".new-session-form .send-button");
 
     // Wait for session to be established and idle
     await expect(page).toHaveURL(/\/sessions\//);
