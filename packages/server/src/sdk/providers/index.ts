@@ -5,6 +5,7 @@
  */
 
 // Types
+import type { AgentProvider, ProviderName } from "./types.js";
 export type {
   AgentProvider,
   AgentSession,
@@ -14,9 +15,11 @@ export type {
 } from "./types.js";
 
 // Claude provider (uses @anthropic-ai/claude-agent-sdk)
+import { claudeProvider } from "./claude.js";
 export { ClaudeProvider, claudeProvider } from "./claude.js";
 
 // Codex provider (uses codex CLI)
+import { codexProvider } from "./codex.js";
 export {
   CodexProvider,
   codexProvider,
@@ -24,6 +27,7 @@ export {
 } from "./codex.js";
 
 // Gemini provider (uses gemini CLI)
+import { geminiProvider } from "./gemini.js";
 export {
   GeminiProvider,
   geminiProvider,
@@ -31,6 +35,7 @@ export {
 } from "./gemini.js";
 
 // Local model provider (uses Ollama)
+import { localModelProvider } from "./local-model.js";
 export {
   LocalModelProvider,
   localModelProvider,
@@ -41,30 +46,23 @@ export {
  * Get all available provider instances.
  * Useful for provider detection UI.
  */
-export function getAllProviders(): import("./types.js").AgentProvider[] {
-  return [
-    require("./claude.js").claudeProvider,
-    require("./codex.js").codexProvider,
-    require("./gemini.js").geminiProvider,
-    require("./local-model.js").localModelProvider,
-  ];
+export function getAllProviders(): AgentProvider[] {
+  return [claudeProvider, codexProvider, geminiProvider, localModelProvider];
 }
 
 /**
  * Get a provider by name.
  */
-export function getProvider(
-  name: import("./types.js").ProviderName,
-): import("./types.js").AgentProvider | null {
+export function getProvider(name: ProviderName): AgentProvider | null {
   switch (name) {
     case "claude":
-      return require("./claude.js").claudeProvider;
+      return claudeProvider;
     case "codex":
-      return require("./codex.js").codexProvider;
+      return codexProvider;
     case "gemini":
-      return require("./gemini.js").geminiProvider;
+      return geminiProvider;
     case "local":
-      return require("./local-model.js").localModelProvider;
+      return localModelProvider;
     default:
       return null;
   }
