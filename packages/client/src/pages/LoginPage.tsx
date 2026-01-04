@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { YepAnywhereLogo } from "../components/YepAnywhereLogo";
 import { useAuth } from "../contexts/AuthContext";
 
 export function LoginPage() {
@@ -81,7 +82,9 @@ export function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-container">
-        <h1 className="login-title">Claude Anywhere</h1>
+        <div className="login-logo">
+          <YepAnywhereLogo />
+        </div>
         <p className="login-subtitle">
           {isSetupMode
             ? "Create your account to get started"
@@ -132,8 +135,7 @@ export function LoginPage() {
 
         {isSetupMode && (
           <p className="login-hint">
-            This password will be used to access Claude Anywhere from any
-            device.
+            This password will be used to access Yep Anywhere from any device.
           </p>
         )}
       </div>

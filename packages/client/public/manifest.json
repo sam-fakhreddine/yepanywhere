@@ -1,7 +1,7 @@
 {
-  "name": "Claude Anywhere",
-  "short_name": "Claude Anywhere",
-  "description": "Access Claude from anywhere",
+  "name": "Yep Anywhere",
+  "short_name": "Yep Anywhere",
+  "description": "Access your AI agents from anywhere",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1f1f1f",

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 export type Theme = "auto" | "light" | "dark" | "verydark";
 
-const THEME_KEY = "claude-anywhere-theme";
+const THEME_KEY = "yep-anywhere-theme";
 
 const themeLabels: Record<Theme, string> = {
   auto: "Auto",

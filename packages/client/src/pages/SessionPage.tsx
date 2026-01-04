@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, uploadFile } from "../api/client";
 import { MessageInput, type UploadProgress } from "../components/MessageInput";
+import { MessageInputToolbar } from "../components/MessageInputToolbar";
 import { MessageList } from "../components/MessageList";
 import { ProviderBadge } from "../components/ProviderBadge";
 import { QuestionAnswerPanel } from "../components/QuestionAnswerPanel";
@@ -115,6 +116,9 @@ function SessionPageContent({
   const [localIsStarred, setLocalIsStarred] = useState<boolean | undefined>(
     undefined,
   );
+  const [localHasUnread, setLocalHasUnread] = useState<boolean | undefined>(
+    undefined,
+  );
 
   // Reset local metadata state when sessionId changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset on sessionId change
@@ -122,11 +126,15 @@ function SessionPageContent({
     setLocalCustomTitle(undefined);
     setLocalIsArchived(undefined);
     setLocalIsStarred(undefined);
+    setLocalHasUnread(undefined);
   }, [sessionId]);
 
   // File attachment state
   const [attachments, setAttachments] = useState<UploadedFile[]>([]);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress[]>([]);
+
+  // Approval panel collapsed state (separate from message input collapse)
+  const [approvalCollapsed, setApprovalCollapsed] = useState(false);
 
   // Track user engagement to mark session as "seen"
   // Only enabled when not in external session (we own or it's idle)
@@ -169,7 +177,9 @@ function SessionPageContent({
     try {
       if (status.state === "idle") {
         // Resume the session with current permission mode and model settings
-        const model = getModelSetting();
+        // Use session's existing model if available (important for non-Claude providers),
+        // otherwise fall back to user's model preference for new Claude sessions
+        const model = session?.model ?? getModelSetting();
         const thinking = getThinkingSetting();
         const result = await api.resumeSession(
           projectId,
@@ -455,6 +465,28 @@ function SessionPageContent({
     }
   };
 
+  const hasUnread = localHasUnread ?? session?.hasUnread ?? false;
+
+  const handleToggleRead = async () => {
+    const newHasUnread = !hasUnread;
+    setLocalHasUnread(newHasUnread);
+    try {
+      if (newHasUnread) {
+        await api.markSessionUnread(sessionId);
+      } else {
+        await api.markSessionSeen(sessionId);
+      }
+      showToast(
+        newHasUnread ? "Marked as unread" : "Marked as read",
+        "success",
+      );
+    } catch (err) {
+      console.error("Failed to update read status:", err);
+      setLocalHasUnread(undefined); // Revert on error
+      showToast("Failed to update read status", "error");
+    }
+  };
+
   if (error) return <div className="error">Error: {error.message}</div>;
 
   // Sidebar icon component
@@ -557,18 +589,18 @@ function SessionPageContent({
                 {!loading && isArchived && (
                   <span className="archived-badge">Archived</span>
                 )}
-                {!loading &&
-                  session?.provider &&
-                  session.provider !== "claude" && (
-                    <ProviderBadge provider={session.provider} />
-                  )}
+                {!loading && session?.provider && (
+                  <ProviderBadge provider={session.provider} />
+                )}
                 {!loading && (
                   <SessionMenu
                     sessionId={sessionId}
                     isStarred={isStarred}
                     isArchived={isArchived}
+                    hasUnread={hasUnread}
                     onToggleStar={handleToggleStar}
                     onToggleArchive={handleToggleArchive}
+                    onToggleRead={handleToggleRead}
                     onRename={handleStartEditingTitle}
                     useFixedPositioning
                   />
@@ -624,6 +656,7 @@ function SessionPageContent({
 
         <footer className="session-input">
           <div className="session-input-inner">
+            {/* User question panel */}
             {pendingInputRequest &&
               pendingInputRequest.sessionId === actualSessionId &&
               isAskUserQuestion && (
@@ -633,18 +666,45 @@ function SessionPageContent({
                   onDeny={handleDeny}
                 />
               )}
+
+            {/* Tool approval: show panel + always-visible toolbar */}
             {pendingInputRequest &&
               pendingInputRequest.sessionId === actualSessionId &&
               !isAskUserQuestion && (
-                <ToolApprovalPanel
-                  request={pendingInputRequest}
-                  onApprove={handleApprove}
-                  onDeny={handleDeny}
-                  onApproveAcceptEdits={handleApproveAcceptEdits}
-                  onDenyWithFeedback={handleDenyWithFeedback}
-                  draftKey={`draft-message-${sessionId}`}
-                />
+                <>
+                  <ToolApprovalPanel
+                    request={pendingInputRequest}
+                    onApprove={handleApprove}
+                    onDeny={handleDeny}
+                    onApproveAcceptEdits={handleApproveAcceptEdits}
+                    onDenyWithFeedback={handleDenyWithFeedback}
+                    collapsed={approvalCollapsed}
+                    onCollapsedChange={setApprovalCollapsed}
+                  />
+                  <MessageInputToolbar
+                    mode={permissionMode}
+                    onModeChange={setPermissionMode}
+                    isModePending={isModePending}
+                    isHeld={isHeld}
+                    onHoldChange={setHold}
+                    contextUsage={session?.contextUsage}
+                    sessionModel={session?.model}
+                    isRunning={status.state === "owned"}
+                    isThinking={processState === "running"}
+                    onStop={handleAbort}
+                    pendingApproval={
+                      approvalCollapsed
+                        ? {
+                            type: "tool-approval",
+                            onExpand: () => setApprovalCollapsed(false),
+                          }
+                        : undefined
+                    }
+                  />
+                </>
               )}
+
+            {/* No pending approval: show full message input */}
             {!(
               pendingInputRequest &&
               pendingInputRequest.sessionId === actualSessionId &&
@@ -682,6 +742,7 @@ function SessionPageContent({
                 onAttach={handleAttach}
                 onRemoveAttachment={handleRemoveAttachment}
                 uploadProgress={uploadProgress}
+                sessionModel={session?.model}
               />
             )}
           </div>

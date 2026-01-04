@@ -3,7 +3,11 @@ import type { Components, ExtraProps } from "react-markdown";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { AgentContentContext } from "../../contexts/AgentContentContext";
-import { splitTextWithFilePaths } from "../../lib/filePathDetection";
+import {
+  isLikelyFilePath,
+  parseLineColumn,
+  splitTextWithFilePaths,
+} from "../../lib/filePathDetection";
 import { FilePathLink } from "../FilePathLink";
 
 interface Props {
@@ -133,8 +137,36 @@ export const TextBlock = memo(function TextBlock({
       }: React.ComponentPropsWithoutRef<"blockquote"> & ExtraProps) => (
         <blockquote {...props}>{processChildren(children)}</blockquote>
       ),
-      // Note: We intentionally skip code and pre elements to avoid
-      // processing file paths inside code blocks
+      // For inline code, check if the content is a file path and linkify it
+      // This handles cases like: Created `docs/project/file.md`
+      code: ({
+        children,
+        ...props
+      }: React.ComponentPropsWithoutRef<"code"> & ExtraProps) => {
+        // Only process single string children (inline code, not code blocks)
+        // Require a directory component (/) to avoid bare filenames that can't be resolved
+        if (
+          typeof children === "string" &&
+          children.includes("/") &&
+          isLikelyFilePath(children)
+        ) {
+          // Parse out line/column numbers from paths like "file.tsx:42:10"
+          const { path, line, column } = parseLineColumn(children);
+          return (
+            <code {...props}>
+              <FilePathLink
+                filePath={path}
+                projectId={projectId}
+                lineNumber={line}
+                columnNumber={column}
+                displayText={children}
+                showFullPath
+              />
+            </code>
+          );
+        }
+        return <code {...props}>{children}</code>;
+      },
     };
   }, [projectId, isStreaming]);
 

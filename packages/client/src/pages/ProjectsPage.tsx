@@ -60,82 +60,84 @@ export function ProjectsPage() {
           isSidebarCollapsed={isSidebarCollapsed}
         />
 
-        <main className="sessions-page-content">
-          {/* Add Project Button/Form */}
-          <div className="add-project-section">
-            {!showAddForm ? (
-              <>
-                <button
-                  type="button"
-                  className="add-project-button"
-                  onClick={() => setShowAddForm(true)}
-                >
-                  + Add Project
-                </button>
-                <p className="add-project-hint">
-                  or just launch Claude in a folder and it will automatically
-                  appear here
-                </p>
-              </>
-            ) : (
-              <form onSubmit={handleAddProject} className="add-project-form">
-                <input
-                  type="text"
-                  value={newProjectPath}
-                  onChange={(e) => setNewProjectPath(e.target.value)}
-                  placeholder="Enter project path (e.g., ~/code/my-project)"
-                  disabled={adding}
-                />
-                <div className="add-project-actions">
-                  <button
-                    type="submit"
-                    disabled={adding || !newProjectPath.trim()}
-                  >
-                    {adding ? "Adding..." : "Add"}
-                  </button>
+        <main className="page-scroll-container">
+          <div className="page-content-inner">
+            {/* Add Project Button/Form */}
+            <div className="add-project-section">
+              {!showAddForm ? (
+                <>
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowAddForm(false);
-                      setNewProjectPath("");
-                      setAddError(null);
-                    }}
-                    disabled={adding}
+                    className="add-project-button"
+                    onClick={() => setShowAddForm(true)}
                   >
-                    Cancel
+                    + Add Project
                   </button>
-                </div>
-                {addError && (
-                  <div className="add-project-error">{addError}</div>
-                )}
-              </form>
+                  <p className="add-project-hint">
+                    or just launch Claude in a folder and it will automatically
+                    appear here
+                  </p>
+                </>
+              ) : (
+                <form onSubmit={handleAddProject} className="add-project-form">
+                  <input
+                    type="text"
+                    value={newProjectPath}
+                    onChange={(e) => setNewProjectPath(e.target.value)}
+                    placeholder="Enter project path (e.g., ~/code/my-project)"
+                    disabled={adding}
+                  />
+                  <div className="add-project-actions">
+                    <button
+                      type="submit"
+                      disabled={adding || !newProjectPath.trim()}
+                    >
+                      {adding ? "Adding..." : "Add"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddForm(false);
+                        setNewProjectPath("");
+                        setAddError(null);
+                      }}
+                      disabled={adding}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  {addError && (
+                    <div className="add-project-error">{addError}</div>
+                  )}
+                </form>
+              )}
+            </div>
+
+            {projects.length === 0 ? (
+              <p>No projects found. Add a project above to get started.</p>
+            ) : (
+              <ul className="project-list">
+                {projects.map((project) => (
+                  <li key={project.id}>
+                    <Link to={`/projects/${project.id}`}>
+                      <strong>{project.name}</strong>
+                      <span className="meta">
+                        {project.sessionCount} sessions
+                        <ActiveCountBadge
+                          variant="owned"
+                          count={project.activeOwnedCount}
+                        />
+                        <ActiveCountBadge
+                          variant="external"
+                          count={project.activeExternalCount}
+                        />
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-
-          {projects.length === 0 ? (
-            <p>No projects found. Add a project above to get started.</p>
-          ) : (
-            <ul className="project-list">
-              {projects.map((project) => (
-                <li key={project.id}>
-                  <Link to={`/projects/${project.id}`}>
-                    <strong>{project.name}</strong>
-                    <span className="meta">
-                      {project.sessionCount} sessions
-                      <ActiveCountBadge
-                        variant="owned"
-                        count={project.activeOwnedCount}
-                      />
-                      <ActiveCountBadge
-                        variant="external"
-                        count={project.activeExternalCount}
-                      />
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
         </main>
       </div>
     </div>

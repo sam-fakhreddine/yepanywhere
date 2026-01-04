@@ -8,7 +8,11 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { UrlProjectId } from "@claude-anywhere/shared";
+import {
+  DEFAULT_PROVIDER,
+  type ProviderName,
+  type UrlProjectId,
+} from "@claude-anywhere/shared";
 import { getLogger } from "../logging/logger.js";
 import type { ISessionReader } from "../sessions/types.js";
 import type { SessionSummary } from "../supervisor/types.js";
@@ -29,8 +33,8 @@ export interface CachedSessionSummary {
   fileMtime: number;
   /** True if session has no user/assistant messages (metadata-only file) */
   isEmpty?: boolean;
-  /** AI provider (defaults to "claude" for backwards compatibility) */
-  provider?: "claude" | "codex" | "gemini";
+  /** AI provider for this session */
+  provider: ProviderName;
 }
 
 export interface SessionIndexState {
@@ -46,6 +50,8 @@ export interface SessionIndexServiceOptions {
   dataDir?: string;
   /** Claude projects directory (defaults to ~/.claude/projects) */
   projectsDir?: string;
+  /** Max number of projects to keep in memory cache (default: 100) */
+  maxCacheSize?: number;
 }
 
 /**
@@ -61,6 +67,7 @@ export class SessionIndexService implements ISessionIndexService {
   private indexCache: Map<string, SessionIndexState> = new Map();
   private savePromises: Map<string, Promise<void>> = new Map();
   private pendingSaves: Set<string> = new Set();
+  private maxCacheSize: number;
 
   constructor(options: SessionIndexServiceOptions = {}) {
     const home = process.env.HOME ?? process.env.USERPROFILE ?? ".";
@@ -68,6 +75,25 @@ export class SessionIndexService implements ISessionIndexService {
       options.dataDir ?? path.join(home, ".claude-anywhere", "indexes");
     this.projectsDir =
       options.projectsDir ?? path.join(home, ".claude", "projects");
+    this.maxCacheSize = options.maxCacheSize ?? 10000;
+  }
+
+  /**
+   * Evict oldest entries if cache exceeds max size.
+   * Simple FIFO eviction since Map maintains insertion order.
+   */
+  private evictIfNeeded(): void {
+    while (this.indexCache.size > this.maxCacheSize) {
+      const firstKey = this.indexCache.keys().next().value;
+      if (firstKey) {
+        this.indexCache.delete(firstKey);
+        logger.debug(
+          `[SessionIndexService] Evicted cache entry for ${firstKey} (cache size: ${this.indexCache.size})`,
+        );
+      } else {
+        break;
+      }
+    }
   }
 
   /**
@@ -123,6 +149,7 @@ export class SessionIndexService implements ISessionIndexService {
         parsed.projectId === projectId
       ) {
         this.indexCache.set(cacheKey, parsed);
+        this.evictIfNeeded();
         return parsed;
       }
 
@@ -133,6 +160,7 @@ export class SessionIndexService implements ISessionIndexService {
         sessions: {},
       };
       this.indexCache.set(cacheKey, fresh);
+      this.evictIfNeeded();
       return fresh;
     } catch (error) {
       // File doesn't exist or is invalid - start fresh
@@ -148,6 +176,7 @@ export class SessionIndexService implements ISessionIndexService {
         sessions: {},
       };
       this.indexCache.set(cacheKey, fresh);
+      this.evictIfNeeded();
       return fresh;
     }
   }
@@ -260,7 +289,7 @@ export class SessionIndexService implements ISessionIndexService {
               messageCount: cached.messageCount,
               status: { state: "idle" },
               contextUsage: cached.contextUsage,
-              provider: cached.provider ?? "claude",
+              provider: cached.provider ?? DEFAULT_PROVIDER,
             });
           } else {
             // Cache miss - parse the file
@@ -298,6 +327,7 @@ export class SessionIndexService implements ISessionIndexService {
                 indexedBytes: size,
                 fileMtime: mtime,
                 isEmpty: true,
+                provider: DEFAULT_PROVIDER,
               };
               indexChanged = true;
             }
@@ -418,6 +448,7 @@ export class SessionIndexService implements ISessionIndexService {
           indexedBytes: size,
           fileMtime: mtime,
           isEmpty: true,
+          provider: DEFAULT_PROVIDER,
         };
         await this.saveIndex(sessionDir);
       }

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-const BASE_TITLE = "Claude Anywhere";
+const BASE_TITLE = "Yep Anywhere";
 
 /**
  * Truncates a string to a maximum length, adding ellipsis if needed.

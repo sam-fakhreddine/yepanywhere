@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
+import { FloatingActionButton } from "./components/FloatingActionButton";
 import { ReloadBanner } from "./components/ReloadBanner";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SchemaValidationProvider } from "./contexts/SchemaValidationContext";
 import { ToastProvider } from "./contexts/ToastContext";
+import { useNeedsAttentionBadge } from "./hooks/useNeedsAttentionBadge";
 import { useSyncNotifyInAppSetting } from "./hooks/useNotifyInApp";
 import { useReloadNotifications } from "./hooks/useReloadNotifications";
 
@@ -17,6 +19,9 @@ interface Props {
 export function App({ children }: Props) {
   // Sync notifyInApp setting to service worker on app startup and SW restarts
   useSyncNotifyInAppSetting();
+
+  // Update tab title with needs-attention badge count
+  useNeedsAttentionBadge();
 
   const {
     isManualReloadMode,
@@ -49,6 +54,7 @@ export function App({ children }: Props) {
             />
           )}
           {children}
+          <FloatingActionButton />
         </SchemaValidationProvider>
       </AuthProvider>
     </ToastProvider>

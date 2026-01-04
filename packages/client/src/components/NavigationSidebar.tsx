@@ -8,6 +8,7 @@ import {
   SidebarNavItem,
   SidebarNavSection,
 } from "./SidebarNavItem";
+import { YepAnywhereLogo } from "./YepAnywhereLogo";
 
 const SWIPE_THRESHOLD = 50;
 
@@ -160,42 +161,48 @@ export function NavigationSidebar({
         }
       >
         <div className="sidebar-header">
-          {isDesktop ? (
+          {isDesktop && isCollapsed ? (
+            /* Desktop collapsed mode: show toggle button to expand */
             <button
               type="button"
               className="sidebar-toggle"
               onClick={onToggleExpanded}
-              title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title="Expand sidebar"
+              aria-label="Expand sidebar"
             >
               <SidebarToggleIcon />
             </button>
+          ) : isDesktop ? (
+            /* Desktop expanded mode: show brand (toggle is in toolbar) */
+            <span className="sidebar-brand">
+              <YepAnywhereLogo />
+            </span>
           ) : (
-            <span className="sidebar-brand">Claude Anywhere</span>
-          )}
-          {!isDesktop && (
-            <button
-              type="button"
-              className="sidebar-close"
-              onClick={onClose}
-              aria-label="Close sidebar"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden="true"
+            /* Mobile mode: brand text + close button */
+            <>
+              <span className="sidebar-brand">
+                <YepAnywhereLogo />
+              </span>
+              <button
+                type="button"
+                className="sidebar-close"
+                onClick={onClose}
+                aria-label="Close sidebar"
               >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          )}
-          {isDesktop && !isCollapsed && (
-            <span className="sidebar-brand">Claude Anywhere</span>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </>
           )}
         </div>
 

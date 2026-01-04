@@ -43,7 +43,7 @@ export class Process {
   readonly projectPath: string;
   readonly projectId: UrlProjectId;
   readonly startedAt: Date;
-  readonly provider?: ProviderName;
+  readonly provider: ProviderName;
 
   private legacyQueue: UserMessage[] = [];
   private messageQueue: MessageQueue | null;

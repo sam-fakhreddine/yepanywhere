@@ -34,12 +34,20 @@ export {
   type GeminiProviderConfig,
 } from "./gemini.js";
 
+// CodexOSS provider (uses codex CLI with --oss for local models)
+import { codexOSSProvider } from "./codex-oss.js";
+export {
+  CodexOSSProvider,
+  codexOSSProvider,
+  type CodexOSSProviderConfig,
+} from "./codex-oss.js";
+
 /**
  * Get all available provider instances.
  * Useful for provider detection UI.
  */
 export function getAllProviders(): AgentProvider[] {
-  return [claudeProvider, codexProvider, geminiProvider];
+  return [claudeProvider, codexProvider, codexOSSProvider, geminiProvider];
 }
 
 /**
@@ -51,6 +59,8 @@ export function getProvider(name: ProviderName): AgentProvider | null {
       return claudeProvider;
     case "codex":
       return codexProvider;
+    case "codex-oss":
+      return codexOSSProvider;
     case "gemini":
       return geminiProvider;
     default:

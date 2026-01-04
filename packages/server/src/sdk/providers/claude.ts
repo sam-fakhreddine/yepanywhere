@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { ModelInfo } from "@claude-anywhere/shared";
 import {
   type SDKMessage as AgentSDKMessage,
   type CanUseTool as SDKCanUseTool,
@@ -15,6 +16,13 @@ import type {
   AuthStatus,
   StartSessionOptions,
 } from "./types.js";
+
+/** Static list of Claude models */
+const CLAUDE_MODELS: ModelInfo[] = [
+  { id: "sonnet", name: "Sonnet" },
+  { id: "opus", name: "Opus" },
+  { id: "haiku", name: "Haiku" },
+];
 
 /**
  * OAuth credentials from ~/.claude/.credentials.json
@@ -120,6 +128,14 @@ export class ClaudeProvider implements AgentProvider {
         enabled: false,
       };
     }
+  }
+
+  /**
+   * Get available Claude models.
+   * Returns a static list of known models.
+   */
+  async getAvailableModels(): Promise<ModelInfo[]> {
+    return CLAUDE_MODELS;
   }
 
   /**

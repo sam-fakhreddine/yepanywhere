@@ -59,6 +59,7 @@ export class Session extends SessionView {
       summary.lastSeenAt,
       summary.hasUnread ?? false,
       summary.contextUsage,
+      summary.provider,
     );
     this.deps = deps;
   }
@@ -170,6 +171,7 @@ export class Session extends SessionView {
       lastSeenAt: this.lastSeenAt,
       hasUnread: this.hasUnread,
       contextUsage: this.contextUsage,
+      provider: this.provider,
     };
   }
 }

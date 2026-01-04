@@ -10,9 +10,13 @@ import { createAuthMiddleware } from "./middleware/auth.js";
 import { corsMiddleware, requireCustomHeader } from "./middleware/security.js";
 import type { NotificationService } from "./notifications/index.js";
 import {
-  CodexSessionScanner,
   CODEX_SESSIONS_DIR,
+  CodexSessionScanner,
 } from "./projects/codex-scanner.js";
+import {
+  GEMINI_TMP_DIR,
+  GeminiSessionScanner,
+} from "./projects/gemini-scanner.js";
 import { ProjectScanner } from "./projects/scanner.js";
 import { PushNotifier, type PushService } from "./push/index.js";
 import { createPushRoutes } from "./push/routes.js";
@@ -33,6 +37,7 @@ import type {
   RealClaudeSDKInterface,
 } from "./sdk/types.js";
 import { CodexSessionReader } from "./sessions/codex-reader.js";
+import { GeminiSessionReader } from "./sessions/gemini-reader.js";
 import { ClaudeSessionReader } from "./sessions/reader.js";
 import type { ISessionReader } from "./sessions/types.js";
 import { ExternalSessionTracker } from "./supervisor/ExternalSessionTracker.js";
@@ -111,6 +116,7 @@ export function createApp(
   // Create dependencies
   const scanner = new ProjectScanner({ projectsDir: options.projectsDir });
   const codexScanner = new CodexSessionScanner();
+  const geminiScanner = new GeminiSessionScanner();
   const supervisor = new Supervisor({
     sdk: options.sdk,
     realSdk: options.realSdk,
@@ -128,12 +134,18 @@ export function createApp(
   const readerFactory = (project: Project): ISessionReader => {
     switch (project.provider) {
       case "codex":
+      case "codex-oss":
         return new CodexSessionReader({
           sessionsDir: project.sessionDir,
           projectPath: project.path,
         });
+      case "gemini":
+        return new GeminiSessionReader({
+          sessionsDir: GEMINI_TMP_DIR,
+          projectPath: project.path,
+          hashToCwd: geminiScanner.getHashToCwd(),
+        });
       case "claude":
-      default:
         return new ClaudeSessionReader({ sessionDir: project.sessionDir });
     }
   };
@@ -182,6 +194,8 @@ export function createApp(
       sessionIndexService: options.sessionIndexService,
       codexScanner,
       codexSessionsDir: CODEX_SESSIONS_DIR,
+      geminiScanner,
+      geminiSessionsDir: GEMINI_TMP_DIR,
     }),
   );
   app.route(
@@ -196,6 +210,8 @@ export function createApp(
       eventBus: options.eventBus,
       codexScanner,
       codexSessionsDir: CODEX_SESSIONS_DIR,
+      geminiScanner,
+      geminiSessionsDir: GEMINI_TMP_DIR,
     }),
   );
   app.route(

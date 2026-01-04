@@ -144,25 +144,34 @@ export function createStreamRoutes(deps: StreamDeps): Hono {
         }
       });
 
-      // Handle stream close
-      stream.onAbort(() => {
-        completed = true;
-        clearInterval(heartbeatInterval);
-        unsubscribe();
-      });
-
       // Keep stream open until process completes or client disconnects
       await new Promise<void>((resolve) => {
-        const checkComplete = process.subscribe((event) => {
+        // Also resolve if already completed (process finished before we got here)
+        if (completed) {
+          resolve();
+          return;
+        }
+
+        // Subscribe to wait for completion
+        const unsubscribeCompletion = process.subscribe((event) => {
           if (event.type === "complete") {
-            checkComplete();
+            unsubscribeCompletion();
             resolve();
           }
         });
 
-        // Also resolve if already completed
+        // Handle stream close - must unsubscribe the completion listener too
+        stream.onAbort(() => {
+          completed = true;
+          clearInterval(heartbeatInterval);
+          unsubscribe();
+          unsubscribeCompletion(); // Clean up completion listener on disconnect
+          resolve();
+        });
+
+        // Check again after subscribing in case we missed it
         if (completed) {
-          checkComplete();
+          unsubscribeCompletion();
           resolve();
         }
       });

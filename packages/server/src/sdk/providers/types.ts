@@ -1,12 +1,12 @@
 // Provider abstraction types for multi-provider support
-import type { PermissionMode } from "@claude-anywhere/shared";
+import type { ModelInfo, PermissionMode } from "@claude-anywhere/shared";
 import type { MessageQueue } from "../messageQueue.js";
 import type { CanUseTool, SDKMessage, UserMessage } from "../types.js";
 
 /**
  * Provider names - extensible for future providers.
  */
-export type ProviderName = "claude" | "codex" | "gemini";
+export type ProviderName = "claude" | "codex" | "codex-oss" | "gemini";
 
 /**
  * Authentication status for a provider.
@@ -92,4 +92,11 @@ export interface AgentProvider {
    * Returns the session iterator, message queue, and abort function.
    */
   startSession(options: StartSessionOptions): Promise<AgentSession>;
+
+  /**
+   * Get available models for this provider.
+   * For local providers (Codex with Ollama), this queries the local model list.
+   * For cloud providers (Claude, Gemini), this returns a static list.
+   */
+  getAvailableModels(): Promise<ModelInfo[]>;
 }

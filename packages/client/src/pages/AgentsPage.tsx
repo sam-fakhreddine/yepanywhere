@@ -225,49 +225,51 @@ export function AgentsPage() {
       >
         <PageHeader title="Agents" onOpenSidebar={openSidebar} />
 
-        <main className="sessions-page-content">
-          {loading && <p className="loading">Loading agents...</p>}
+        <main className="page-scroll-container">
+          <div className="page-content-inner">
+            {loading && <p className="loading">Loading agents...</p>}
 
-          {error && (
-            <p className="error">Error loading agents: {error.message}</p>
-          )}
+            {error && (
+              <p className="error">Error loading agents: {error.message}</p>
+            )}
 
-          {!loading && !error && (
-            <>
-              <section className="agents-section">
-                <h2>
-                  Active Agents
-                  {activeCount > 0 && (
-                    <span className="agents-count-badge">{activeCount}</span>
-                  )}
-                </h2>
-                {processes.length === 0 ? (
-                  <p className="agents-empty">No active agents</p>
-                ) : (
-                  <div className="agents-list">
-                    {processes.map((process) => (
-                      <ProcessCard key={process.id} process={process} />
-                    ))}
-                  </div>
-                )}
-              </section>
-
-              {terminatedProcesses.length > 0 && (
+            {!loading && !error && (
+              <>
                 <section className="agents-section">
-                  <h2>Recently Terminated</h2>
-                  <div className="agents-list">
-                    {terminatedProcesses.map((process) => (
-                      <ProcessCard
-                        key={process.id}
-                        process={process}
-                        isTerminated
-                      />
-                    ))}
-                  </div>
+                  <h2>
+                    Active Agents
+                    {activeCount > 0 && (
+                      <span className="agents-count-badge">{activeCount}</span>
+                    )}
+                  </h2>
+                  {processes.length === 0 ? (
+                    <p className="agents-empty">No active agents</p>
+                  ) : (
+                    <div className="agents-list">
+                      {processes.map((process) => (
+                        <ProcessCard key={process.id} process={process} />
+                      ))}
+                    </div>
+                  )}
                 </section>
-              )}
-            </>
-          )}
+
+                {terminatedProcesses.length > 0 && (
+                  <section className="agents-section">
+                    <h2>Recently Terminated</h2>
+                    <div className="agents-list">
+                      {terminatedProcesses.map((process) => (
+                        <ProcessCard
+                          key={process.id}
+                          process={process}
+                          isTerminated
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </>
+            )}
+          </div>
         </main>
       </div>
     </div>

@@ -88,6 +88,7 @@ export const FilePathLink = memo(function FilePathLink({
           <FileViewerModal
             projectId={projectId}
             filePath={filePath}
+            lineNumber={lineNumber}
             onClose={handleClose}
           />,
           document.body,
@@ -102,10 +103,12 @@ export const FilePathLink = memo(function FilePathLink({
 function FileViewerModal({
   projectId,
   filePath,
+  lineNumber,
   onClose,
 }: {
   projectId: string;
   filePath: string;
+  lineNumber?: number;
   onClose: () => void;
 }) {
   const handleOverlayClick = (e: React.MouseEvent) => {
@@ -151,6 +154,7 @@ function FileViewerModal({
         <FileViewer
           projectId={projectId}
           filePath={filePath}
+          lineNumber={lineNumber}
           onClose={onClose}
         />
       </dialog>

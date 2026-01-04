@@ -93,7 +93,7 @@ export const SidebarIcons = {
       viewBox="0 0 24 24"
       aria-hidden="true"
     >
-      <circle cx="12" cy="12" r="12" fill="var(--app-claude-orange)" />
+      <circle cx="12" cy="12" r="12" fill="var(--app-yep-green)" />
       <line
         x1="12"
         y1="7"

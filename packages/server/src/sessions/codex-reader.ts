@@ -388,16 +388,18 @@ export class CodexSessionReader implements ISessionReader {
 
   /**
    * Count user/assistant messages in entries.
+   *
+   * Matches the logic in convertEntriesToMessages - we count user_message
+   * events and response_item messages, but not agent_message events since
+   * those are streaming duplicates.
    */
   private countMessages(entries: CodexSessionEntry[]): number {
     let count = 0;
 
     for (const entry of entries) {
       if (entry.type === "event_msg") {
-        if (
-          entry.payload.type === "user_message" ||
-          entry.payload.type === "agent_message"
-        ) {
+        // Only count user_message events (not agent_message streaming tokens)
+        if (entry.payload.type === "user_message") {
           count++;
         }
       } else if (entry.type === "response_item") {
@@ -446,10 +448,19 @@ export class CodexSessionReader implements ISessionReader {
 
   /**
    * Convert Codex JSONL entries to Message format.
+   *
+   * Codex sessions contain both streaming events (event_msg) and aggregated
+   * response_item entries. We prefer response_item for messages since they
+   * contain the complete text, and only use event_msg for user_message events.
+   *
+   * Unlike Claude's DAG structure, Codex sessions are linear. We create a
+   * parentUuid chain by linking each message to the previous one, which
+   * enables proper ordering and deduplication in the client.
    */
   private convertEntriesToMessages(entries: CodexSessionEntry[]): Message[] {
     const messages: Message[] = [];
     let messageIndex = 0;
+    let lastMessageUuid: string | null = null;
 
     // Track function calls for pairing with outputs
     const pendingCalls = new Map<
@@ -465,13 +476,25 @@ export class CodexSessionReader implements ISessionReader {
           pendingCalls,
         );
         if (msg) {
+          // Set parentUuid to create linear chain for ordering/dedup
+          msg.parentUuid = lastMessageUuid;
+          lastMessageUuid = msg.uuid ?? null;
           messages.push(msg);
         }
       } else if (entry.type === "event_msg") {
-        const msg = this.convertEventMsg(entry, messageIndex++);
-        if (msg) {
-          messages.push(msg);
+        // Only process user_message events - agent_message events are
+        // duplicates of the response_item data (streaming tokens)
+        if (entry.payload.type === "user_message") {
+          const msg = this.convertEventMsg(entry, messageIndex++);
+          if (msg) {
+            // Set parentUuid to create linear chain for ordering/dedup
+            msg.parentUuid = lastMessageUuid;
+            lastMessageUuid = msg.uuid ?? null;
+            messages.push(msg);
+          }
         }
+        // Skip agent_message, agent_reasoning, token_count - these are
+        // streaming events that duplicate response_item content
       }
       // Skip session_meta and turn_context for now
     }
@@ -529,16 +552,37 @@ export class CodexSessionReader implements ISessionReader {
 
   /**
    * Convert a message payload (user or assistant).
+   *
+   * Codex streams tokens as separate output_text blocks, so we concatenate
+   * them into a single text block for proper rendering.
    */
   private convertMessagePayload(
     payload: CodexMessagePayload,
     uuid: string,
     timestamp: string,
   ): Message {
-    const content: ContentBlock[] = payload.content.map((c) => ({
-      type: "text" as const,
-      text: c.text,
-    }));
+    // Concatenate all text blocks into a single string
+    const fullText = payload.content.map((c) => c.text).join("");
+
+    // Skip empty messages
+    if (!fullText.trim()) {
+      return {
+        uuid,
+        type: payload.role,
+        message: {
+          role: payload.role,
+          content: [],
+        },
+        timestamp,
+      };
+    }
+
+    const content: ContentBlock[] = [
+      {
+        type: "text" as const,
+        text: fullText,
+      },
+    ];
 
     return {
       uuid,

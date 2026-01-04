@@ -868,6 +868,7 @@ export class Supervisor {
 
     // Capture process info for terminated list before deleting
     const terminatedInfo = process.getInfo();
+    terminatedInfo.state = "terminated"; // Override state since process may have been forcefully aborted
     terminatedInfo.terminatedAt = new Date().toISOString();
     if (process.terminationReason) {
       terminatedInfo.terminationReason = process.terminationReason;
@@ -958,6 +959,7 @@ export class Supervisor {
       updatedAt: now,
       messageCount: 0,
       status,
+      provider: process.provider,
     };
 
     const event: SessionCreatedEvent = {

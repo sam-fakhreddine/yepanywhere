@@ -7,8 +7,11 @@ export const SIDEBAR_MIN_WIDTH = 280; // Current default, minimum allowed
 export const SIDEBAR_MAX_WIDTH = 560; // 2x minimum
 export const SIDEBAR_COLLAPSED_WIDTH = 56;
 export const MIN_CONTENT_WIDTH = 600; // Minimum main content area width
+// Desktop breakpoint must match CSS @media (min-width: 1100px) in index.css
+export const DESKTOP_BREAKPOINT = 1100;
 
-// Desktop mode when: viewport >= sidebarWidth + MIN_CONTENT_WIDTH
+// Desktop mode when: viewport >= DESKTOP_BREAKPOINT
+// Expanded sidebar when: viewport >= sidebarWidth + MIN_CONTENT_WIDTH
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -52,9 +55,9 @@ export function useSidebarWidth(): UseSidebarWidthResult {
     saveWidth(clamped);
   }, []);
 
-  // Desktop layout is possible if there's room for collapsed sidebar + content
+  // Desktop layout is possible when viewport meets the desktop breakpoint
   const canShowDesktop = useCallback((viewportWidth: number) => {
-    return viewportWidth >= SIDEBAR_COLLAPSED_WIDTH + MIN_CONTENT_WIDTH;
+    return viewportWidth >= DESKTOP_BREAKPOINT;
   }, []);
 
   // Expanded sidebar is possible if there's room for full width + content

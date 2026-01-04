@@ -4,15 +4,18 @@ import {
   type ThinkingOption,
   type UploadedFile,
   isUrlProjectId,
+  resolveModel,
   thinkingOptionToTokens,
 } from "@claude-anywhere/shared";
 import { Hono } from "hono";
 import type { SessionMetadataService } from "../metadata/index.js";
 import type { NotificationService } from "../notifications/index.js";
 import type { CodexSessionScanner } from "../projects/codex-scanner.js";
+import type { GeminiSessionScanner } from "../projects/gemini-scanner.js";
 import type { ProjectScanner } from "../projects/scanner.js";
 import type { PermissionMode, SDKMessage, UserMessage } from "../sdk/types.js";
 import { CodexSessionReader } from "../sessions/codex-reader.js";
+import { GeminiSessionReader } from "../sessions/gemini-reader.js";
 import type { ISessionReader } from "../sessions/types.js";
 import type { ExternalSessionTracker } from "../supervisor/ExternalSessionTracker.js";
 import type { Process } from "../supervisor/Process.js";
@@ -52,6 +55,8 @@ export interface SessionsDeps {
   eventBus?: EventBus;
   codexScanner?: CodexSessionScanner;
   codexSessionsDir?: string;
+  geminiScanner?: GeminiSessionScanner;
+  geminiSessionsDir?: string;
 }
 
 interface StartSessionBody {
@@ -236,6 +241,32 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
       }
     }
 
+    // For Claude/Codex projects, also check for Gemini sessions if still not found
+    // This handles mixed projects that have sessions from multiple providers
+    if (
+      !session &&
+      (project.provider === "claude" || project.provider === "codex") &&
+      deps.geminiScanner &&
+      deps.geminiSessionsDir
+    ) {
+      const geminiSessions = await deps.geminiScanner.getSessionsForProject(
+        project.path,
+      );
+      if (geminiSessions.length > 0) {
+        const geminiReader = new GeminiSessionReader({
+          sessionsDir: deps.geminiSessionsDir,
+          projectPath: project.path,
+          hashToCwd: deps.geminiScanner.getHashToCwd(),
+        });
+        session = await geminiReader.getSession(
+          sessionId,
+          project.id,
+          afterMessageId,
+          { includeOrphans: wasEverOwned && !process },
+        );
+      }
+    }
+
     // Determine the session status
     const status = process
       ? {
@@ -281,6 +312,7 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
             customTitle: metadata?.customTitle,
             isArchived: metadata?.isArchived,
             isStarred: metadata?.isStarred,
+            model: metadata?.model,
             lastSeenAt: lastSeenEntry?.timestamp,
             hasUnread,
           },
@@ -309,6 +341,7 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
         customTitle: metadata?.customTitle,
         isArchived: metadata?.isArchived,
         isStarred: metadata?.isStarred,
+        model: metadata?.model,
         lastSeenAt,
         hasUnread,
       },
@@ -382,7 +415,23 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
       return c.json(result, 202); // 202 Accepted - queued for processing
     }
 
-    // Started immediately
+    // Started immediately - store the model in metadata if explicitly provided
+    // For non-Claude providers (Codex OSS, Gemini), body.model is the actual model ID
+    // For Claude with "default", we resolve to the actual model name
+    if (deps.sessionMetadataService && result.sessionId) {
+      const resolvedModel =
+        model ??
+        (body.provider === "claude" || !body.provider
+          ? resolveModel(body.model)
+          : undefined);
+      if (resolvedModel) {
+        await deps.sessionMetadataService.setModel(
+          result.sessionId,
+          resolvedModel,
+        );
+      }
+    }
+
     return c.json({
       sessionId: result.sessionId,
       processId: result.id,
@@ -447,7 +496,23 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
       return c.json(result, 202); // 202 Accepted - queued for processing
     }
 
-    // Created immediately - session exists and is ready for uploads
+    // Created immediately - store the model in metadata if explicitly provided
+    // For non-Claude providers (Codex OSS, Gemini), body.model is the actual model ID
+    // For Claude with "default", we resolve to the actual model name
+    if (deps.sessionMetadataService && result.sessionId) {
+      const resolvedModel =
+        model ??
+        (body.provider === "claude" || !body.provider
+          ? resolveModel(body.model)
+          : undefined);
+      if (resolvedModel) {
+        await deps.sessionMetadataService.setModel(
+          result.sessionId,
+          resolvedModel,
+        );
+      }
+    }
+
     return c.json({
       sessionId: result.sessionId,
       processId: result.id,
@@ -522,7 +587,14 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
       return c.json(result, 202); // 202 Accepted - queued for processing
     }
 
-    // Started immediately
+    // Started immediately - store the model in metadata if explicitly provided
+    // For non-Claude providers (Codex OSS, Gemini), body.model is the actual model ID
+    // For Claude with "default", we resolve to the actual model name
+    // When resuming, only update if a model is explicitly provided to preserve existing metadata
+    if (deps.sessionMetadataService && model) {
+      await deps.sessionMetadataService.setModel(sessionId, model);
+    }
+
     return c.json({
       processId: result.id,
       permissionMode: result.permissionMode,
@@ -703,7 +775,7 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
     return c.json({ accepted: true });
   });
 
-  // POST /api/sessions/:sessionId/mark-seen - Mark session as seen
+  // POST /api/sessions/:sessionId/mark-seen - Mark session as seen (read)
   routes.post("/sessions/:sessionId/mark-seen", async (c) => {
     const sessionId = c.req.param("sessionId");
 
@@ -725,6 +797,28 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
     );
 
     return c.json({ marked: true });
+  });
+
+  // DELETE /api/sessions/:sessionId/mark-seen - Mark session as unread
+  routes.delete("/sessions/:sessionId/mark-seen", async (c) => {
+    const sessionId = c.req.param("sessionId");
+
+    if (!deps.notificationService) {
+      return c.json({ error: "Notification service not available" }, 503);
+    }
+
+    await deps.notificationService.clearSession(sessionId);
+
+    // Emit event so other tabs/clients can update
+    if (deps.eventBus) {
+      deps.eventBus.emit({
+        type: "session-seen",
+        sessionId,
+        timestamp: "", // Empty timestamp signals "unread"
+      });
+    }
+
+    return c.json({ marked: false });
   });
 
   // GET /api/notifications/last-seen - Get all last seen entries

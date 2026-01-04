@@ -7,6 +7,7 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import type { ProviderName } from "@claude-anywhere/shared";
 
 export interface SessionMetadata {
   /** Custom title that overrides auto-generated title */
@@ -15,6 +16,10 @@ export interface SessionMetadata {
   isArchived?: boolean;
   /** Whether the session is starred/favorited */
   isStarred?: boolean;
+  /** Model used for this session (resolved, not "default") */
+  model?: string;
+  /** Provider used for this session (for backward compatibility with sessions that don't have provider in JSONL) */
+  provider?: ProviderName;
 }
 
 export interface SessionMetadataState {
@@ -139,6 +144,34 @@ export class SessionMetadataService {
   }
 
   /**
+   * Set the model for a session.
+   * This stores the resolved model name (not "default").
+   */
+  async setModel(sessionId: string, model: string | undefined): Promise<void> {
+    this.updateSessionMetadata(sessionId, (metadata) => ({
+      ...metadata,
+      model: model || undefined,
+    }));
+    await this.save();
+  }
+
+  /**
+   * Set the provider for a session.
+   * This stores the provider name for backward compatibility with sessions
+   * that don't have provider information in their JSONL files.
+   */
+  async setProvider(
+    sessionId: string,
+    provider: ProviderName | undefined,
+  ): Promise<void> {
+    this.updateSessionMetadata(sessionId, (metadata) => ({
+      ...metadata,
+      provider: provider || undefined,
+    }));
+    await this.save();
+  }
+
+  /**
    * Update metadata for a session (title, archived, starred).
    */
   async updateMetadata(
@@ -184,6 +217,8 @@ export class SessionMetadataService {
     if (updated.customTitle) cleaned.customTitle = updated.customTitle;
     if (updated.isArchived) cleaned.isArchived = updated.isArchived;
     if (updated.isStarred) cleaned.isStarred = updated.isStarred;
+    if (updated.model) cleaned.model = updated.model;
+    if (updated.provider) cleaned.provider = updated.provider;
 
     if (Object.keys(cleaned).length === 0) {
       // Remove the entry entirely if empty

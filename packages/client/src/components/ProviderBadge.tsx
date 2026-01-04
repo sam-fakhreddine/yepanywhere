@@ -1,14 +1,16 @@
 import type { ProviderName } from "@claude-anywhere/shared";
 
 const PROVIDER_COLORS: Record<ProviderName, string> = {
-  claude: "var(--app-claude-orange)",
+  claude: "var(--app-yep-green)",
   codex: "#10a37f", // OpenAI green
+  "codex-oss": "#10a37f", // OpenAI green (same as codex)
   gemini: "#4285f4", // Google blue
 };
 
 const PROVIDER_LABELS: Record<ProviderName, string> = {
   claude: "Claude",
   codex: "Codex",
+  "codex-oss": "CodexOSS",
   gemini: "Gemini",
 };
 
@@ -34,7 +36,7 @@ export function ProviderBadge({
   if (compact) {
     return (
       <span
-        className={`provider-badge-dot ${className}`}
+        className={`provider-badge-stripe ${className}`}
         style={{ backgroundColor: color }}
         title={label}
         aria-label={`Provider: ${label}`}

@@ -1,17 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { api } from "../api/client";
+import { Link } from "react-router-dom";
 import type { ProcessStateType } from "../hooks/useFileActivity";
 import { useProcesses } from "../hooks/useProcesses";
-import { type SessionSummary, getSessionDisplayTitle } from "../types";
-import { ActivityIndicator } from "./ActivityIndicator";
-import { ProviderBadge } from "./ProviderBadge";
-import { SessionMenu } from "./SessionMenu";
+import type { SessionSummary } from "../types";
+import { SessionListItem } from "./SessionListItem";
 import {
   SidebarIcons,
   SidebarNavItem,
   SidebarNavSection,
 } from "./SidebarNavItem";
+import { YepAnywhereLogo } from "./YepAnywhereLogo";
 
 const SWIPE_THRESHOLD = 50; // Minimum distance to trigger close
 const SWIPE_ENGAGE_THRESHOLD = 15; // Minimum horizontal distance before swipe engages
@@ -286,11 +284,15 @@ export function Sidebar({
             </button>
           ) : isDesktop ? (
             /* Desktop expanded mode: show brand (toggle is in toolbar) */
-            <span className="sidebar-brand">Claude Anywhere</span>
+            <span className="sidebar-brand">
+              <YepAnywhereLogo />
+            </span>
           ) : (
             /* Mobile mode: brand text + close button */
             <>
-              <span className="sidebar-brand">Claude Anywhere</span>
+              <span className="sidebar-brand">
+                <YepAnywhereLogo />
+              </span>
               <button
                 type="button"
                 className="sidebar-close"
@@ -372,10 +374,11 @@ export function Sidebar({
               <h3 className="sidebar-section-title">Starred</h3>
               <ul className="sidebar-session-list">
                 {starredSessions.map((session) => (
-                  <SidebarSessionItem
+                  <SessionListItem
                     key={session.id}
                     session={session}
                     projectId={projectId}
+                    mode="compact"
                     isCurrent={session.id === currentSessionId}
                     processState={processStates[session.id]}
                     onNavigate={onNavigate}
@@ -393,10 +396,11 @@ export function Sidebar({
                 {recentDaySessions
                   .slice(0, recentSessionsLimit)
                   .map((session) => (
-                    <SidebarSessionItem
+                    <SessionListItem
                       key={session.id}
                       session={session}
                       projectId={projectId}
+                      mode="compact"
                       isCurrent={session.id === currentSessionId}
                       processState={processStates[session.id]}
                       onNavigate={onNavigate}
@@ -430,10 +434,11 @@ export function Sidebar({
               <h3 className="sidebar-section-title">Older</h3>
               <ul className="sidebar-session-list">
                 {olderSessions.map((session) => (
-                  <SidebarSessionItem
+                  <SessionListItem
                     key={session.id}
                     session={session}
                     projectId={projectId}
+                    mode="compact"
                     isCurrent={session.id === currentSessionId}
                     processState={processStates[session.id]}
                     onNavigate={onNavigate}
@@ -464,214 +469,5 @@ export function Sidebar({
         )}
       </aside>
     </>
-  );
-}
-
-interface SidebarSessionItemProps {
-  session: SessionSummary;
-  projectId: string;
-  isCurrent: boolean;
-  processState?: ProcessStateType;
-  onNavigate: () => void;
-  hasDraft?: boolean;
-}
-
-function SidebarSessionItem({
-  session,
-  projectId,
-  isCurrent,
-  processState,
-  onNavigate,
-  hasDraft,
-}: SidebarSessionItemProps) {
-  const navigate = useNavigate();
-  const [localIsStarred, setLocalIsStarred] = useState<boolean | undefined>(
-    undefined,
-  );
-  const [localIsArchived, setLocalIsArchived] = useState<boolean | undefined>(
-    undefined,
-  );
-  const [isEditing, setIsEditing] = useState(false);
-  const [renameValue, setRenameValue] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [localTitle, setLocalTitle] = useState<string | undefined>(undefined);
-  const renameInputRef = useRef<HTMLInputElement>(null);
-  const isSavingRef = useRef(false);
-
-  const isStarred = localIsStarred ?? session.isStarred;
-  const isArchived = localIsArchived ?? session.isArchived;
-  const displayTitle = localTitle ?? getSessionDisplayTitle(session);
-
-  // Focus input when entering edit mode
-  useEffect(() => {
-    if (isEditing) {
-      setTimeout(() => {
-        renameInputRef.current?.focus();
-        renameInputRef.current?.select();
-      }, 0);
-    }
-  }, [isEditing]);
-
-  const handleToggleStar = async () => {
-    const newStarred = !isStarred;
-    setLocalIsStarred(newStarred);
-    try {
-      await api.updateSessionMetadata(session.id, { starred: newStarred });
-    } catch (err) {
-      console.error("Failed to update star status:", err);
-      setLocalIsStarred(undefined); // Revert on error
-    }
-  };
-
-  const handleToggleArchive = async () => {
-    const newArchived = !isArchived;
-    setLocalIsArchived(newArchived);
-    try {
-      await api.updateSessionMetadata(session.id, { archived: newArchived });
-    } catch (err) {
-      console.error("Failed to update archive status:", err);
-      setLocalIsArchived(undefined); // Revert on error
-    }
-  };
-
-  const handleRename = () => {
-    setRenameValue(displayTitle);
-    setIsEditing(true);
-  };
-
-  const handleCancelEditing = () => {
-    if (isSavingRef.current) return;
-    setIsEditing(false);
-    setRenameValue("");
-  };
-
-  const handleSaveRename = async () => {
-    if (!renameValue.trim() || isSaving) return;
-    if (renameValue.trim() === displayTitle) {
-      handleCancelEditing();
-      return;
-    }
-    isSavingRef.current = true;
-    setIsSaving(true);
-    try {
-      await api.updateSessionMetadata(session.id, {
-        title: renameValue.trim(),
-      });
-      setLocalTitle(renameValue.trim());
-      setIsEditing(false);
-    } catch (err) {
-      console.error("Failed to rename session:", err);
-    } finally {
-      setIsSaving(false);
-      isSavingRef.current = false;
-    }
-  };
-
-  const handleRenameBlur = () => {
-    if (isSavingRef.current) return;
-    if (!renameValue.trim() || renameValue.trim() === displayTitle) {
-      handleCancelEditing();
-      return;
-    }
-    handleSaveRename();
-  };
-
-  const handleRenameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleSaveRename();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      handleCancelEditing();
-    }
-  };
-
-  // Determine activity indicator
-  const getActivityIndicator = () => {
-    // External sessions always show external badge
-    if (session.status.state === "external") {
-      return <span className="sidebar-badge sidebar-badge-external">Ext</span>;
-    }
-
-    // Priority 1: Needs input
-    if (session.pendingInputType) {
-      const label = session.pendingInputType === "tool-approval" ? "Appr" : "Q";
-      return (
-        <span className="sidebar-badge sidebar-badge-needs-input">{label}</span>
-      );
-    }
-
-    // Priority 2: Running (thinking)
-    const effectiveProcessState = processState ?? session.processState;
-    if (effectiveProcessState === "running") {
-      return (
-        <ActivityIndicator variant="badge" className="sidebar-badge-running" />
-      );
-    }
-
-    // Unread - handled via CSS class on <li>, not a badge
-    // Active (owned) sessions don't need a dot - "Thinking" badge shows when running
-    return null;
-  };
-
-  const liClassName = [isCurrent && "current", session.hasUnread && "unread"]
-    .filter(Boolean)
-    .join(" ");
-
-  return (
-    <li className={liClassName || undefined}>
-      {isEditing ? (
-        <input
-          ref={renameInputRef}
-          type="text"
-          className="sidebar-rename-input"
-          value={renameValue}
-          onChange={(e) => setRenameValue(e.target.value)}
-          onBlur={handleRenameBlur}
-          onKeyDown={handleRenameKeyDown}
-          disabled={isSaving}
-        />
-      ) : (
-        <Link
-          to={`/projects/${projectId}/sessions/${session.id}`}
-          onClick={onNavigate}
-          title={session.fullTitle || displayTitle}
-        >
-          <span className="sidebar-session-title">
-            {isStarred && (
-              <svg
-                className="sidebar-star"
-                width="10"
-                height="10"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden="true"
-              >
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
-            )}
-            <span className="sidebar-session-title-text">{displayTitle}</span>
-            {hasDraft && <span className="sidebar-draft">(draft)</span>}
-            {session.provider && session.provider !== "claude" && (
-              <ProviderBadge provider={session.provider} compact />
-            )}
-          </span>
-          {getActivityIndicator()}
-        </Link>
-      )}
-      <SessionMenu
-        sessionId={session.id}
-        isStarred={isStarred ?? false}
-        isArchived={isArchived ?? false}
-        onToggleStar={handleToggleStar}
-        onToggleArchive={handleToggleArchive}
-        onRename={handleRename}
-        useEllipsisIcon
-        useFixedPositioning
-        className="sidebar-session-menu"
-      />
-    </li>
   );
 }

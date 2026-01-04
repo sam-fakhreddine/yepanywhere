@@ -1,4 +1,4 @@
-import type { ProviderInfo } from "@claude-anywhere/shared";
+import { DEFAULT_PROVIDER, type ProviderInfo } from "@claude-anywhere/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 
@@ -59,9 +59,9 @@ export function getDefaultProvider(
   const available = getAvailableProviders(providers);
   if (available.length === 0) return null;
 
-  // Prefer Claude as default
-  const claude = available.find((p) => p.name === "claude");
-  if (claude) return claude;
+  // Prefer default provider (Claude)
+  const defaultProv = available.find((p) => p.name === DEFAULT_PROVIDER);
+  if (defaultProv) return defaultProv;
 
   // available[0] is guaranteed to exist since we checked length > 0
   return available[0] ?? null;

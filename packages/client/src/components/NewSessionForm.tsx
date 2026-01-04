@@ -1,4 +1,8 @@
-import type { ProviderName } from "@claude-anywhere/shared";
+import {
+  type ModelInfo,
+  type ProviderName,
+  resolveModel,
+} from "@claude-anywhere/shared";
 import {
   type ChangeEvent,
   type ClipboardEvent,
@@ -19,6 +23,7 @@ import {
   useProviders,
 } from "../hooks/useProviders";
 import type { PermissionMode } from "../types";
+import { clearFabPrefill, getFabPrefill } from "./FloatingActionButton";
 import { VoiceInputButton, type VoiceInputButtonRef } from "./VoiceInputButton";
 
 interface PendingFile {
@@ -86,6 +91,7 @@ export function NewSessionForm({
   const [selectedProvider, setSelectedProvider] = useState<ProviderName | null>(
     null,
   );
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [isStarting, setIsStarting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<
@@ -100,15 +106,48 @@ export function NewSessionForm({
   const { providers, loading: providersLoading } = useProviders();
   const availableProviders = getAvailableProviders(providers);
 
+  // Get models for the currently selected provider
+  const selectedProviderInfo = providers.find(
+    (p) => p.name === selectedProvider,
+  );
+  const availableModels: ModelInfo[] = selectedProviderInfo?.models ?? [];
+
   // Set default provider when providers load
   useEffect(() => {
     if (!selectedProvider && providers.length > 0) {
       const defaultProvider = getDefaultProvider(providers);
       if (defaultProvider) {
         setSelectedProvider(defaultProvider.name);
+        // Set default model based on user settings
+        if (defaultProvider.models && defaultProvider.models.length > 0) {
+          const targetModelId = resolveModel(getModelSetting());
+          // Find the preferred model in available models
+          const matchingModel = defaultProvider.models.find(
+            (m) => m.id === targetModelId,
+          );
+          // Use preferred model if available, otherwise fall back to first model
+          setSelectedModel(
+            matchingModel?.id ?? defaultProvider.models[0]?.id ?? null,
+          );
+        }
       }
     }
   }, [providers, selectedProvider]);
+
+  // When provider changes, reset model based on user settings
+  const handleProviderSelect = (providerName: ProviderName) => {
+    setSelectedProvider(providerName);
+    const provider = providers.find((p) => p.name === providerName);
+    if (provider?.models && provider.models.length > 0) {
+      const targetModelId = resolveModel(getModelSetting());
+      // Find the preferred model in available models
+      const matchingModel = provider.models.find((m) => m.id === targetModelId);
+      // Use preferred model if available, otherwise fall back to first model
+      setSelectedModel(matchingModel?.id ?? provider.models[0]?.id ?? null);
+    } else {
+      setSelectedModel(null);
+    }
+  };
 
   // Combined display text: committed text + interim transcript
   const displayText = interimTranscript
@@ -121,6 +160,20 @@ export function NewSessionForm({
       textareaRef.current?.focus();
     }
   }, [autoFocus]);
+
+  // Check for FAB pre-fill on mount (when coming from FloatingActionButton)
+  useEffect(() => {
+    const prefill = getFabPrefill();
+    if (prefill) {
+      setMessage(prefill);
+      clearFabPrefill();
+      // Focus and move cursor to end
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(prefill.length, prefill.length);
+      }
+    }
+  }, [setMessage]);
 
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -176,12 +229,11 @@ export function NewSessionForm({
       let processId: string;
       const uploadedFiles: UploadedFile[] = [];
 
-      // Get model settings from localStorage
-      const model = getModelSetting();
+      // Get model and thinking settings
       const thinking = getThinkingSetting();
       const sessionOptions = {
         mode,
-        model,
+        model: selectedModel ?? undefined,
         thinking,
         provider: selectedProvider ?? undefined,
       };
@@ -265,6 +317,22 @@ export function NewSessionForm({
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Enter") {
+      // On mobile (touch devices), Enter adds newline - must use send button
+      // On desktop, Enter sends message, Shift/Ctrl+Enter adds newline
+      const isMobile = window.matchMedia("(pointer: coarse)").matches;
+
+      // If voice recording is active, Enter submits (on any device)
+      if (voiceButtonRef.current?.isListening) {
+        e.preventDefault();
+        handleStartSession();
+        return;
+      }
+
+      if (isMobile) {
+        // Mobile: Enter always adds newline, send button required
+        return;
+      }
+
       if (ENTER_SENDS_MESSAGE) {
         if (e.ctrlKey || e.shiftKey) return;
         e.preventDefault();
@@ -374,6 +442,7 @@ export function NewSessionForm({
             ref={voiceButtonRef}
             onTranscript={handleVoiceTranscript}
             onInterimTranscript={handleInterimTranscript}
+            onListeningStart={() => textareaRef.current?.focus()}
             disabled={isStarting}
             className="toolbar-button"
           />
@@ -474,7 +543,7 @@ export function NewSessionForm({
                   key={p.name}
                   type="button"
                   className={`provider-option ${isSelected ? "selected" : ""} ${!isAvailable ? "disabled" : ""}`}
-                  onClick={() => isAvailable && setSelectedProvider(p.name)}
+                  onClick={() => isAvailable && handleProviderSelect(p.name)}
                   disabled={isStarting || !isAvailable}
                   title={
                     !isAvailable
@@ -497,6 +566,28 @@ export function NewSessionForm({
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Model Selection */}
+      {selectedProvider && availableModels.length > 0 && (
+        <div className="new-session-model-section">
+          <h3>Model</h3>
+          <select
+            value={selectedModel ?? ""}
+            onChange={(e) => setSelectedModel(e.target.value || null)}
+            disabled={isStarting}
+            className="model-select"
+          >
+            {availableModels.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+                {model.size
+                  ? ` (${(model.size / (1024 * 1024 * 1024)).toFixed(1)} GB)`
+                  : ""}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 

@@ -182,12 +182,39 @@ export function InboxContent({
   const isEmpty = totalItems === 0 && !loading;
 
   return (
-    <main className="sessions-page-content inbox-content">
-      {/* Toolbar with refresh button and optional global inbox link */}
-      <div className="inbox-toolbar">
-        {showGlobalInboxLink && (
-          <Link to="/inbox" className="inbox-global-button">
+    <main className="page-scroll-container">
+      <div className="page-content-inner inbox-content">
+        {/* Toolbar with refresh button and optional global inbox link */}
+        <div className="inbox-toolbar">
+          {showGlobalInboxLink && (
+            <Link to="/inbox" className="inbox-global-button">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+              Global Inbox
+            </Link>
+          )}
+          <button
+            type="button"
+            className="inbox-refresh-button"
+            onClick={handleRefresh}
+            disabled={refreshing || loading}
+            title="Refresh inbox"
+          >
             <svg
+              className={refreshing ? "spinning" : ""}
               width="16"
               height="16"
               viewBox="0 0 24 24"
@@ -198,81 +225,56 @@ export function InboxContent({
               strokeLinejoin="round"
               aria-hidden="true"
             >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="2" y1="12" x2="22" y2="12" />
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
-            Global Inbox
-          </Link>
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
+
+        {loading && <p className="loading">Loading inbox...</p>}
+
+        {error && <p className="error">Error loading inbox: {error.message}</p>}
+
+        {!loading && !error && isEmpty && (
+          <div className="inbox-empty">
+            <svg
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+            <h3>All caught up!</h3>
+            <p>
+              {projectId
+                ? "No sessions need attention in this project."
+                : "No sessions need attention."}
+            </p>
+          </div>
         )}
-        <button
-          type="button"
-          className="inbox-refresh-button"
-          onClick={handleRefresh}
-          disabled={refreshing || loading}
-          title="Refresh inbox"
-        >
-          <svg
-            className={refreshing ? "spinning" : ""}
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <polyline points="23 4 23 10 17 10" />
-            <polyline points="1 20 1 14 7 14" />
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-          </svg>
-          {refreshing ? "Refreshing..." : "Refresh"}
-        </button>
+
+        {!loading && !error && !isEmpty && (
+          <div className="inbox-tiers">
+            {TIER_CONFIGS.map((config) => (
+              <InboxSection
+                key={config.key}
+                config={config}
+                items={tierData[config.key] ?? []}
+                hideProjectName={hideProjectName}
+              />
+            ))}
+          </div>
+        )}
       </div>
-
-      {loading && <p className="loading">Loading inbox...</p>}
-
-      {error && <p className="error">Error loading inbox: {error.message}</p>}
-
-      {!loading && !error && isEmpty && (
-        <div className="inbox-empty">
-          <svg
-            width="48"
-            height="48"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-            <polyline points="22 4 12 14.01 9 11.01" />
-          </svg>
-          <h3>All caught up!</h3>
-          <p>
-            {projectId
-              ? "No sessions need attention in this project."
-              : "No sessions need attention."}
-          </p>
-        </div>
-      )}
-
-      {!loading && !error && !isEmpty && (
-        <div className="inbox-tiers">
-          {TIER_CONFIGS.map((config) => (
-            <InboxSection
-              key={config.key}
-              config={config}
-              items={tierData[config.key] ?? []}
-              hideProjectName={hideProjectName}
-            />
-          ))}
-        </div>
-      )}
     </main>
   );
 }

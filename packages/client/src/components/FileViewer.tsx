@@ -3,6 +3,7 @@ import { memo, useCallback, useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../api/client";
+import { CodeHighlighter } from "./CodeHighlighter";
 
 interface FileViewerProps {
   projectId: string;
@@ -10,6 +11,10 @@ interface FileViewerProps {
   onClose?: () => void;
   /** If true, renders as standalone page layout instead of modal content */
   standalone?: boolean;
+  /** Line number to scroll to and highlight (1-indexed) */
+  lineNumber?: number;
+  /** End line for range highlighting (1-indexed). If not provided, only lineNumber is highlighted. */
+  lineEnd?: number;
 }
 
 /**
@@ -92,12 +97,17 @@ export const FileViewer = memo(function FileViewer({
   filePath,
   onClose,
   standalone = false,
+  lineNumber,
+  lineEnd,
 }: FileViewerProps) {
   const [fileData, setFileData] = useState<FileContentResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [renderMarkdown, setRenderMarkdown] = useState(true);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [highlightedLineRef, setHighlightedLineRef] =
+    useState<HTMLElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +133,31 @@ export const FileViewer = memo(function FileViewer({
       cancelled = true;
     };
   }, [projectId, filePath]);
+
+  // Handle Escape key to exit fullscreen
+  useEffect(() => {
+    if (!fullscreen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setFullscreen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [fullscreen]);
+
+  // Scroll to highlighted line when it's rendered
+  useEffect(() => {
+    if (highlightedLineRef) {
+      // Small delay to ensure layout is complete
+      requestAnimationFrame(() => {
+        highlightedLineRef.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      });
+    }
+  }, [highlightedLineRef]);
 
   const handleCopy = useCallback(async () => {
     if (!fileData?.content) return;
@@ -192,18 +227,22 @@ export const FileViewer = memo(function FileViewer({
         );
       }
 
-      // Code/text with line numbers
-      const lines = content.split("\n");
+      // Code/text with syntax highlighting
       return (
         <div className="file-viewer-code" data-language={language}>
-          <div className="file-viewer-line-numbers">
-            {lines.map((_, i) => (
-              <div key={`line-${i + 1}`}>{i + 1}</div>
-            ))}
-          </div>
-          <pre className="file-viewer-content">
-            <code>{content}</code>
-          </pre>
+          <CodeHighlighter
+            code={content}
+            language={language}
+            showLineNumbers
+            highlightLines={
+              lineNumber ? { start: lineNumber, end: lineEnd } : undefined
+            }
+            onLineRef={
+              lineNumber
+                ? (_lineNum, el) => setHighlightedLineRef(el)
+                : undefined
+            }
+          />
         </div>
       );
     }
@@ -282,6 +321,14 @@ export const FileViewer = memo(function FileViewer({
         >
           <DownloadIcon />
         </button>
+        <button
+          type="button"
+          className="file-viewer-action"
+          onClick={() => setFullscreen(!fullscreen)}
+          title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+        >
+          {fullscreen ? <ExitFullscreenIcon /> : <FullscreenIcon />}
+        </button>
         {onClose && (
           <button
             type="button"
@@ -296,17 +343,16 @@ export const FileViewer = memo(function FileViewer({
     </div>
   );
 
-  if (standalone) {
-    return (
-      <div className="file-viewer file-viewer-standalone">
-        {header}
-        <div className="file-viewer-body">{renderContent()}</div>
-      </div>
-    );
-  }
+  const viewerClass = [
+    "file-viewer",
+    standalone && "file-viewer-standalone",
+    fullscreen && "file-viewer-fullscreen",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <div className="file-viewer">
+    <div className={viewerClass}>
       {header}
       <div className="file-viewer-body">{renderContent()}</div>
     </div>
@@ -438,6 +484,42 @@ function MarkdownIcon() {
     >
       <rect x="1" y="3" width="14" height="10" rx="1" />
       <path d="M4 6v4l2-2 2 2V6M10 10V6l2 3 2-3v4" />
+    </svg>
+  );
+}
+
+function FullscreenIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3" />
+    </svg>
+  );
+}
+
+function ExitFullscreenIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5 2v3H2M14 5h-3V2M11 14v-3h3M2 11h3v3" />
     </svg>
   );
 }

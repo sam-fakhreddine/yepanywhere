@@ -24,6 +24,8 @@ interface VoiceInputButtonProps {
   onTranscript: (text: string) => void;
   /** Callback for interim results - shows live preview */
   onInterimTranscript?: (text: string) => void;
+  /** Callback when listening starts - useful for focusing input */
+  onListeningStart?: () => void;
   /** Whether the button should be disabled */
   disabled?: boolean;
   /** Additional class name */
@@ -40,6 +42,7 @@ export const VoiceInputButton = forwardRef(function VoiceInputButton(
   {
     onTranscript,
     onInterimTranscript,
+    onListeningStart,
     disabled,
     className = "",
   }: VoiceInputButtonProps,
@@ -106,6 +109,16 @@ export const VoiceInputButton = forwardRef(function VoiceInputButton(
     }
   }, [isListening, interimTranscript, onInterimTranscript]);
 
+  // Handle click - toggle listening and notify when starting
+  const handleClick = useCallback(() => {
+    const wasListening = isListening;
+    toggleListening();
+    // If we weren't listening, we're now starting - notify parent
+    if (!wasListening) {
+      onListeningStart?.();
+    }
+  }, [isListening, toggleListening, onListeningStart]);
+
   // Don't render if not supported or disabled in settings
   if (!isAvailable) {
     return null;
@@ -115,7 +128,7 @@ export const VoiceInputButton = forwardRef(function VoiceInputButton(
     <button
       type="button"
       className={`voice-input-button ${isListening ? "listening" : ""} ${className}`}
-      onClick={toggleListening}
+      onClick={handleClick}
       disabled={disabled}
       title={
         error

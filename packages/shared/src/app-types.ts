@@ -195,7 +195,9 @@ export interface AppSessionSummary {
   messageCount: number;
   status: AppSessionStatus;
   // Provider field - which AI provider is running this session
-  provider?: ProviderName;
+  provider: ProviderName;
+  // Model used for this session (resolved, not "default")
+  model?: string;
   // Notification fields
   pendingInputType?: PendingInputType;
   processState?: ProcessStateType;

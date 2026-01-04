@@ -14,13 +14,14 @@
  */
 
 import type {
-  AppSessionSummary,
   AppSessionStatus,
+  AppSessionSummary,
+  ContextUsage,
   PendingInputType,
   ProcessStateType,
-  ContextUsage,
 } from "../app-types.js";
 import type { UrlProjectId } from "../projectId.js";
+import { DEFAULT_PROVIDER, type ProviderName } from "../types.js";
 
 /** Maximum length for truncated titles */
 export const SESSION_TITLE_MAX_LENGTH = 120;
@@ -59,6 +60,8 @@ export class SessionView {
     readonly hasUnread: boolean,
     /** Context window usage information */
     readonly contextUsage: ContextUsage | undefined,
+    /** AI provider for this session */
+    readonly provider: ProviderName,
   ) {}
 
   // ===========================================================================
@@ -167,6 +170,7 @@ export class SessionView {
       summary.lastSeenAt,
       summary.hasUnread ?? false,
       summary.contextUsage,
+      summary.provider,
     );
   }
 
@@ -191,6 +195,7 @@ export class SessionView {
     lastSeenAt?: string;
     hasUnread?: boolean;
     contextUsage?: ContextUsage;
+    provider?: ProviderName;
   }): SessionView {
     const now = new Date().toISOString();
     return new SessionView(
@@ -210,6 +215,7 @@ export class SessionView {
       data.lastSeenAt,
       data.hasUnread ?? false,
       data.contextUsage,
+      data.provider ?? DEFAULT_PROVIDER,
     );
   }
 }

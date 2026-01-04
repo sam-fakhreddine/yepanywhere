@@ -236,7 +236,7 @@ function looksLikeEmail(str: string): boolean {
 /**
  * Check if a string is likely a valid file path.
  */
-function isLikelyFilePath(str: string): boolean {
+export function isLikelyFilePath(str: string): boolean {
   // Skip URLs
   if (looksLikeUrl(str)) return false;
 
@@ -300,7 +300,7 @@ function isLikelyFilePath(str: string): boolean {
 /**
  * Parse line and column numbers from a file path string.
  */
-function parseLineColumn(str: string): {
+export function parseLineColumn(str: string): {
   path: string;
   line?: number;
   column?: number;

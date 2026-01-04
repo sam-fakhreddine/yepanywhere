@@ -136,6 +136,9 @@ function createMockScenarios(provider: string): MockScenario[] {
 const mockProviders: Record<ProviderName, MockAgentProvider> = {
   claude: new MockClaudeProvider({ scenarios: createMockScenarios("claude") }),
   codex: new MockCodexProvider({ scenarios: createMockScenarios("codex") }),
+  "codex-oss": new MockCodexProvider({
+    scenarios: createMockScenarios("codex-oss"),
+  }),
   gemini: new MockGeminiProvider({ scenarios: createMockScenarios("gemini") }),
 };
 

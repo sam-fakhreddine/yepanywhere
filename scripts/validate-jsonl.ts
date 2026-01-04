@@ -61,7 +61,10 @@ function findJsonlFiles(dir: string): string[] {
   return files;
 }
 
-function validateFile(filePath: string, schemaType: SchemaType): ValidationResult {
+function validateFile(
+  filePath: string,
+  schemaType: SchemaType,
+): ValidationResult {
   const content = fs.readFileSync(filePath, "utf-8");
   const lines = content
     .trim()
@@ -75,7 +78,8 @@ function validateFile(filePath: string, schemaType: SchemaType): ValidationResul
     errors: [],
   };
 
-  const schema = schemaType === "codex" ? CodexSessionEntrySchema : SessionEntrySchema;
+  const schema =
+    schemaType === "codex" ? CodexSessionEntrySchema : SessionEntrySchema;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -217,7 +221,9 @@ function main() {
 
   console.log(`\n${"=".repeat(60)}`);
   console.log("GRAND TOTAL");
-  console.log(`  ${grandTotalValid}/${grandTotalLines} lines valid across ${grandTotalFiles} files`);
+  console.log(
+    `  ${grandTotalValid}/${grandTotalLines} lines valid across ${grandTotalFiles} files`,
+  );
 
   if (allErrors.length > 0) {
     console.log(`\nErrors (${allErrors.length} total):\n`);

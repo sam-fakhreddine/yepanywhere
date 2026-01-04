@@ -12,11 +12,9 @@ import {
   type DraftControls,
   useDraftPersistence,
 } from "../hooks/useDraftPersistence";
-import { useModelSettings } from "../hooks/useModelSettings";
 import type { ContextUsage, PermissionMode } from "../types";
-import { ContextUsageIndicator } from "./ContextUsageIndicator";
-import { ModeSelector } from "./ModeSelector";
-import { VoiceInputButton, type VoiceInputButtonRef } from "./VoiceInputButton";
+import { MessageInputToolbar } from "./MessageInputToolbar";
+import type { VoiceInputButtonRef } from "./VoiceInputButton";
 
 /** Progress info for an in-flight upload */
 export interface UploadProgress {
@@ -67,6 +65,8 @@ interface Props {
   onRemoveAttachment?: (id: string) => void;
   /** Progress info for in-flight uploads */
   uploadProgress?: UploadProgress[];
+  /** Model used for this session (from server metadata) */
+  sessionModel?: string;
 }
 
 export function MessageInput({
@@ -91,6 +91,7 @@ export function MessageInput({
   onAttach,
   onRemoveAttachment,
   uploadProgress = [],
+  sessionModel,
 }: Props) {
   const [text, setText, controls] = useDraftPersistence(draftKey);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -99,7 +100,6 @@ export function MessageInput({
   // User-controlled collapse state (independent of external collapse from approval panel)
   const [userCollapsed, setUserCollapsed] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState("");
-  const { thinkingEnabled, toggleThinking, thinkingLevel } = useModelSettings();
 
   // Combined display text: committed text + interim transcript
   const displayText = interimTranscript
@@ -157,8 +157,25 @@ export function MessageInput({
     }
 
     if (e.key === "Enter") {
+      // On mobile (touch devices), Enter adds newline - must use send button
+      // On desktop, Enter sends message, Shift/Ctrl+Enter adds newline
+      const isMobile = window.matchMedia("(pointer: coarse)").matches;
+
+      // If voice recording is active, Enter submits (on any device)
+      if (voiceButtonRef.current?.isListening) {
+        e.preventDefault();
+        handleSubmit();
+        return;
+      }
+
+      if (isMobile) {
+        // Mobile: Enter always adds newline, send button required
+        // Allow default behavior (newline)
+        return;
+      }
+
       if (ENTER_SENDS_MESSAGE) {
-        // Enter sends, Ctrl+Enter adds newline
+        // Desktop: Enter sends, Ctrl+Enter adds newline
         if (e.ctrlKey || e.shiftKey) {
           // Allow default behavior (newline)
           return;
@@ -320,107 +337,29 @@ export function MessageInput({
         />
 
         {!collapsed && (
-          <div className="message-input-toolbar">
-            <div className="message-input-left">
-              {onModeChange && (
-                <ModeSelector
-                  mode={mode}
-                  onModeChange={onModeChange}
-                  isModePending={isModePending}
-                  isHeld={isHeld}
-                  onHoldChange={onHoldChange}
-                />
-              )}
-              <button
-                type="button"
-                className="attach-button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={!canAttach}
-                title={
-                  canAttach
-                    ? "Attach files"
-                    : "Send a message first to enable attachments"
-                }
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  aria-hidden="true"
-                >
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                </svg>
-                {attachments.length > 0 && (
-                  <span className="attach-count">{attachments.length}</span>
-                )}
-              </button>
-              <button
-                type="button"
-                className={`thinking-toggle-button ${thinkingEnabled ? "active" : ""}`}
-                onClick={toggleThinking}
-                title={
-                  thinkingEnabled
-                    ? `Extended thinking: ${thinkingLevel}`
-                    : "Enable extended thinking"
-                }
-                aria-pressed={thinkingEnabled}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-              </button>
-              <VoiceInputButton
-                ref={voiceButtonRef}
-                onTranscript={handleVoiceTranscript}
-                onInterimTranscript={handleInterimTranscript}
-                disabled={disabled}
-              />
-            </div>
-            <div className="message-input-actions">
-              <ContextUsageIndicator usage={contextUsage} size={16} />
-              {/* Show stop button when thinking and input is empty, otherwise show send */}
-              {isRunning &&
-              onStop &&
-              isThinking &&
-              !text.trim() &&
-              attachments.length === 0 ? (
-                <button
-                  type="button"
-                  onClick={onStop}
-                  className="stop-button"
-                  aria-label="Stop"
-                >
-                  <span className="stop-icon" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={
-                    disabled || (!text.trim() && attachments.length === 0)
-                  }
-                  className="send-button"
-                  aria-label="Send"
-                >
-                  <span className="send-icon">↑</span>
-                </button>
-              )}
-            </div>
-          </div>
+          <MessageInputToolbar
+            mode={mode}
+            onModeChange={onModeChange}
+            isModePending={isModePending}
+            isHeld={isHeld}
+            onHoldChange={onHoldChange}
+            canAttach={canAttach}
+            attachmentCount={attachments.length}
+            onAttachClick={() => fileInputRef.current?.click()}
+            voiceButtonRef={voiceButtonRef}
+            onVoiceTranscript={handleVoiceTranscript}
+            onInterimTranscript={handleInterimTranscript}
+            onListeningStart={() => textareaRef.current?.focus()}
+            voiceDisabled={disabled}
+            contextUsage={contextUsage}
+            sessionModel={sessionModel}
+            isRunning={isRunning}
+            isThinking={isThinking}
+            onStop={onStop}
+            onSend={handleSubmit}
+            canSend={!!(text.trim() || attachments.length > 0)}
+            disabled={disabled}
+          />
         )}
       </div>
     </div>

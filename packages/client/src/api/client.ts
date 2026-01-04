@@ -1,6 +1,5 @@
 import type {
   FileContentResponse,
-  ModelOption,
   PendingInputType,
   ProcessStateType,
   ProviderInfo,
@@ -46,7 +45,8 @@ export interface InboxResponse {
 
 export interface SessionOptions {
   mode?: PermissionMode;
-  model?: ModelOption;
+  /** Model ID (e.g., "sonnet", "opus", "qwen2.5-coder:0.5b") */
+  model?: string;
   thinking?: ThinkingOption;
   provider?: ProviderName;
 }
@@ -270,6 +270,11 @@ export const api = {
     fetchJSON<{ marked: boolean }>(`/sessions/${sessionId}/mark-seen`, {
       method: "POST",
       body: JSON.stringify({ timestamp, messageId }),
+    }),
+
+  markSessionUnread: (sessionId: string) =>
+    fetchJSON<{ marked: boolean }>(`/sessions/${sessionId}/mark-seen`, {
+      method: "DELETE",
     }),
 
   getLastSeen: () =>

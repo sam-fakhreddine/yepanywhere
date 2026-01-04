@@ -7,6 +7,7 @@
  * - Configurable auth status
  */
 
+import type { ModelInfo } from "@claude-anywhere/shared";
 import { MessageQueue } from "../../messageQueue.js";
 import type { SDKMessage } from "../../types.js";
 import type {
@@ -108,6 +109,13 @@ export abstract class BaseMockProvider implements MockAgentProvider {
       authenticated: this._authenticated,
       enabled: this._authenticated,
     };
+  }
+
+  /**
+   * Get available models (mock implementation).
+   */
+  async getAvailableModels(): Promise<ModelInfo[]> {
+    return [{ id: "mock-model", name: "Mock Model" }];
   }
 
   /**

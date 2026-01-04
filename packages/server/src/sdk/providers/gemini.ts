@@ -18,7 +18,14 @@ import type {
   GeminiStats,
   GeminiToolResultEvent,
   GeminiToolUseEvent,
+  ModelInfo,
 } from "@claude-anywhere/shared";
+
+/** Static list of Gemini models */
+const GEMINI_MODELS: ModelInfo[] = [
+  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro" },
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+];
 import { parseGeminiEvent } from "@claude-anywhere/shared";
 import { MessageQueue } from "../messageQueue.js";
 import type { SDKMessage } from "../types.js";
@@ -148,6 +155,14 @@ export class GeminiProvider implements AgentProvider {
   }
 
   /**
+   * Get available Gemini models.
+   * Returns a static list of known models.
+   */
+  async getAvailableModels(): Promise<ModelInfo[]> {
+    return GEMINI_MODELS;
+  }
+
+  /**
    * Start a new Gemini session.
    */
   async startSession(options: StartSessionOptions): Promise<AgentSession> {
@@ -191,162 +206,170 @@ export class GeminiProvider implements AgentProvider {
       return;
     }
 
-    // Generate a session ID
-    const sessionId = `gemini-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    // Use existing session ID if resuming, otherwise generate a new one
+    let currentSessionId =
+      options.resumeSessionId ??
+      `gemini-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
     // Emit init message
     yield {
       type: "system",
       subtype: "init",
-      session_id: sessionId,
+      session_id: currentSessionId,
       cwd,
     } as SDKMessage;
 
-    // Wait for initial message from queue
+    // Track whether this is the first message (for --resume logic)
+    let isFirstMessage = true;
+
+    // Process messages from the queue in a loop
     const messageGen = queue.generator();
-    const firstMessage = await messageGen.next();
-    if (firstMessage.done) {
+    for await (const message of messageGen) {
+      if (signal.aborted) break;
+
+      // Extract text from the user message
+      const userPrompt = this.extractTextFromMessage(message);
+
+      // Emit user message
       yield {
-        type: "result",
-        session_id: sessionId,
-        result: "No message provided",
-      } as SDKMessage;
-      return;
-    }
-
-    // Extract text from the user message
-    const userPrompt = this.extractTextFromMessage(firstMessage.value);
-
-    // Emit user message
-    yield {
-      type: "user",
-      session_id: sessionId,
-      message: {
-        role: "user",
-        content: userPrompt,
-      },
-    } as SDKMessage;
-
-    // Build gemini command arguments
-    const args: string[] = [];
-
-    // Set output mode to stream-json
-    args.push("-o", "stream-json");
-
-    // Add model if specified
-    if (options.model) {
-      args.push("-m", options.model);
-    }
-
-    // Note: Gemini CLI may have different permission flags
-    // For now, we assume auto-approve is the default in agentic mode
-
-    // Add the prompt
-    args.push(userPrompt);
-
-    // Spawn the gemini process
-    let geminiProcess: ChildProcess;
-    try {
-      geminiProcess = spawn(geminiPath, args, {
-        cwd,
-        stdio: ["pipe", "pipe", "pipe"],
-        env: {
-          ...process.env,
+        type: "user",
+        session_id: currentSessionId,
+        message: {
+          role: "user",
+          content: userPrompt,
         },
-      });
-    } catch (error) {
-      yield {
-        type: "error",
-        session_id: sessionId,
-        error: `Failed to spawn Gemini process: ${error instanceof Error ? error.message : String(error)}`,
       } as SDKMessage;
-      return;
-    }
 
-    // Handle abort
-    const abortHandler = () => {
-      geminiProcess.kill("SIGTERM");
-    };
-    signal.addEventListener("abort", abortHandler);
+      // Build gemini command arguments
+      const args: string[] = [];
 
-    // Set up timeout
-    const timeoutId = setTimeout(() => {
-      geminiProcess.kill("SIGTERM");
-    }, this.timeout);
+      // Set output mode to stream-json
+      args.push("-o", "stream-json");
 
-    try {
-      // Parse JSON from stdout
-      if (!geminiProcess.stdout) {
+      // Add resume flag: use it if resuming an existing session OR if this is a follow-up message
+      if (options.resumeSessionId || !isFirstMessage) {
+        args.push("--resume", currentSessionId);
+      }
+
+      // Add model if specified
+      if (options.model) {
+        args.push("-m", options.model);
+      }
+
+      // Note: Gemini CLI may have different permission flags
+      // For now, we assume auto-approve is the default in agentic mode
+
+      // Add the prompt
+      args.push(userPrompt);
+
+      // Spawn the gemini process
+      let geminiProcess: ChildProcess;
+      try {
+        geminiProcess = spawn(geminiPath, args, {
+          cwd,
+          stdio: ["pipe", "pipe", "pipe"],
+          env: {
+            ...process.env,
+          },
+        });
+      } catch (error) {
         yield {
           type: "error",
-          session_id: sessionId,
-          error: "Gemini process has no stdout",
+          session_id: currentSessionId,
+          error: `Failed to spawn Gemini process: ${error instanceof Error ? error.message : String(error)}`,
         } as SDKMessage;
         return;
       }
 
-      const rl = createInterface({
-        input: geminiProcess.stdout,
-        crlfDelay: Number.POSITIVE_INFINITY,
-      });
-
-      let realSessionId: string | undefined;
-      let lastStats: GeminiStats | undefined;
-
-      for await (const line of rl) {
-        if (signal.aborted) break;
-
-        const event = parseGeminiEvent(line);
-        if (!event) continue;
-
-        // Update real session ID from init event
-        if (event.type === "init") {
-          const init = event as GeminiInitEvent;
-          realSessionId = init.session_id;
-        }
-
-        // Track stats from result event
-        if (event.type === "result") {
-          const result = event as GeminiResultEvent;
-          lastStats = result.stats;
-        }
-
-        // Convert Gemini event to SDKMessage
-        const sdkMessage = this.convertEventToSDKMessage(
-          event,
-          realSessionId ?? sessionId,
-        );
-        if (sdkMessage) {
-          yield sdkMessage;
-        }
-      }
-
-      // Wait for process to exit
-      const exitCode = await new Promise<number | null>((resolve) => {
-        geminiProcess.on("close", resolve);
-        geminiProcess.on("error", () => resolve(null));
-      });
-
-      // Emit result message
-      yield {
-        type: "result",
-        session_id: realSessionId ?? sessionId,
-        exitCode,
-        usage: lastStats
-          ? {
-              input_tokens: lastStats.input_tokens,
-              output_tokens: lastStats.output_tokens,
-            }
-          : undefined,
-      } as SDKMessage;
-    } finally {
-      clearTimeout(timeoutId);
-      signal.removeEventListener("abort", abortHandler);
-
-      // Ensure process is killed
-      if (!geminiProcess.killed) {
+      // Handle abort
+      const abortHandler = () => {
         geminiProcess.kill("SIGTERM");
+      };
+      signal.addEventListener("abort", abortHandler);
+
+      // Set up timeout
+      const timeoutId = setTimeout(() => {
+        geminiProcess.kill("SIGTERM");
+      }, this.timeout);
+
+      try {
+        // Parse JSON from stdout
+        if (!geminiProcess.stdout) {
+          yield {
+            type: "error",
+            session_id: currentSessionId,
+            error: "Gemini process has no stdout",
+          } as SDKMessage;
+          return;
+        }
+
+        const rl = createInterface({
+          input: geminiProcess.stdout,
+          crlfDelay: Number.POSITIVE_INFINITY,
+        });
+
+        let lastStats: GeminiStats | undefined;
+
+        for await (const line of rl) {
+          if (signal.aborted) break;
+
+          const event = parseGeminiEvent(line);
+          if (!event) continue;
+
+          // Update session ID from init event (Gemini returns the real session ID)
+          if (event.type === "init") {
+            const init = event as GeminiInitEvent;
+            if (init.session_id) {
+              currentSessionId = init.session_id;
+            }
+          }
+
+          // Track stats from result event
+          if (event.type === "result") {
+            const result = event as GeminiResultEvent;
+            lastStats = result.stats;
+          }
+
+          // Convert Gemini event to SDKMessage
+          const sdkMessage = this.convertEventToSDKMessage(
+            event,
+            currentSessionId,
+          );
+          if (sdkMessage) {
+            yield sdkMessage;
+          }
+        }
+
+        // Wait for process to exit
+        const exitCode = await new Promise<number | null>((resolve) => {
+          geminiProcess.on("close", resolve);
+          geminiProcess.on("error", () => resolve(null));
+        });
+
+        // Emit result message for this turn
+        yield {
+          type: "result",
+          session_id: currentSessionId,
+          exitCode,
+          usage: lastStats
+            ? {
+                input_tokens: lastStats.input_tokens,
+                output_tokens: lastStats.output_tokens,
+              }
+            : undefined,
+        } as SDKMessage;
+      } finally {
+        clearTimeout(timeoutId);
+        signal.removeEventListener("abort", abortHandler);
+
+        // Ensure process is killed
+        if (!geminiProcess.killed) {
+          geminiProcess.kill("SIGTERM");
+        }
       }
+
+      // After first message, all subsequent messages are continuations
+      isFirstMessage = false;
     }
   }
 

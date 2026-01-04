@@ -8,6 +8,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { ModelInfo } from "@claude-anywhere/shared";
 import {
   Codex,
   type CodexOptions,
@@ -156,6 +157,21 @@ export class CodexProvider implements AgentProvider {
         enabled: false,
       };
     }
+  }
+
+  /**
+   * Get available models for Codex cloud.
+   * Returns hardcoded list of known Codex models.
+   * See: https://developers.openai.com/codex/models/
+   */
+  async getAvailableModels(): Promise<ModelInfo[]> {
+    // Codex cloud models - see https://developers.openai.com/codex/models/
+    return [
+      { id: "gpt-5.2-codex", name: "GPT-5.2 Codex" },
+      { id: "gpt-5-codex", name: "GPT-5 Codex" },
+      { id: "gpt-5-codex-mini", name: "GPT-5 Codex Mini" },
+      { id: "codex-mini-latest", name: "Codex Mini" },
+    ];
   }
 
   /**

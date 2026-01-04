@@ -9,6 +9,7 @@ export {
 export type {
   ProviderName,
   ProviderInfo,
+  ModelInfo,
   PermissionMode,
   SessionStatus,
   ModelOption,
@@ -16,7 +17,12 @@ export type {
   FileMetadata,
   FileContentResponse,
 } from "./types.js";
-export { thinkingOptionToTokens } from "./types.js";
+export {
+  thinkingOptionToTokens,
+  resolveModel,
+  DEFAULT_MODEL,
+  DEFAULT_PROVIDER,
+} from "./types.js";
 
 export {
   orderByParentChain,
@@ -174,3 +180,17 @@ export type {
   GeminiEvent,
 } from "./gemini-schema/types.js";
 export { parseGeminiEvent } from "./gemini-schema/events.js";
+
+// Gemini session file types (for reading ~/.gemini/tmp/<hash>/chats/)
+export type {
+  GeminiFunctionResponse,
+  GeminiToolCallResult,
+  GeminiToolCall,
+  GeminiThought,
+  GeminiTokens,
+  GeminiUserMessage,
+  GeminiAssistantMessage,
+  GeminiSessionMessage,
+  GeminiSessionFile,
+} from "./gemini-schema/session.js";
+export { parseGeminiSessionFile } from "./gemini-schema/session.js";

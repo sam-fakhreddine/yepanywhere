@@ -1,10 +1,29 @@
 /**
  * Provider name - which AI agent provider to use.
  * - "claude": Claude via Anthropic SDK
- * - "codex": OpenAI Codex via CLI (supports local models via --oss)
+ * - "codex": OpenAI Codex via SDK (cloud models)
+ * - "codex-oss": Codex via CLI with --oss (local models via Ollama)
  * - "gemini": Google Gemini via CLI
  */
-export type ProviderName = "claude" | "codex" | "gemini";
+export type ProviderName = "claude" | "codex" | "codex-oss" | "gemini";
+
+/**
+ * The default provider when none is specified.
+ * Used for backward compatibility with existing sessions that don't have provider set.
+ */
+export const DEFAULT_PROVIDER: ProviderName = "claude";
+
+/**
+ * Model information for a provider.
+ */
+export interface ModelInfo {
+  /** Model identifier (e.g., "sonnet", "qwen2.5-coder:0.5b") */
+  id: string;
+  /** Human-readable name */
+  name: string;
+  /** Model size in bytes (for local models) */
+  size?: number;
+}
 
 /**
  * Provider info for UI display.
@@ -17,6 +36,8 @@ export interface ProviderInfo {
   enabled: boolean;
   expiresAt?: string;
   user?: { email?: string; name?: string };
+  /** Available models for this provider */
+  models?: ModelInfo[];
 }
 
 /**
@@ -40,6 +61,21 @@ export type PermissionMode =
  * - "haiku": Claude Haiku
  */
 export type ModelOption = "default" | "sonnet" | "opus" | "haiku";
+
+/**
+ * The default model when "default" is selected.
+ */
+export const DEFAULT_MODEL: Exclude<ModelOption, "default"> = "opus";
+
+/**
+ * Resolve a model option to the actual model name.
+ * Maps "default" to the actual default model (opus).
+ */
+export function resolveModel(
+  model: ModelOption | undefined,
+): Exclude<ModelOption, "default"> {
+  return model === "default" || !model ? DEFAULT_MODEL : model;
+}
 
 /**
  * Extended thinking budget option.

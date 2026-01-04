@@ -1,3 +1,4 @@
+import { DEFAULT_PROVIDER } from "@claude-anywhere/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { type Project, type SessionSummary, toUrlProjectId } from "../types";
@@ -290,6 +291,7 @@ export function useSessions(projectId: string | undefined) {
         updatedAt: now,
         messageCount: 0,
         status: { state: "idle" },
+        provider: DEFAULT_PROVIDER,
       };
 
       setSessions((prev) => {

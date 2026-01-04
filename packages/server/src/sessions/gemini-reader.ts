@@ -1,0 +1,517 @@
+/**
+ * GeminiSessionReader - Reads Gemini sessions from disk.
+ *
+ * Gemini stores sessions at ~/.gemini/tmp/<projectHash>/chats/session-*.json
+ * with a different format than Claude or Codex:
+ * - JSON files (not JSONL)
+ * - sessionId, projectHash, startTime, lastUpdated
+ * - messages[] array with user and gemini message types
+ *
+ * Unlike Claude's DAG structure, Gemini sessions are linear.
+ */
+
+import { readFile, readdir, stat } from "node:fs/promises";
+import { basename, join } from "node:path";
+import {
+  type GeminiAssistantMessage,
+  type GeminiSessionFile,
+  type GeminiSessionMessage,
+  type GeminiUserMessage,
+  SESSION_TITLE_MAX_LENGTH,
+  type UrlProjectId,
+  parseGeminiSessionFile,
+} from "@claude-anywhere/shared";
+import type {
+  ContentBlock,
+  ContextUsage,
+  Message,
+  Session,
+  SessionSummary,
+} from "../supervisor/types.js";
+import type { GetSessionOptions, ISessionReader } from "./types.js";
+
+// Gemini model context window size (1M tokens for Gemini 2.0)
+const CONTEXT_WINDOW_SIZE = 1_000_000;
+
+export interface GeminiSessionReaderOptions {
+  /**
+   * Base directory for Gemini sessions (~/.gemini/tmp).
+   * Sessions are stored in <projectHash>/chats/session-*.json structure.
+   */
+  sessionsDir: string;
+  /**
+   * The project path (cwd) to filter sessions by.
+   * Only sessions with this cwd will be listed.
+   */
+  projectPath?: string;
+  /**
+   * Optional map of projectHash -> cwd for filtering.
+   * If not provided, all sessions will be listed.
+   */
+  hashToCwd?: Map<string, string>;
+}
+
+interface GeminiSessionCacheEntry {
+  id: string;
+  filePath: string;
+  projectHash: string;
+  startTime: string;
+  mtime: number;
+  size: number;
+}
+
+/**
+ * Gemini-specific session reader for Gemini CLI JSON files.
+ *
+ * Handles Gemini's linear conversation structure with user and gemini messages.
+ */
+export class GeminiSessionReader implements ISessionReader {
+  private sessionsDir: string;
+  private projectPath?: string;
+  private hashToCwd?: Map<string, string>;
+
+  // Cache of session ID -> file info for quick lookups
+  private sessionFileCache: Map<string, GeminiSessionCacheEntry> = new Map();
+  private cacheTimestamp = 0;
+  private readonly CACHE_TTL_MS = 5000; // 5 second cache
+
+  constructor(options: GeminiSessionReaderOptions) {
+    this.sessionsDir = options.sessionsDir;
+    this.projectPath = options.projectPath;
+    this.hashToCwd = options.hashToCwd;
+  }
+
+  async listSessions(projectId: UrlProjectId): Promise<SessionSummary[]> {
+    const summaries: SessionSummary[] = [];
+    const sessions = await this.scanSessions();
+
+    for (const session of sessions) {
+      // Filter by project path if set
+      if (this.projectPath) {
+        const cwd = this.hashToCwd?.get(session.projectHash);
+        if (cwd !== this.projectPath) {
+          continue;
+        }
+      }
+
+      const summary = await this.getSessionSummary(session.id, projectId);
+      if (summary) {
+        summaries.push(summary);
+      }
+    }
+
+    // Sort by updatedAt descending
+    summaries.sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+
+    return summaries;
+  }
+
+  async getSessionSummary(
+    sessionId: string,
+    projectId: UrlProjectId,
+  ): Promise<SessionSummary | null> {
+    const sessionCache = await this.findSessionFile(sessionId);
+    if (!sessionCache) return null;
+
+    try {
+      const content = await readFile(sessionCache.filePath, "utf-8");
+      const session = parseGeminiSessionFile(content);
+
+      if (!session || session.messages.length === 0) return null;
+
+      const stats = await stat(sessionCache.filePath);
+      const { title, fullTitle } = this.extractTitle(session.messages);
+      const messageCount = session.messages.length;
+      const contextUsage = this.extractContextUsage(session.messages);
+
+      // Skip sessions with no actual conversation messages
+      if (messageCount === 0) return null;
+
+      return {
+        id: sessionId,
+        projectId,
+        title,
+        fullTitle,
+        createdAt: session.startTime,
+        updatedAt: session.lastUpdated ?? stats.mtime.toISOString(),
+        messageCount,
+        status: { state: "idle" },
+        contextUsage,
+        provider: "gemini",
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async getSession(
+    sessionId: string,
+    projectId: UrlProjectId,
+    afterMessageId?: string,
+    _options?: GetSessionOptions,
+  ): Promise<Session | null> {
+    const summary = await this.getSessionSummary(sessionId, projectId);
+    if (!summary) return null;
+
+    const sessionCache = await this.findSessionFile(sessionId);
+    if (!sessionCache) return null;
+
+    const content = await readFile(sessionCache.filePath, "utf-8");
+    const sessionFile = parseGeminiSessionFile(content);
+    if (!sessionFile) return null;
+
+    // Convert messages to our format
+    const messages = this.convertMessagesToMessages(sessionFile.messages);
+
+    // Filter to only messages after the given ID (for incremental fetching)
+    if (afterMessageId) {
+      const afterIndex = messages.findIndex((m) => m.uuid === afterMessageId);
+      if (afterIndex !== -1) {
+        return {
+          ...summary,
+          messages: messages.slice(afterIndex + 1),
+        };
+      }
+    }
+
+    return {
+      ...summary,
+      messages,
+    };
+  }
+
+  async getSessionSummaryIfChanged(
+    sessionId: string,
+    projectId: UrlProjectId,
+    cachedMtime: number,
+    cachedSize: number,
+  ): Promise<{ summary: SessionSummary; mtime: number; size: number } | null> {
+    const sessionCache = await this.findSessionFile(sessionId);
+    if (!sessionCache) return null;
+
+    try {
+      const stats = await stat(sessionCache.filePath);
+      const mtime = stats.mtimeMs;
+      const size = stats.size;
+
+      // If mtime and size match cached values, return null (no change)
+      if (mtime === cachedMtime && size === cachedSize) {
+        return null;
+      }
+
+      const summary = await this.getSessionSummary(sessionId, projectId);
+      if (!summary) return null;
+
+      return { summary, mtime, size };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Gemini doesn't have subagent sessions like Claude.
+   * Returns empty array for compatibility.
+   */
+  async getAgentMappings(): Promise<{ toolUseId: string; agentId: string }[]> {
+    return [];
+  }
+
+  /**
+   * Gemini doesn't have subagent sessions like Claude.
+   * Returns null for compatibility.
+   */
+  async getAgentSession(
+    _agentId: string,
+  ): Promise<{ messages: Message[]; status: string } | null> {
+    return null;
+  }
+
+  /**
+   * Scan the sessions directory and find all session files.
+   */
+  private async scanSessions(): Promise<GeminiSessionCacheEntry[]> {
+    // Check cache
+    if (Date.now() - this.cacheTimestamp < this.CACHE_TTL_MS) {
+      return Array.from(this.sessionFileCache.values());
+    }
+
+    const sessions: GeminiSessionCacheEntry[] = [];
+
+    try {
+      await stat(this.sessionsDir);
+    } catch {
+      // Directory doesn't exist
+      return [];
+    }
+
+    // Scan ~/.gemini/tmp/{projectHash}/chats/*.json
+    const projectHashDirs = await this.findProjectHashDirs();
+
+    for (const { hashDir, projectHash } of projectHashDirs) {
+      const chatsDir = join(hashDir, "chats");
+      try {
+        await stat(chatsDir);
+        const files = await this.findSessionFiles(chatsDir);
+
+        for (const filePath of files) {
+          const session = await this.readSessionMeta(filePath, projectHash);
+          if (session) {
+            sessions.push(session);
+            this.sessionFileCache.set(session.id, session);
+          }
+        }
+      } catch {
+        // Chats directory doesn't exist, skip
+      }
+    }
+
+    this.cacheTimestamp = Date.now();
+    return sessions;
+  }
+
+  /**
+   * Find all project hash directories in ~/.gemini/tmp/
+   */
+  private async findProjectHashDirs(): Promise<
+    { hashDir: string; projectHash: string }[]
+  > {
+    const dirs: { hashDir: string; projectHash: string }[] = [];
+
+    try {
+      const entries = await readdir(this.sessionsDir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          dirs.push({
+            hashDir: join(this.sessionsDir, entry.name),
+            projectHash: entry.name,
+          });
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
+
+    return dirs;
+  }
+
+  /**
+   * Find all session JSON files in a chats directory.
+   */
+  private async findSessionFiles(chatsDir: string): Promise<string[]> {
+    const files: string[] = [];
+
+    try {
+      const entries = await readdir(chatsDir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (
+          entry.isFile() &&
+          entry.name.startsWith("session-") &&
+          entry.name.endsWith(".json")
+        ) {
+          files.push(join(chatsDir, entry.name));
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
+
+    return files;
+  }
+
+  /**
+   * Find a session file by ID.
+   */
+  private async findSessionFile(
+    sessionId: string,
+  ): Promise<GeminiSessionCacheEntry | null> {
+    // Check cache first
+    const cached = this.sessionFileCache.get(sessionId);
+    if (cached) return cached;
+
+    // Scan if cache miss
+    await this.scanSessions();
+    return this.sessionFileCache.get(sessionId) ?? null;
+  }
+
+  /**
+   * Read session metadata from a file.
+   */
+  private async readSessionMeta(
+    filePath: string,
+    projectHash: string,
+  ): Promise<GeminiSessionCacheEntry | null> {
+    try {
+      const stats = await stat(filePath);
+      const content = await readFile(filePath, "utf-8");
+      const session = parseGeminiSessionFile(content);
+
+      if (!session) return null;
+
+      return {
+        id: session.sessionId,
+        filePath,
+        projectHash,
+        startTime: session.startTime,
+        mtime: stats.mtimeMs,
+        size: stats.size,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Extract title from messages (first user message).
+   */
+  private extractTitle(messages: GeminiSessionMessage[]): {
+    title: string | null;
+    fullTitle: string | null;
+  } {
+    // Find first user message
+    for (const msg of messages) {
+      if (msg.type === "user") {
+        const userMsg = msg as GeminiUserMessage;
+        const fullTitle = userMsg.content.trim();
+        const title =
+          fullTitle.length <= SESSION_TITLE_MAX_LENGTH
+            ? fullTitle
+            : `${fullTitle.slice(0, SESSION_TITLE_MAX_LENGTH - 3)}...`;
+        return { title, fullTitle };
+      }
+    }
+
+    return { title: null, fullTitle: null };
+  }
+
+  /**
+   * Extract context usage from token counts in messages.
+   */
+  private extractContextUsage(
+    messages: GeminiSessionMessage[],
+  ): ContextUsage | undefined {
+    // Find last assistant message with token info
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg && msg.type === "gemini") {
+        const assistantMsg = msg as GeminiAssistantMessage;
+        if (assistantMsg.tokens?.input) {
+          const inputTokens =
+            assistantMsg.tokens.input + (assistantMsg.tokens.cached ?? 0);
+          const contextWindow = CONTEXT_WINDOW_SIZE;
+          const percentage = Math.round((inputTokens / contextWindow) * 100);
+
+          return { inputTokens, percentage };
+        }
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Convert Gemini session messages to Message format.
+   */
+  private convertMessagesToMessages(
+    sessionMessages: GeminiSessionMessage[],
+  ): Message[] {
+    const messages: Message[] = [];
+
+    for (const msg of sessionMessages) {
+      this.convertGeminiMessage(msg, messages);
+    }
+
+    return messages;
+  }
+
+  /**
+   * Convert a single Gemini message to our Message format.
+   * Appends converted messages to the output array.
+   */
+  private convertGeminiMessage(
+    msg: GeminiSessionMessage,
+    output: Message[],
+  ): void {
+    if (msg.type === "user") {
+      const userMsg = msg as GeminiUserMessage;
+      output.push({
+        uuid: userMsg.id,
+        type: "user",
+        message: {
+          role: "user",
+          content: userMsg.content,
+        },
+        timestamp: userMsg.timestamp,
+      });
+      return;
+    }
+
+    if (msg.type === "gemini") {
+      const assistantMsg = msg as GeminiAssistantMessage;
+      const content: ContentBlock[] = [];
+
+      // Add thinking blocks if present
+      if (assistantMsg.thoughts) {
+        for (const thought of assistantMsg.thoughts) {
+          content.push({
+            type: "thinking",
+            thinking: `${thought.subject}: ${thought.description}`,
+          });
+        }
+      }
+
+      // Add main content
+      if (assistantMsg.content) {
+        content.push({
+          type: "text",
+          text: assistantMsg.content,
+        });
+      }
+
+      // Add tool calls if present
+      if (assistantMsg.toolCalls) {
+        for (const toolCall of assistantMsg.toolCalls) {
+          content.push({
+            type: "tool_use",
+            id: toolCall.id,
+            name: toolCall.name,
+            input: toolCall.args,
+          });
+        }
+      }
+
+      output.push({
+        uuid: assistantMsg.id,
+        type: "assistant",
+        message: {
+          role: "assistant",
+          content,
+        },
+        timestamp: assistantMsg.timestamp,
+      });
+
+      // Add tool results as separate messages after the assistant message
+      if (assistantMsg.toolCalls) {
+        for (const toolCall of assistantMsg.toolCalls) {
+          if (toolCall.result && toolCall.result.length > 0) {
+            for (const result of toolCall.result) {
+              output.push({
+                uuid: `${assistantMsg.id}-result-${result.functionResponse.id}`,
+                type: "tool_result",
+                toolUseResult: {
+                  tool_use_id: result.functionResponse.id,
+                  content: result.functionResponse.response.output,
+                },
+                timestamp: toolCall.timestamp ?? assistantMsg.timestamp,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+}

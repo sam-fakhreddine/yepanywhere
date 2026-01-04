@@ -240,7 +240,7 @@ async function handlePush(data) {
 
   // Test notifications always show (user explicitly requested them)
   if (data.type === "test") {
-    return self.registration.showNotification("Claude Anywhere", {
+    return self.registration.showNotification("Yep Anywhere", {
       body: data.message || "Test notification",
       tag: "test",
       icon: "/icon-192.png",
@@ -287,7 +287,7 @@ async function handlePush(data) {
 }
 
 async function showPendingInputNotification(data) {
-  const title = data.projectName || "Claude Anywhere";
+  const title = data.projectName || "Yep Anywhere";
   const options = {
     body: data.summary || "Waiting for input",
     tag: `session-${data.sessionId}`,
@@ -321,7 +321,7 @@ async function showPendingInputNotification(data) {
 }
 
 function showSessionHaltedNotification(data) {
-  const title = data.projectName || "Claude Anywhere";
+  const title = data.projectName || "Yep Anywhere";
   const reasonText = {
     completed: "Task completed",
     error: "Task encountered an error",

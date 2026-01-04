@@ -1,11 +1,13 @@
 import { access, readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
-import type { ProviderName, UrlProjectId } from "@claude-anywhere/shared";
-import type { Project } from "../supervisor/types.js";
 import {
-  CodexSessionScanner,
-  CODEX_SESSIONS_DIR,
-} from "./codex-scanner.js";
+  DEFAULT_PROVIDER,
+  type ProviderName,
+  type UrlProjectId,
+} from "@claude-anywhere/shared";
+import type { Project } from "../supervisor/types.js";
+import { CODEX_SESSIONS_DIR, CodexSessionScanner } from "./codex-scanner.js";
+import { GEMINI_TMP_DIR, GeminiSessionScanner } from "./gemini-scanner.js";
 import {
   CLAUDE_PROJECTS_DIR,
   decodeProjectId,
@@ -16,20 +18,30 @@ import {
 export interface ScannerOptions {
   projectsDir?: string; // override for testing
   codexSessionsDir?: string; // override for testing
+  geminiSessionsDir?: string; // override for testing
   enableCodex?: boolean; // whether to include Codex projects (default: true)
+  enableGemini?: boolean; // whether to include Gemini projects (default: true)
 }
 
 export class ProjectScanner {
   private projectsDir: string;
   private codexScanner: CodexSessionScanner | null;
+  private geminiScanner: GeminiSessionScanner | null;
   private enableCodex: boolean;
+  private enableGemini: boolean;
 
   constructor(options: ScannerOptions = {}) {
     this.projectsDir = options.projectsDir ?? CLAUDE_PROJECTS_DIR;
     this.enableCodex = options.enableCodex ?? true;
+    this.enableGemini = options.enableGemini ?? true;
     this.codexScanner = this.enableCodex
       ? new CodexSessionScanner({
           sessionsDir: options.codexSessionsDir ?? CODEX_SESSIONS_DIR,
+        })
+      : null;
+    this.geminiScanner = this.enableGemini
+      ? new GeminiSessionScanner({
+          sessionsDir: options.geminiSessionsDir ?? GEMINI_TMP_DIR,
         })
       : null;
   }
@@ -129,6 +141,21 @@ export class ProjectScanner {
       }
     }
 
+    // Merge Gemini projects if enabled
+    if (this.geminiScanner) {
+      // Register known paths for hash resolution before scanning
+      this.geminiScanner.registerKnownPaths(Array.from(seenPaths));
+
+      const geminiProjects = await this.geminiScanner.listProjects();
+      for (const geminiProject of geminiProjects) {
+        // Skip if we've already seen this path from Claude/Codex
+        // (Gemini projects with unknown hashes will have paths like "gemini:xxxxxxxx")
+        if (seenPaths.has(geminiProject.path)) continue;
+        seenPaths.add(geminiProject.path);
+        projects.push(geminiProject);
+      }
+    }
+
     return projects;
   }
 
@@ -174,29 +201,48 @@ export class ProjectScanner {
       return null;
     }
 
-    // Determine provider: use preferred if specified, otherwise check for Codex sessions
-    let provider: "claude" | "codex" | "gemini" = preferredProvider ?? "claude";
-    if (!preferredProvider && this.codexScanner) {
+    // Determine provider: use preferred if specified, otherwise check for Codex/Gemini sessions
+    let provider: ProviderName = preferredProvider ?? DEFAULT_PROVIDER;
+    if (!preferredProvider) {
       // Check if Codex sessions exist for this path
-      const codexSessions =
-        await this.codexScanner.getSessionsForProject(projectPath);
-      if (codexSessions.length > 0) {
-        provider = "codex";
+      if (this.codexScanner) {
+        const codexSessions =
+          await this.codexScanner.getSessionsForProject(projectPath);
+        if (codexSessions.length > 0) {
+          provider = "codex";
+        }
+      }
+
+      // Check if Gemini sessions exist for this path (only if no Codex sessions)
+      if (provider === "claude" && this.geminiScanner) {
+        const geminiSessions =
+          await this.geminiScanner.getSessionsForProject(projectPath);
+        if (geminiSessions.length > 0) {
+          provider = "gemini";
+        }
       }
     }
 
     // Create a virtual project entry
     // The session directory will be created by the SDK when the first session starts
     const encodedPath = projectPath.replace(/\//g, "-");
+
+    // Determine the session directory based on provider
+    let sessionDir: string;
+    if (provider === "codex") {
+      sessionDir = CODEX_SESSIONS_DIR;
+    } else if (provider === "gemini") {
+      sessionDir = GEMINI_TMP_DIR;
+    } else {
+      sessionDir = join(this.projectsDir, encodedPath);
+    }
+
     return {
       id: projectId as UrlProjectId,
       path: projectPath,
       name: basename(projectPath),
       sessionCount: 0,
-      sessionDir:
-        provider === "codex" && this.codexScanner
-          ? CODEX_SESSIONS_DIR
-          : join(this.projectsDir, encodedPath),
+      sessionDir,
       activeOwnedCount: 0,
       activeExternalCount: 0,
       lastActivity: null,

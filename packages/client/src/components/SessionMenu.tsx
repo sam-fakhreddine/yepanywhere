@@ -5,8 +5,10 @@ export interface SessionMenuProps {
   sessionId: string;
   isStarred: boolean;
   isArchived: boolean;
+  hasUnread?: boolean;
   onToggleStar: () => void | Promise<void>;
   onToggleArchive: () => void | Promise<void>;
+  onToggleRead?: () => void | Promise<void>;
   onRename: () => void;
   /** Use "..." icon instead of chevron */
   useEllipsisIcon?: boolean;
@@ -19,8 +21,10 @@ export interface SessionMenuProps {
 export function SessionMenu({
   isStarred,
   isArchived,
+  hasUnread,
   onToggleStar,
   onToggleArchive,
+  onToggleRead,
   onRename,
   useEllipsisIcon = false,
   className = "",
@@ -157,6 +161,28 @@ export function SessionMenu({
         </svg>
         {isArchived ? "Unarchive" : "Archive"}
       </button>
+      {onToggleRead && (
+        <button type="button" onClick={() => handleAction(onToggleRead)}>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden="true"
+          >
+            {hasUnread ? (
+              // Checkmark icon for "Mark as read"
+              <polyline points="20 6 9 17 4 12" />
+            ) : (
+              // Envelope/circle icon for "Mark as unread"
+              <circle cx="12" cy="12" r="10" />
+            )}
+          </svg>
+          {hasUnread ? "Mark as read" : "Mark as unread"}
+        </button>
+      )}
     </div>
   );
 

@@ -75,7 +75,7 @@ export interface SessionSummary {
   /** Context usage from the last assistant message */
   contextUsage?: ContextUsage;
   /** AI provider used for this session */
-  provider?: ProviderName;
+  provider: ProviderName;
 }
 
 /**
@@ -163,7 +163,7 @@ export interface ProcessInfo {
   holdSince?: string; // ISO timestamp when entered hold
   terminationReason?: string; // why it terminated
   terminatedAt?: string; // when it terminated (ISO timestamp)
-  provider?: ProviderName; // which provider is running this process
+  provider: ProviderName; // which provider is running this process
 }
 
 // Process events for subscribers
@@ -183,5 +183,5 @@ export interface ProcessOptions {
   sessionId: string;
   idleTimeoutMs?: number; // default 5 minutes
   permissionMode?: PermissionMode;
-  provider?: ProviderName; // which provider is running this process
+  provider: ProviderName; // which provider is running this process
 }

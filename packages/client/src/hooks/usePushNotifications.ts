@@ -4,6 +4,12 @@ import { api } from "../api/client";
 const DEVICE_ID_KEY = "claude-anywhere-device-id";
 const SW_PATH = "/sw.js";
 
+// Service worker is disabled in dev mode by default to avoid page reload issues
+// (skipWaiting + clients.claim can disrupt SSE connections on mobile screen unlock)
+// Enable with VITE_ENABLE_SW=true in .env or environment
+const SW_ENABLED =
+  !import.meta.env.DEV || import.meta.env.VITE_ENABLE_SW === "true";
+
 interface PushState {
   isSupported: boolean;
   isSubscribed: boolean;
@@ -35,8 +41,9 @@ export function usePushNotifications() {
   const [registration, setRegistration] =
     useState<ServiceWorkerRegistration | null>(null);
 
-  // Check browser support
+  // Check browser support (and whether SW is enabled in this environment)
   const isSupported =
+    SW_ENABLED &&
     typeof window !== "undefined" &&
     "serviceWorker" in navigator &&
     "PushManager" in window &&
@@ -55,11 +62,14 @@ export function usePushNotifications() {
   // Initialize: register service worker and check subscription status
   useEffect(() => {
     if (!isSupported) {
+      const reason = !SW_ENABLED
+        ? "Service worker disabled in dev mode (set VITE_ENABLE_SW=true to enable)"
+        : "Push notifications not supported in this browser";
       setState((s) => ({
         ...s,
         isSupported: false,
         isLoading: false,
-        error: "Push notifications not supported in this browser",
+        error: reason,
       }));
       return;
     }

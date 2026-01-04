@@ -2350,37 +2350,66 @@ details[open] .collapsible__icon {
   color: var(--vscode-errorForeground, #f48771);
 }
 
-/* Code display with line numbers */
+/* Code display with syntax highlighting */
 .file-viewer-code {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
   font-family: "SF Mono", Monaco, "Cascadia Code", "Consolas", monospace;
   font-size: var(--font-size-base);
   line-height: 1.5;
+  background: #1e1e1e;
+  overflow-x: auto;
 }
 
-.file-viewer-line-numbers {
+/* Syntax highlighter overrides */
+.file-viewer-code pre {
+  margin: 0 !important;
+}
+
+.file-viewer-code code {
+  font-family: inherit !important;
+}
+
+/* Plain code display (fallback and large files) */
+.code-highlighter-plain {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 0.75rem;
+  margin: 0;
+  background: transparent;
+}
+
+.code-highlighter-plain .code-line-numbers {
   text-align: right;
-  padding: 0.75rem 0.5rem;
+  padding-right: 1em;
   color: #555;
   user-select: none;
-  border-right: 1px solid #333;
-  background: #1a1a1a;
+  min-width: 2.5em;
 }
 
-.file-viewer-line-numbers > div {
+.code-highlighter-plain .code-line-numbers > div {
   line-height: 1.5;
 }
 
-.file-viewer-content {
+.code-highlighter-plain .code-content {
+  margin: 0;
+  overflow-x: auto;
+  line-height: 1.5;
+}
+
+.code-highlighter-plain .code-content code {
+  display: block;
+  white-space: pre;
+}
+
+/* Simple plain code without line numbers */
+pre.code-highlighter-plain {
+  display: block;
   padding: 0.75rem;
   margin: 0;
   overflow-x: auto;
   line-height: 1.5;
-  background: #1e1e1e;
 }
 
-.file-viewer-content code {
+pre.code-highlighter-plain code {
   display: block;
   white-space: pre;
 }
@@ -2516,6 +2545,43 @@ details[open] .collapsible__icon {
 
 .file-viewer-download-btn:hover {
   background: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+/* Fullscreen mode */
+.file-viewer-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: var(--vscode-editor-background, #1e1e1e);
+  border-radius: 0;
+  max-height: none;
+  height: 100vh;
+  width: 100vw;
+}
+
+.file-viewer-fullscreen .file-viewer-header {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0;
+  flex-shrink: 0;
+}
+
+.file-viewer-fullscreen .file-viewer-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
+.file-viewer-fullscreen .file-viewer-code,
+.file-viewer-fullscreen .file-viewer-markdown {
+  padding: 0.5rem;
+}
+
+.file-viewer-fullscreen .file-viewer-image {
+  padding: 0;
+}
+
+.file-viewer-fullscreen .file-viewer-image img {
+  max-height: calc(100vh - 50px);
 }
 
 /* ==========================================================================
@@ -2670,14 +2736,6 @@ details[open] .collapsible__icon {
 
   .file-viewer-code {
     font-size: var(--font-size-sm);
-  }
-
-  .file-viewer-line-numbers {
-    padding: 0.5rem 0.25rem;
-  }
-
-  .file-viewer-content {
-    padding: 0.5rem;
   }
 
   .file-viewer-modal {

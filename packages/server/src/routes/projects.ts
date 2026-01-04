@@ -4,8 +4,10 @@ import type { SessionIndexService } from "../indexes/index.js";
 import type { SessionMetadataService } from "../metadata/index.js";
 import type { NotificationService } from "../notifications/index.js";
 import type { CodexSessionScanner } from "../projects/codex-scanner.js";
+import type { GeminiSessionScanner } from "../projects/gemini-scanner.js";
 import type { ProjectScanner } from "../projects/scanner.js";
 import { CodexSessionReader } from "../sessions/codex-reader.js";
+import { GeminiSessionReader } from "../sessions/gemini-reader.js";
 import type { ISessionReader } from "../sessions/types.js";
 import type { ExternalSessionTracker } from "../supervisor/ExternalSessionTracker.js";
 import type { Supervisor } from "../supervisor/Supervisor.js";
@@ -28,6 +30,10 @@ export interface ProjectsDeps {
   codexScanner?: CodexSessionScanner;
   /** Codex sessions directory (defaults to ~/.codex/sessions) */
   codexSessionsDir?: string;
+  /** Gemini scanner for checking if a project has Gemini sessions */
+  geminiScanner?: GeminiSessionScanner;
+  /** Gemini sessions directory (defaults to ~/.gemini/tmp) */
+  geminiSessionsDir?: string;
 }
 
 interface ProjectActivityCounts {
@@ -106,6 +112,7 @@ export function createProjectsRoutes(deps: ProjectsDeps): Hono {
             permissionMode: process.permissionMode,
             modeVersion: process.modeVersion,
           },
+          provider: process.provider,
         });
       }
     }
@@ -266,17 +273,42 @@ export function createProjectsRoutes(deps: ProjectsDeps): Hono {
     // For Claude projects, also check for Codex sessions for the same path
     // This handles the case where a project has sessions from multiple providers
     if (project.provider === "claude" && deps.codexScanner) {
-      const codexSessions =
-        await deps.codexScanner.getSessionsForProject(project.path);
+      const codexSessions = await deps.codexScanner.getSessionsForProject(
+        project.path,
+      );
       if (codexSessions.length > 0 && deps.codexSessionsDir) {
         const codexReader = new CodexSessionReader({
           sessionsDir: deps.codexSessionsDir,
           projectPath: project.path,
         });
-        const codexSessionSummaries =
-          await codexReader.listSessions(project.id);
+        const codexSessionSummaries = await codexReader.listSessions(
+          project.id,
+        );
         // Merge Codex sessions with Claude sessions
         sessions = [...sessions, ...codexSessionSummaries];
+      }
+    }
+
+    // For Claude/Codex projects, also check for Gemini sessions for the same path
+    // This handles the case where a project has sessions from multiple providers
+    if (
+      (project.provider === "claude" || project.provider === "codex") &&
+      deps.geminiScanner
+    ) {
+      const geminiSessions = await deps.geminiScanner.getSessionsForProject(
+        project.path,
+      );
+      if (geminiSessions.length > 0 && deps.geminiSessionsDir) {
+        const geminiReader = new GeminiSessionReader({
+          sessionsDir: deps.geminiSessionsDir,
+          projectPath: project.path,
+          hashToCwd: deps.geminiScanner.getHashToCwd(),
+        });
+        const geminiSessionSummaries = await geminiReader.listSessions(
+          project.id,
+        );
+        // Merge Gemini sessions with Claude/Codex sessions
+        sessions = [...sessions, ...geminiSessionSummaries];
       }
     }
 
@@ -358,16 +390,39 @@ export function createProjectsRoutes(deps: ProjectsDeps): Hono {
 
     // For Claude projects, also check for Codex sessions for the same path
     if (project.provider === "claude" && deps.codexScanner) {
-      const codexSessions =
-        await deps.codexScanner.getSessionsForProject(project.path);
+      const codexSessions = await deps.codexScanner.getSessionsForProject(
+        project.path,
+      );
       if (codexSessions.length > 0 && deps.codexSessionsDir) {
         const codexReader = new CodexSessionReader({
           sessionsDir: deps.codexSessionsDir,
           projectPath: project.path,
         });
-        const codexSessionSummaries =
-          await codexReader.listSessions(project.id);
+        const codexSessionSummaries = await codexReader.listSessions(
+          project.id,
+        );
         sessions = [...sessions, ...codexSessionSummaries];
+      }
+    }
+
+    // For Claude/Codex projects, also check for Gemini sessions for the same path
+    if (
+      (project.provider === "claude" || project.provider === "codex") &&
+      deps.geminiScanner
+    ) {
+      const geminiSessions = await deps.geminiScanner.getSessionsForProject(
+        project.path,
+      );
+      if (geminiSessions.length > 0 && deps.geminiSessionsDir) {
+        const geminiReader = new GeminiSessionReader({
+          sessionsDir: deps.geminiSessionsDir,
+          projectPath: project.path,
+          hashToCwd: deps.geminiScanner.getHashToCwd(),
+        });
+        const geminiSessionSummaries = await geminiReader.listSessions(
+          project.id,
+        );
+        sessions = [...sessions, ...geminiSessionSummaries];
       }
     }
 

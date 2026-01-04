@@ -1,27 +1,31 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { ContextUsageIndicator } from "../components/ContextUsageIndicator";
+import type { ProviderName } from "@claude-anywhere/shared";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { api } from "../api/client";
+import { BulkActionBar } from "../components/BulkActionBar";
+import {
+  FilterDropdown,
+  type FilterOption,
+} from "../components/FilterDropdown";
 import { NewSessionForm } from "../components/NewSessionForm";
 import { PageHeader } from "../components/PageHeader";
-import { SessionStatusBadge } from "../components/StatusBadge";
+import { SessionListItem } from "../components/SessionListItem";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useProjectLayout } from "../layouts";
 import { getSessionDisplayTitle } from "../types";
 
-function formatRelativeTime(timestamp: string): string {
-  const now = Date.now();
-  const then = new Date(timestamp).getTime();
-  const diffMs = now - then;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
+// Long-press threshold for entering selection mode on mobile
+const LONG_PRESS_MS = 500;
 
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return new Date(timestamp).toLocaleDateString();
-}
+// Status filter options
+type StatusFilter = "all" | "unread" | "starred" | "archived";
+
+// Provider colors for filter dropdown (matching ProviderBadge)
+const PROVIDER_COLORS: Record<ProviderName, string> = {
+  claude: "var(--app-yep-green)",
+  codex: "#10a37f",
+  "codex-oss": "#f97316",
+  gemini: "#4285f4",
+};
 
 export function SessionsPage() {
   const {
@@ -38,36 +42,53 @@ export function SessionsPage() {
     addOptimisticSession,
   } = useProjectLayout();
 
-  // Filter state: "all" shows non-archived, "unread" shows only unread, "starred" shows only starred, "archived" shows only archived, "codex" shows only Codex sessions
-  type FilterMode = "all" | "unread" | "starred" | "archived" | "codex";
+  // Filter state: multi-select for status and providers
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [statusFilters, setStatusFilters] = useState<StatusFilter[]>([]);
+  const [providerFilters, setProviderFilters] = useState<ProviderName[]>([]);
 
-  // Filter sessions based on search and filter mode
+  // Selection state for multi-select mode
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [isBulkActionPending, setIsBulkActionPending] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressSessionRef = useRef<string | null>(null);
+
+  // Filter sessions based on search, status, and provider filters
   const filteredSessions = useMemo(() => {
     return sessions.filter((session) => {
-      // Filter by mode
-      switch (filterMode) {
-        case "all":
-          // Show non-archived sessions
-          if (session.isArchived) return false;
-          break;
-        case "unread":
-          // Show only unread non-archived sessions
-          if (!session.hasUnread || session.isArchived) return false;
-          break;
-        case "starred":
-          // Show only starred sessions (including archived starred ones)
-          if (!session.isStarred) return false;
-          break;
-        case "archived":
-          // Show only archived sessions
-          if (!session.isArchived) return false;
-          break;
-        case "codex":
-          // Show only Codex sessions (non-archived)
-          if (session.provider !== "codex" || session.isArchived) return false;
-          break;
+      // Status filtering (empty = show all non-archived)
+      if (statusFilters.length === 0) {
+        // Default: show non-archived
+        if (session.isArchived) return false;
+      } else {
+        // Check if session matches any selected status filter
+        let matchesStatus = false;
+        for (const status of statusFilters) {
+          switch (status) {
+            case "all":
+              if (!session.isArchived) matchesStatus = true;
+              break;
+            case "unread":
+              if (session.hasUnread && !session.isArchived)
+                matchesStatus = true;
+              break;
+            case "starred":
+              if (session.isStarred) matchesStatus = true;
+              break;
+            case "archived":
+              if (session.isArchived) matchesStatus = true;
+              break;
+          }
+        }
+        if (!matchesStatus) return false;
+      }
+
+      // Provider filtering (empty = show all providers)
+      if (providerFilters.length > 0) {
+        if (!session.provider || !providerFilters.includes(session.provider)) {
+          return false;
+        }
       }
 
       // Filter by search query
@@ -82,26 +103,169 @@ export function SessionsPage() {
 
       return true;
     });
-  }, [sessions, searchQuery, filterMode]);
+  }, [sessions, searchQuery, statusFilters, providerFilters]);
 
-  // Count unread, starred, and archived sessions for badges
-  const unreadCount = useMemo(
-    () => sessions.filter((s) => s.hasUnread && !s.isArchived).length,
-    [sessions],
+  // Build status filter options with counts
+  const statusOptions = useMemo((): FilterOption<StatusFilter>[] => {
+    const allCount = sessions.filter((s) => !s.isArchived).length;
+    const unreadCount = sessions.filter(
+      (s) => s.hasUnread && !s.isArchived,
+    ).length;
+    const starredCount = sessions.filter((s) => s.isStarred).length;
+    const archivedCount = sessions.filter((s) => s.isArchived).length;
+
+    return [
+      { value: "all", label: "All", count: allCount },
+      { value: "unread", label: "Unread", count: unreadCount },
+      { value: "starred", label: "Starred", count: starredCount },
+      { value: "archived", label: "Archived", count: archivedCount },
+    ];
+  }, [sessions]);
+
+  // Build provider filter options with counts and colors
+  const providerOptions = useMemo((): FilterOption<ProviderName>[] => {
+    // Count sessions per provider
+    const providerCounts: Partial<Record<ProviderName, number>> = {};
+    for (const s of sessions) {
+      if (s.provider && !s.isArchived) {
+        providerCounts[s.provider] = (providerCounts[s.provider] ?? 0) + 1;
+      }
+    }
+
+    // Only show providers that have sessions
+    const options: FilterOption<ProviderName>[] = [];
+    const providerOrder: ProviderName[] = [
+      "claude",
+      "codex",
+      "codex-oss",
+      "gemini",
+    ];
+    for (const provider of providerOrder) {
+      const count = providerCounts[provider];
+      if (count && count > 0) {
+        options.push({
+          value: provider,
+          label: provider.charAt(0).toUpperCase() + provider.slice(1),
+          count,
+          color: PROVIDER_COLORS[provider],
+        });
+      }
+    }
+    return options;
+  }, [sessions]);
+
+  // Selection handlers
+  const handleSelect = useCallback((sessionId: string, selected: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (selected) {
+        next.add(sessionId);
+      } else {
+        next.delete(sessionId);
+      }
+      // Exit selection mode when nothing is selected
+      if (next.size === 0) {
+        setIsSelectionMode(false);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    setSelectedIds(new Set(filteredSessions.map((s) => s.id)));
+    setIsSelectionMode(true);
+  }, [filteredSessions]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setIsSelectionMode(false);
+  }, []);
+
+  // Long-press handlers for mobile selection mode
+  const handleLongPressStart = useCallback(
+    (sessionId: string) => {
+      // Already in selection mode or on desktop - don't start long-press
+      if (isSelectionMode || isWideScreen) return;
+
+      longPressSessionRef.current = sessionId;
+      longPressTimerRef.current = setTimeout(() => {
+        // Enter selection mode and select this session
+        setIsSelectionMode(true);
+        setSelectedIds(new Set([sessionId]));
+        longPressSessionRef.current = null;
+      }, LONG_PRESS_MS);
+    },
+    [isSelectionMode, isWideScreen],
   );
-  const starredCount = useMemo(
-    () => sessions.filter((s) => s.isStarred).length,
-    [sessions],
-  );
-  const archivedCount = useMemo(
-    () => sessions.filter((s) => s.isArchived).length,
-    [sessions],
-  );
-  const codexCount = useMemo(
-    () =>
-      sessions.filter((s) => s.provider === "codex" && !s.isArchived).length,
-    [sessions],
-  );
+
+  const handleLongPressEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    longPressSessionRef.current = null;
+  }, []);
+
+  // Bulk action handlers
+  const handleBulkArchive = useCallback(async () => {
+    if (isBulkActionPending) return;
+    setIsBulkActionPending(true);
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map((id) =>
+          api.updateSessionMetadata(id, { archived: true }),
+        ),
+      );
+      handleClearSelection();
+    } finally {
+      setIsBulkActionPending(false);
+    }
+  }, [selectedIds, isBulkActionPending, handleClearSelection]);
+
+  const handleBulkUnarchive = useCallback(async () => {
+    if (isBulkActionPending) return;
+    setIsBulkActionPending(true);
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map((id) =>
+          api.updateSessionMetadata(id, { archived: false }),
+        ),
+      );
+      handleClearSelection();
+    } finally {
+      setIsBulkActionPending(false);
+    }
+  }, [selectedIds, isBulkActionPending, handleClearSelection]);
+
+  const handleBulkStar = useCallback(async () => {
+    if (isBulkActionPending) return;
+    setIsBulkActionPending(true);
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map((id) =>
+          api.updateSessionMetadata(id, { starred: true }),
+        ),
+      );
+      handleClearSelection();
+    } finally {
+      setIsBulkActionPending(false);
+    }
+  }, [selectedIds, isBulkActionPending, handleClearSelection]);
+
+  const handleBulkUnstar = useCallback(async () => {
+    if (isBulkActionPending) return;
+    setIsBulkActionPending(true);
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map((id) =>
+          api.updateSessionMetadata(id, { starred: false }),
+        ),
+      );
+      handleClearSelection();
+    } finally {
+      setIsBulkActionPending(false);
+    }
+  }, [selectedIds, isBulkActionPending, handleClearSelection]);
 
   // Update browser tab title (project name only, no session)
   useDocumentTitle(project?.name);
@@ -128,124 +292,133 @@ export function SessionsPage() {
           isSidebarCollapsed={isSidebarCollapsed}
         />
 
-        <main className="sessions-page-content">
-          <NewSessionForm
-            projectId={projectId}
-            onOptimisticSession={addOptimisticSession}
-            compact
-            rows={3}
-            placeholder="Start a new session..."
-            autoFocus={false}
-          />
-
-          <h2>Sessions</h2>
-
-          {/* Filter bar */}
-          <div className="filter-bar">
-            <input
-              type="text"
-              className="filter-search"
-              placeholder="Search sessions..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+        <main className="page-scroll-container">
+          <div className="page-content-inner">
+            <NewSessionForm
+              projectId={projectId}
+              onOptimisticSession={addOptimisticSession}
+              compact
+              rows={3}
+              placeholder="Start a new session..."
+              autoFocus={false}
             />
-            <div className="filter-chips">
-              <button
-                type="button"
-                className={`filter-chip ${filterMode === "all" ? "active" : ""}`}
-                onClick={() => setFilterMode("all")}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                className={`filter-chip ${filterMode === "unread" ? "active" : ""}`}
-                onClick={() => setFilterMode("unread")}
-              >
-                Unread{unreadCount > 0 && ` (${unreadCount})`}
-              </button>
-              <button
-                type="button"
-                className={`filter-chip ${filterMode === "starred" ? "active" : ""}`}
-                onClick={() => setFilterMode("starred")}
-              >
-                Starred{starredCount > 0 && ` (${starredCount})`}
-              </button>
-              <button
-                type="button"
-                className={`filter-chip ${filterMode === "archived" ? "active" : ""}`}
-                onClick={() => setFilterMode("archived")}
-              >
-                Archived{archivedCount > 0 && ` (${archivedCount})`}
-              </button>
-              <button
-                type="button"
-                className={`filter-chip ${filterMode === "codex" ? "active" : ""}`}
-                onClick={() => setFilterMode("codex")}
-              >
-                Codex{codexCount > 0 && ` (${codexCount})`}
-              </button>
-            </div>
-          </div>
 
-          {sessions.length === 0 ? (
-            <p>No sessions yet</p>
-          ) : filteredSessions.length === 0 ? (
-            <p className="no-results">No sessions match your filters</p>
-          ) : (
-            <ul className="session-list">
-              {filteredSessions.map((session) => (
-                <li
-                  key={session.id}
-                  className={[
-                    session.isArchived && "archived",
-                    session.hasUnread && "unread",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                >
-                  <Link to={`/projects/${projectId}/sessions/${session.id}`}>
-                    <strong title={session.fullTitle || undefined}>
-                      {session.isStarred && (
-                        <span className="star-indicator" aria-label="Starred">
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            aria-hidden="true"
-                          >
-                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                          </svg>
+            <h2>Sessions</h2>
+
+            {/* Filter bar */}
+            <div className="filter-bar">
+              <input
+                type="text"
+                className="filter-search"
+                placeholder="Search sessions..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <div className="filter-dropdowns">
+                <FilterDropdown
+                  label="Status"
+                  options={statusOptions}
+                  selected={statusFilters}
+                  onChange={setStatusFilters}
+                  placeholder="All"
+                />
+                {providerOptions.length > 1 && (
+                  <FilterDropdown
+                    label="Provider"
+                    options={providerOptions}
+                    selected={providerFilters}
+                    onChange={setProviderFilters}
+                    placeholder="All providers"
+                  />
+                )}
+              </div>
+            </div>
+
+            {sessions.length === 0 ? (
+              <p>No sessions yet</p>
+            ) : filteredSessions.length === 0 ? (
+              <p className="no-results">No sessions match your filters</p>
+            ) : (
+              <>
+                {/* Select all header (desktop or when in selection mode) */}
+                {(isWideScreen || isSelectionMode) &&
+                  filteredSessions.length > 0 && (
+                    <div className="session-list-header">
+                      <label className="session-list-header__select-all">
+                        <input
+                          type="checkbox"
+                          checked={
+                            selectedIds.size === filteredSessions.length &&
+                            filteredSessions.length > 0
+                          }
+                          onChange={(e) =>
+                            e.target.checked
+                              ? handleSelectAll()
+                              : handleClearSelection()
+                          }
+                        />
+                        <span>
+                          {selectedIds.size > 0
+                            ? `${selectedIds.size} selected`
+                            : "Select all"}
                         </span>
-                      )}
-                      {getSessionDisplayTitle(session)}
-                      {session.isArchived && (
-                        <span className="archived-badge">Archived</span>
-                      )}
-                    </strong>
-                    <span className="meta">
-                      {formatRelativeTime(session.updatedAt)}
-                      <ContextUsageIndicator
-                        usage={session.contextUsage}
-                        size={14}
-                      />
-                      <SessionStatusBadge
-                        status={session.status}
-                        pendingInputType={session.pendingInputType}
-                        hasUnread={session.hasUnread}
-                        processState={
-                          processStates[session.id] ?? session.processState
+                      </label>
+                    </div>
+                  )}
+
+                <ul
+                  className={`session-list ${isSelectionMode ? "session-list--selection-mode" : ""}`}
+                >
+                  {filteredSessions.map((session) => (
+                    <div
+                      key={session.id}
+                      onTouchStart={() => handleLongPressStart(session.id)}
+                      onTouchEnd={handleLongPressEnd}
+                      onTouchCancel={handleLongPressEnd}
+                      onMouseDown={() =>
+                        !isWideScreen && handleLongPressStart(session.id)
+                      }
+                      onMouseUp={handleLongPressEnd}
+                      onMouseLeave={handleLongPressEnd}
+                    >
+                      <SessionListItem
+                        session={session}
+                        projectId={projectId}
+                        mode="card"
+                        processState={processStates[session.id]}
+                        isSelected={selectedIds.has(session.id)}
+                        onNavigate={() => {
+                          // In selection mode on mobile, tap toggles selection
+                          if (isSelectionMode && !isWideScreen) {
+                            handleSelect(
+                              session.id,
+                              !selectedIds.has(session.id),
+                            );
+                          }
+                        }}
+                        onSelect={
+                          isWideScreen || isSelectionMode
+                            ? handleSelect
+                            : undefined
                         }
                       />
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+                    </div>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            {/* Bulk action bar */}
+            <BulkActionBar
+              selectedCount={selectedIds.size}
+              onArchive={handleBulkArchive}
+              onUnarchive={handleBulkUnarchive}
+              onStar={handleBulkStar}
+              onUnstar={handleBulkUnstar}
+              onClearSelection={handleClearSelection}
+              isPending={isBulkActionPending}
+            />
+          </div>
         </main>
       </div>
     </div>
