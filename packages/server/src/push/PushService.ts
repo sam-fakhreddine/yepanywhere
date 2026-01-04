@@ -22,7 +22,7 @@ import type { VapidKeys } from "./vapid.js";
 const CURRENT_VERSION = 1;
 
 export interface PushServiceOptions {
-  /** Directory to store subscription data (defaults to ~/.claude-anywhere) */
+  /** Directory to store subscription data (defaults to ~/.yep-anywhere) */
   dataDir?: string;
   /** VAPID keys for signing push requests */
   vapidKeys?: VapidKeys;
@@ -42,7 +42,7 @@ export class PushService {
       options.dataDir ??
       path.join(
         process.env.HOME ?? process.env.USERPROFILE ?? ".",
-        ".claude-anywhere",
+        ".yep-anywhere",
       );
     this.filePath = path.join(this.dataDir, "push-subscriptions.json");
     this.vapidKeys = options.vapidKeys;

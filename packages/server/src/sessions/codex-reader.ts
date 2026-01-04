@@ -25,7 +25,7 @@ import {
   SESSION_TITLE_MAX_LENGTH,
   type UrlProjectId,
   parseCodexSessionEntry,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 import type {
   ContentBlock,
   ContextUsage,
@@ -140,6 +140,7 @@ export class CodexSessionReader implements ISessionReader {
       const { title, fullTitle } = this.extractTitle(entries);
       const messageCount = this.countMessages(entries);
       const contextUsage = this.extractContextUsage(entries);
+      const model = this.extractModel(entries);
 
       // Skip sessions with no actual conversation messages
       if (messageCount === 0) return null;
@@ -155,6 +156,7 @@ export class CodexSessionReader implements ISessionReader {
         status: { state: "idle" },
         contextUsage,
         provider: "codex",
+        model,
       };
     } catch {
       return null;
@@ -443,6 +445,19 @@ export class CodexSessionReader implements ISessionReader {
       }
     }
 
+    return undefined;
+  }
+
+  /**
+   * Extract the model from turn_context entries.
+   */
+  private extractModel(entries: CodexSessionEntry[]): string | undefined {
+    // Find first turn_context entry with a model
+    for (const entry of entries) {
+      if (entry.type === "turn_context" && entry.payload.model) {
+        return entry.payload.model;
+      }
+    }
     return undefined;
   }
 

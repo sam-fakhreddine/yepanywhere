@@ -12,7 +12,7 @@ import {
   DEFAULT_PROVIDER,
   type ProviderName,
   type UrlProjectId,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 import { getLogger } from "../logging/logger.js";
 import type { ISessionReader } from "../sessions/types.js";
 import type { SessionSummary } from "../supervisor/types.js";
@@ -46,7 +46,7 @@ export interface SessionIndexState {
 const CURRENT_VERSION = 1;
 
 export interface SessionIndexServiceOptions {
-  /** Directory to store index files (defaults to ~/.claude-anywhere/indexes) */
+  /** Directory to store index files (defaults to ~/.yep-anywhere/indexes) */
   dataDir?: string;
   /** Claude projects directory (defaults to ~/.claude/projects) */
   projectsDir?: string;
@@ -72,7 +72,7 @@ export class SessionIndexService implements ISessionIndexService {
   constructor(options: SessionIndexServiceOptions = {}) {
     const home = process.env.HOME ?? process.env.USERPROFILE ?? ".";
     this.dataDir =
-      options.dataDir ?? path.join(home, ".claude-anywhere", "indexes");
+      options.dataDir ?? path.join(home, ".yep-anywhere", "indexes");
     this.projectsDir =
       options.projectsDir ?? path.join(home, ".claude", "projects");
     this.maxCacheSize = options.maxCacheSize ?? 10000;

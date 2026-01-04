@@ -1,4 +1,4 @@
-# Claude Anywhere: Project Overview & Status
+# Yep Anywhere: Project Overview & Status
 
 A mobile-first supervisor for Claude Code agents. Run agents on your dev machine, approve from your phone.
 
@@ -104,7 +104,7 @@ packages/
 |------|---------------|---------|--------|-------------------|-------------------|
 | Claude Code CLI | No | Yes | No | No | Yes |
 | VS Code Extension | No | Yes | Partial* | No | Yes |
-| **claude-anywhere** | Yes | Yes | Yes | Yes | Yes |
+| **yep-anywhere** | Yes | Yes | Yes | Yes | Yes |
 
 *VS Code Remote works but webview state is fragile.
 

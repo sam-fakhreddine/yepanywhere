@@ -41,7 +41,7 @@ function formatErrors(errors: ZodError): string {
   return parts.join("\n") || "Schema validation failed";
 }
 
-const GITHUB_ISSUES_URL = "https://github.com/kzahel/claude-anywhere/issues";
+const GITHUB_ISSUES_URL = "https://github.com/kzahel/yep-anywhere/issues";
 
 /**
  * Small warning badge that appears on tool results that fail schema validation.

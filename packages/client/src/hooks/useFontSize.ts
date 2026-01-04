@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 export type FontSize = "small" | "default" | "large" | "larger";
 
-const FONT_SIZE_KEY = "claude-anywhere-font-size";
+const FONT_SIZE_KEY = "yep-anywhere-font-size";
 
 const fontSizeScales: Record<FontSize, number> = {
   small: 0.85,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-const STORAGE_KEY = "claude-anywhere-notify-in-app";
+const STORAGE_KEY = "yep-anywhere-notify-in-app";
 
 /**
  * Read the notifyInApp setting from localStorage

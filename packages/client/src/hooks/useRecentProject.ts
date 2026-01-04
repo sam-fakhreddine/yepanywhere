@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-const STORAGE_KEY = "claude-anywhere-recent-project";
+const STORAGE_KEY = "yep-anywhere-recent-project";
 
 /**
  * Get the most recently visited project ID from sessionStorage.

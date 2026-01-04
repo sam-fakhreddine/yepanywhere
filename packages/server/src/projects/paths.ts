@@ -60,7 +60,7 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import type { UrlProjectId } from "@claude-anywhere/shared";
+import type { UrlProjectId } from "@yep-anywhere/shared";
 
 /** The root directory where Claude stores project sessions */
 export const CLAUDE_DIR = join(homedir(), ".claude");

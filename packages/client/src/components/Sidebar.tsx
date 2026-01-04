@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { ProcessStateType } from "../hooks/useFileActivity";
-import { useProcesses } from "../hooks/useProcesses";
 import type { SessionSummary } from "../types";
 import { SessionListItem } from "./SessionListItem";
 import {
@@ -94,7 +93,6 @@ export function Sidebar({
   const [recentSessionsLimit, setRecentSessionsLimit] = useState(
     RECENT_SESSIONS_INITIAL,
   );
-  const { activeCount } = useProcesses();
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0]?.clientX ?? null;
@@ -357,7 +355,6 @@ export function Sidebar({
                 to="/agents"
                 icon={SidebarIcons.agents}
                 label="Agents"
-                badge={activeCount}
                 onClick={onNavigate}
               />
               <SidebarNavItem

@@ -3,7 +3,7 @@ import type {
   AgentStatus as AgentStatusType,
   AppContentBlock,
   AppMessage,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 
 // Re-export shared types
 export type {
@@ -43,7 +43,7 @@ export type {
   AppSession,
   AgentStatus,
   InputRequest,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 
 // Re-export type guards
 export {
@@ -52,10 +52,10 @@ export {
   isSystemMessage,
   isSummaryMessage,
   isConversationMessage,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 
 // Re-export branded ID types and utilities
-export { toUrlProjectId, fromUrlProjectId } from "@claude-anywhere/shared";
+export { toUrlProjectId, fromUrlProjectId } from "@yep-anywhere/shared";
 
 // Re-export message helpers (from lib for convenience)
 export { getMessageId } from "./lib/mergeMessages";
@@ -133,7 +133,7 @@ export interface Message {
 import type {
   AppSessionStatus,
   AppSessionSummary,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 
 export type SessionStatus = AppSessionStatus;
 export type SessionSummary = AppSessionSummary;
@@ -169,4 +169,4 @@ export interface Project {
 }
 
 // Re-export session display title utility from shared
-export { getSessionDisplayTitle } from "@claude-anywhere/shared";
+export { getSessionDisplayTitle } from "@yep-anywhere/shared";

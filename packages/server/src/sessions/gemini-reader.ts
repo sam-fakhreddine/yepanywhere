@@ -20,7 +20,7 @@ import {
   SESSION_TITLE_MAX_LENGTH,
   type UrlProjectId,
   parseGeminiSessionFile,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 import type {
   ContentBlock,
   ContextUsage,
@@ -126,6 +126,7 @@ export class GeminiSessionReader implements ISessionReader {
       const { title, fullTitle } = this.extractTitle(session.messages);
       const messageCount = session.messages.length;
       const contextUsage = this.extractContextUsage(session.messages);
+      const model = this.extractModel(session.messages);
 
       // Skip sessions with no actual conversation messages
       if (messageCount === 0) return null;
@@ -141,6 +142,7 @@ export class GeminiSessionReader implements ISessionReader {
         status: { state: "idle" },
         contextUsage,
         provider: "gemini",
+        model,
       };
     } catch {
       return null;
@@ -410,6 +412,24 @@ export class GeminiSessionReader implements ISessionReader {
       }
     }
 
+    return undefined;
+  }
+
+  /**
+   * Extract the model from the first assistant message.
+   */
+  private extractModel(
+    messages: GeminiSessionMessage[],
+  ): string | undefined {
+    // Find the first assistant message with a model field
+    for (const msg of messages) {
+      if (msg.type === "gemini") {
+        const assistantMsg = msg as GeminiAssistantMessage;
+        if (assistantMsg.model) {
+          return assistantMsg.model;
+        }
+      }
+    }
     return undefined;
   }
 

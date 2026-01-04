@@ -1,4 +1,4 @@
-import { orderByParentChain } from "@claude-anywhere/shared";
+import { orderByParentChain } from "@yep-anywhere/shared";
 import type { Message } from "../types";
 
 /**

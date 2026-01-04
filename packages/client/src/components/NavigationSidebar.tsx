@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useInbox } from "../hooks/useInbox";
+import { useNeedsAttentionBadge } from "../hooks/useNeedsAttentionBadge";
 import { useRecentProjects } from "../hooks/useRecentProjects";
 import {
   SidebarIcons,
@@ -51,8 +51,7 @@ export function NavigationSidebar({
   const [isResizing, setIsResizing] = useState(false);
   const resizeStartX = useRef<number | null>(null);
   const resizeStartWidth = useRef<number | null>(null);
-  const { totalNeedsAttention, totalActive } = useInbox();
-  const inboxCount = totalNeedsAttention + totalActive;
+  const inboxCount = useNeedsAttentionBadge();
   const { recentProjects } = useRecentProjects();
 
   const handleTouchStart = (e: React.TouchEvent) => {

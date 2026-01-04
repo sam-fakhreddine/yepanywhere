@@ -1924,7 +1924,7 @@ a.sidebar-nav-item {
   align-items: center;
   justify-content: center;
   gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-1);
   background: transparent;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -2931,6 +2931,17 @@ a.sidebar-nav-item {
   pointer-events: none;
 }
 
+/* Desktop: position in top-right corner */
+@media (min-width: 768px) {
+  .toast-container {
+    bottom: auto;
+    top: var(--space-4);
+    left: auto;
+    right: var(--space-4);
+    transform: none;
+  }
+}
+
 .toast {
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
@@ -2940,21 +2951,23 @@ a.sidebar-nav-item {
   animation: toast-slide-in 0.2s ease-out;
   max-width: 400px;
   text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .toast-error {
-  background: var(--error-color);
-  color: white;
+  background: #dc2626;
+  color: #fff;
 }
 
 .toast-success {
-  background: var(--success-color);
-  color: #000;
+  background: #16a34a;
+  color: #fff;
 }
 
 .toast-info {
-  background: var(--bg-tertiary);
+  background: var(--bg-secondary);
   color: var(--text-primary);
+  border: 1px solid var(--border-color);
 }
 
 /* Toast with action button - flex layout */
@@ -2985,13 +2998,15 @@ a.sidebar-nav-item {
   background: rgba(255, 255, 255, 0.3);
 }
 
-.toast-error .toast-action {
-  background: rgba(0, 0, 0, 0.2);
-  border-color: rgba(0, 0, 0, 0.3);
+.toast-error .toast-action,
+.toast-success .toast-action {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
-.toast-error .toast-action:hover {
-  background: rgba(0, 0, 0, 0.3);
+.toast-error .toast-action:hover,
+.toast-success .toast-action:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 @keyframes toast-slide-in {
@@ -4006,6 +4021,17 @@ a.sidebar-nav-item {
   width: 6px;
   height: 6px;
   border-radius: 50%;
+}
+
+.provider-badge-model {
+  margin-left: 2px;
+  opacity: 0.7;
+  font-weight: 400;
+}
+
+.provider-badge-model::before {
+  content: "·";
+  margin-right: 2px;
 }
 
 .provider-badge-dot {

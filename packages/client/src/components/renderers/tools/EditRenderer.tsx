@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ZodError } from "zod";
 import { useSchemaValidationContext } from "../../../contexts/SchemaValidationContext";
 import { validateToolResult } from "../../../lib/validateToolResult";
+import { CodeHighlighter } from "../../CodeHighlighter";
 import { SchemaWarning } from "../../SchemaWarning";
 import { Modal } from "../../ui/Modal";
 import type { RenderContext } from "../types";
@@ -159,11 +160,14 @@ function EditToolUse({ input }: { input: EditInput }) {
  * Modal content for viewing complete diff (from result with structuredPatch)
  */
 function DiffModalContent({ result }: { result: EditResult }) {
+  // Combine all hunks into a single diff string for syntax highlighting
+  const diffText = result.structuredPatch
+    .map((hunk) => hunk.lines.join("\n"))
+    .join("\n");
+
   return (
-    <div className="diff-view">
-      {result.structuredPatch.map((hunk, i) => (
-        <DiffHunk key={`modal-hunk-${hunk.oldStart}-${i}`} hunk={hunk} />
-      ))}
+    <div className="diff-modal-content">
+      <CodeHighlighter code={diffText} language="diff" />
     </div>
   );
 }
@@ -173,10 +177,11 @@ function DiffModalContent({ result }: { result: EditResult }) {
  */
 function DiffInputModalContent({ input }: { input: EditInput }) {
   const diffLines = createDiffLines(input.old_string, input.new_string);
+  const diffText = diffLines.join("\n");
 
   return (
-    <div className="diff-view">
-      <DiffLines lines={diffLines} />
+    <div className="diff-modal-content">
+      <CodeHighlighter code={diffText} language="diff" />
     </div>
   );
 }

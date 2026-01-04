@@ -1,4 +1,4 @@
-import { toUrlProjectId } from "@claude-anywhere/shared";
+import { toUrlProjectId } from "@yep-anywhere/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkerQueue } from "../src/supervisor/WorkerQueue.js";
 import type { EventBus } from "../src/watcher/EventBus.js";

@@ -60,7 +60,11 @@ export function useNeedsAttentionBadge() {
 
   // Update document title when count changes
   useEffect(() => {
+    // Track if we're currently updating to avoid observer loop
+    let isUpdating = false;
+
     const updateTitle = () => {
+      isUpdating = true;
       // Strip any existing badge prefix
       const baseTitle = document.title.replace(BADGE_PREFIX_REGEX, "");
 
@@ -69,12 +73,19 @@ export function useNeedsAttentionBadge() {
       } else {
         document.title = baseTitle;
       }
+      // Use setTimeout to reset flag after current mutation cycle completes
+      setTimeout(() => {
+        isUpdating = false;
+      }, 0);
     };
 
     updateTitle();
 
     // Also observe title changes from useDocumentTitle and re-apply badge
     const observer = new MutationObserver(() => {
+      // Skip if we're the ones who triggered the change
+      if (isUpdating) return;
+
       // Check if the badge needs to be (re)applied
       const currentTitle = document.title;
       const hasCorrectBadge =

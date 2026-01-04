@@ -23,6 +23,8 @@ interface SessionListItemProps {
   // Callbacks
   onNavigate: () => void;
   onSelect?: (sessionId: string, selected: boolean) => void;
+  /** When true, taps toggle selection instead of navigating */
+  isSelectionMode?: boolean;
 }
 
 /**
@@ -47,6 +49,7 @@ export function SessionListItem({
   hasDraft = false,
   onNavigate,
   onSelect,
+  isSelectionMode = false,
 }: SessionListItemProps) {
   // Local state for optimistic updates
   const [localIsStarred, setLocalIsStarred] = useState<boolean | undefined>(
@@ -284,7 +287,12 @@ export function SessionListItem({
       ) : (
         <Link
           to={`/projects/${projectId}/sessions/${session.id}`}
-          onClick={onNavigate}
+          onClick={(e) => {
+            if (isSelectionMode) {
+              e.preventDefault();
+            }
+            onNavigate();
+          }}
           title={session.fullTitle || displayTitle}
           className="session-list-item__link"
         >

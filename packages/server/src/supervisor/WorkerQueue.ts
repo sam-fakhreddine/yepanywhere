@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { UrlProjectId } from "@claude-anywhere/shared";
+import type { UrlProjectId } from "@yep-anywhere/shared";
 import type { PermissionMode, UserMessage } from "../sdk/types.js";
 import type { EventBus } from "../watcher/EventBus.js";
 

@@ -170,7 +170,7 @@ test.describe("CodexOSS Session Creation", () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Claude-Anywhere": "true",
+          "X-Yep-Anywhere": "true",
         },
         body: JSON.stringify({
           message: "What is 2+2?",

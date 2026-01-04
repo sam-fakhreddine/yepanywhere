@@ -1,4 +1,4 @@
-# Claude Anywhere
+# Yep Anywhere
 
 A mobile-first supervisor for Claude Code agents. Like the VS Code Claude extension, but designed for phones and multi-session workflows.
 
@@ -33,7 +33,7 @@ Individual overrides (rarely needed):
 
 ## Data Directory & Profiles
 
-Server state is stored in a data directory (default: `~/.claude-anywhere/`). This includes:
+Server state is stored in a data directory (default: `~/.yep-anywhere/`). This includes:
 - `logs/` - Server logs
 - `indexes/` - Session index cache
 - `uploads/` - Uploaded files
@@ -51,16 +51,16 @@ Use profiles to run dev and production instances simultaneously (like Chrome pro
 PORT=3400 pnpm start
 
 # Development (dev profile, port 4000)
-PORT=4000 CLAUDE_ANYWHERE_PROFILE=dev pnpm dev
+PORT=4000 YEP_ANYWHERE_PROFILE=dev pnpm dev
 ```
 
 This creates separate data directories:
-- Production: `~/.claude-anywhere/`
-- Development: `~/.claude-anywhere-dev/`
+- Production: `~/.yep-anywhere/`
+- Development: `~/.yep-anywhere-dev/`
 
 Environment variables:
-- `CLAUDE_ANYWHERE_PROFILE` - Profile name suffix (creates `~/.claude-anywhere-{profile}/`)
-- `CLAUDE_ANYWHERE_DATA_DIR` - Full path override for data directory
+- `YEP_ANYWHERE_PROFILE` - Profile name suffix (creates `~/.yep-anywhere-{profile}/`)
+- `YEP_ANYWHERE_DATA_DIR` - Full path override for data directory
 
 Note: Both instances share `~/.claude/projects/` (SDK-managed sessions).
 
@@ -83,12 +83,12 @@ Never mention Claude, AI, or any AI assistant in commit messages. Write commit m
 
 ## Server Logs
 
-Server logs are written to `{dataDir}/logs/` (default: `~/.claude-anywhere/logs/`):
+Server logs are written to `{dataDir}/logs/` (default: `~/.yep-anywhere/logs/`):
 
 - `server.log` - Main server log (dev mode with `pnpm dev`)
 - `e2e-server.log` - Server log during E2E tests
 
-To view logs in real-time: `tail -f ~/.claude-anywhere/logs/server.log`
+To view logs in real-time: `tail -f ~/.yep-anywhere/logs/server.log`
 
 All `console.log/error/warn` output is captured. Logs are JSON format in the file but pretty-printed to console.
 

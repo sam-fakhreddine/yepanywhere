@@ -1,4 +1,4 @@
-import { DEFAULT_PROVIDER, type ProviderInfo } from "@claude-anywhere/shared";
+import { DEFAULT_PROVIDER, type ProviderInfo } from "@yep-anywhere/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
 
-const DEVICE_ID_KEY = "claude-anywhere-device-id";
+const DEVICE_ID_KEY = "yep-anywhere-device-id";
 const SW_PATH = "/sw.js";
 
 // Service worker is disabled in dev mode by default to avoid page reload issues

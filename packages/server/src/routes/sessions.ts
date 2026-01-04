@@ -4,9 +4,8 @@ import {
   type ThinkingOption,
   type UploadedFile,
   isUrlProjectId,
-  resolveModel,
   thinkingOptionToTokens,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 import { Hono } from "hono";
 import type { SessionMetadataService } from "../metadata/index.js";
 import type { NotificationService } from "../notifications/index.js";
@@ -312,7 +311,6 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
             customTitle: metadata?.customTitle,
             isArchived: metadata?.isArchived,
             isStarred: metadata?.isStarred,
-            model: metadata?.model,
             lastSeenAt: lastSeenEntry?.timestamp,
             hasUnread,
           },
@@ -341,7 +339,8 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
         customTitle: metadata?.customTitle,
         isArchived: metadata?.isArchived,
         isStarred: metadata?.isStarred,
-        model: metadata?.model,
+        // Model comes from the session reader (extracted from JSONL)
+        model: session.model,
         lastSeenAt,
         hasUnread,
       },
@@ -415,23 +414,6 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
       return c.json(result, 202); // 202 Accepted - queued for processing
     }
 
-    // Started immediately - store the model in metadata if explicitly provided
-    // For non-Claude providers (Codex OSS, Gemini), body.model is the actual model ID
-    // For Claude with "default", we resolve to the actual model name
-    if (deps.sessionMetadataService && result.sessionId) {
-      const resolvedModel =
-        model ??
-        (body.provider === "claude" || !body.provider
-          ? resolveModel(body.model)
-          : undefined);
-      if (resolvedModel) {
-        await deps.sessionMetadataService.setModel(
-          result.sessionId,
-          resolvedModel,
-        );
-      }
-    }
-
     return c.json({
       sessionId: result.sessionId,
       processId: result.id,
@@ -494,23 +476,6 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
     // Check if request was queued
     if (isQueuedResponse(result)) {
       return c.json(result, 202); // 202 Accepted - queued for processing
-    }
-
-    // Created immediately - store the model in metadata if explicitly provided
-    // For non-Claude providers (Codex OSS, Gemini), body.model is the actual model ID
-    // For Claude with "default", we resolve to the actual model name
-    if (deps.sessionMetadataService && result.sessionId) {
-      const resolvedModel =
-        model ??
-        (body.provider === "claude" || !body.provider
-          ? resolveModel(body.model)
-          : undefined);
-      if (resolvedModel) {
-        await deps.sessionMetadataService.setModel(
-          result.sessionId,
-          resolvedModel,
-        );
-      }
     }
 
     return c.json({
@@ -585,14 +550,6 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
     // Check if request was queued
     if (isQueuedResponse(result)) {
       return c.json(result, 202); // 202 Accepted - queued for processing
-    }
-
-    // Started immediately - store the model in metadata if explicitly provided
-    // For non-Claude providers (Codex OSS, Gemini), body.model is the actual model ID
-    // For Claude with "default", we resolve to the actual model name
-    // When resuming, only update if a model is explicitly provided to preserve existing metadata
-    if (deps.sessionMetadataService && model) {
-      await deps.sessionMetadataService.setModel(sessionId, model);
     }
 
     return c.json({

@@ -8,7 +8,7 @@
  */
 
 import { basename } from "node:path";
-import type { UrlProjectId } from "@claude-anywhere/shared";
+import type { UrlProjectId } from "@yep-anywhere/shared";
 import { decodeProjectId } from "../projects/paths.js";
 import type { Supervisor } from "../supervisor/Supervisor.js";
 import type { InputRequest } from "../supervisor/types.js";

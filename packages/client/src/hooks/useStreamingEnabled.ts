@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-const STREAMING_KEY = "claude-anywhere-streaming-enabled";
+const STREAMING_KEY = "yep-anywhere-streaming-enabled";
 
 function loadStreamingEnabled(): boolean {
   const stored = localStorage.getItem(STREAMING_KEY);

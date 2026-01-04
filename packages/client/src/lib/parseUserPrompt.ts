@@ -2,7 +2,7 @@ import {
   parseOpenedFiles,
   getFilename as sharedGetFilename,
   stripIdeMetadata,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 
 /**
  * Uploaded file attachment metadata

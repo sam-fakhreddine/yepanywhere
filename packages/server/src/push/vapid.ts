@@ -117,7 +117,7 @@ export async function loadVapidKeys(
  */
 export async function generateVapidKeys(
   filePath: string = VAPID_FILE,
-  subject = "mailto:claude-anywhere@localhost",
+  subject = "mailto:yep-anywhere@localhost",
 ): Promise<VapidKeys> {
   // Ensure data directory exists
   const dir = path.dirname(filePath);

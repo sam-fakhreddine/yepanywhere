@@ -4,7 +4,7 @@ import type {
   UploadServerMessage,
   UploadStartMessage,
   UploadedFile,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 
 /** Default chunk size (64KB) - matches server progress interval */
 const DEFAULT_CHUNK_SIZE = 64 * 1024;

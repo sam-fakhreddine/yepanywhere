@@ -1,4 +1,4 @@
-import type { FileContentResponse } from "@claude-anywhere/shared";
+import type { FileContentResponse } from "@yep-anywhere/shared";
 import { memo, useCallback, useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";

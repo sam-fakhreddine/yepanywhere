@@ -20,7 +20,7 @@ import {
   type GeminiSessionFile,
   type UrlProjectId,
   parseGeminiSessionFile,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 import type { Project } from "../supervisor/types.js";
 import { encodeProjectId } from "./paths.js";
 

@@ -8,7 +8,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { ModelInfo } from "@claude-anywhere/shared";
+import type { ModelInfo } from "@yep-anywhere/shared";
 import {
   Codex,
   type CodexOptions,
@@ -273,10 +273,12 @@ export class CodexProvider implements AgentProvider {
         "Extracted user prompt",
       );
 
-      // Emit user message (use temp ID if we don't have real one yet)
+      // Emit user message with UUID from queue to enable deduplication
+      // The UUID was set by Process.queueMessage() and passed through MessageQueue
       const userMsgSessionId = sessionId || `pending-${Date.now()}`;
       yield {
         type: "user",
+        uuid: message.uuid,
         session_id: userMsgSessionId,
         message: {
           role: "user",

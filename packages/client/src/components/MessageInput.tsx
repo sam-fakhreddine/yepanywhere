@@ -1,4 +1,4 @@
-import type { UploadedFile } from "@claude-anywhere/shared";
+import type { UploadedFile } from "@yep-anywhere/shared";
 import {
   type ClipboardEvent,
   type KeyboardEvent,
@@ -65,8 +65,6 @@ interface Props {
   onRemoveAttachment?: (id: string) => void;
   /** Progress info for in-flight uploads */
   uploadProgress?: UploadProgress[];
-  /** Model used for this session (from server metadata) */
-  sessionModel?: string;
 }
 
 export function MessageInput({
@@ -91,7 +89,6 @@ export function MessageInput({
   onAttach,
   onRemoveAttachment,
   uploadProgress = [],
-  sessionModel,
 }: Props) {
   const [text, setText, controls] = useDraftPersistence(draftKey);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -352,7 +349,6 @@ export function MessageInput({
             onListeningStart={() => textareaRef.current?.focus()}
             voiceDisabled={disabled}
             contextUsage={contextUsage}
-            sessionModel={sessionModel}
             isRunning={isRunning}
             isThinking={isThinking}
             onStop={onStop}

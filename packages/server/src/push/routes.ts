@@ -146,7 +146,7 @@ export function createPushRoutes(deps: PushRoutesDeps): Hono {
 
     const result = await pushService.sendTest(
       body.deviceId,
-      body.message ?? "Test notification from claude-anywhere",
+      body.message ?? "Test notification from Yep Anywhere",
     );
 
     if (!result.success) {

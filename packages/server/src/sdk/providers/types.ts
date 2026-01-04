@@ -1,5 +1,5 @@
 // Provider abstraction types for multi-provider support
-import type { ModelInfo, PermissionMode } from "@claude-anywhere/shared";
+import type { ModelInfo, PermissionMode } from "@yep-anywhere/shared";
 import type { MessageQueue } from "../messageQueue.js";
 import type { CanUseTool, SDKMessage, UserMessage } from "../types.js";
 

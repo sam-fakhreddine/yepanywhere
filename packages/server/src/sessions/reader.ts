@@ -6,7 +6,7 @@ import {
   SESSION_TITLE_MAX_LENGTH,
   isIdeMetadata,
   stripIdeMetadata,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 import type {
   ContentBlock,
   ContextUsage,
@@ -32,7 +32,7 @@ export interface ClaudeSessionReaderOptions {
 export type SessionReaderOptions = ClaudeSessionReaderOptions;
 
 // Re-export AgentStatus for backwards compatibility
-export type { AgentStatus } from "@claude-anywhere/shared";
+export type { AgentStatus } from "@yep-anywhere/shared";
 
 /**
  * Agent session content returned by getAgentSession.
@@ -177,6 +177,7 @@ export class ClaudeSessionReader implements ISessionReader {
       const firstUserMessage = this.findFirstUserMessage(messages);
       const fullTitle = firstUserMessage?.trim() || null;
       const contextUsage = this.extractContextUsage(conversationMessages);
+      const model = this.extractModel(conversationMessages);
 
       return {
         id: sessionId,
@@ -189,6 +190,7 @@ export class ClaudeSessionReader implements ISessionReader {
         status: { state: "idle" }, // Will be updated by Supervisor
         contextUsage,
         provider: "claude",
+        model,
       };
     } catch {
       return null;
@@ -437,6 +439,23 @@ export class ClaudeSessionReader implements ISessionReader {
           );
 
           return { inputTokens, percentage };
+        }
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Extract the model from the first assistant message.
+   * The model is stored in message.model (e.g., "claude-opus-4-5-20251101").
+   */
+  private extractModel(messages: RawSessionMessage[]): string | undefined {
+    // Find the first assistant message with a model field
+    for (const msg of messages) {
+      if (msg.type === "assistant" && msg.message) {
+        const model = msg.message.model as string | undefined;
+        if (model) {
+          return model;
         }
       }
     }

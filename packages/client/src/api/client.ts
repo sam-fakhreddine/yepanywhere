@@ -6,7 +6,7 @@ import type {
   ProviderName,
   ThinkingOption,
   UploadedFile,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 import type {
   AgentSession,
   InputRequest,
@@ -51,7 +51,7 @@ export interface SessionOptions {
   provider?: ProviderName;
 }
 
-export type { UploadedFile } from "@claude-anywhere/shared";
+export type { UploadedFile } from "@yep-anywhere/shared";
 
 const API_BASE = "/api";
 
@@ -70,7 +70,7 @@ export async function fetchJSON<T>(
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      "X-Claude-Anywhere": "true",
+      "X-Yep-Anywhere": "true",
       ...options?.headers,
     },
   });

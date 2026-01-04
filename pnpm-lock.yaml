@@ -20,7 +20,7 @@ importers:
 
   packages/client:
     dependencies:
-      '@claude-anywhere/shared':
+      '@yep-anywhere/shared':
         specifier: workspace:*
         version: link:../shared
       react:
@@ -84,9 +84,6 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.1.76
         version: 0.1.76(zod@4.3.4)
-      '@claude-anywhere/shared':
-        specifier: workspace:*
-        version: link:../shared
       '@hono/node-server':
         specifier: ^1.13.7
         version: 1.19.7(hono@4.11.3)
@@ -96,6 +93,9 @@ importers:
       '@openai/codex-sdk':
         specifier: ^0.77.0
         version: 0.77.0
+      '@yep-anywhere/shared':
+        specifier: workspace:*
+        version: link:../shared
       bcrypt:
         specifier: ^6.0.0
         version: 6.0.0

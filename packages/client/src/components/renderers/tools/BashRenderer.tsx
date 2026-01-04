@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { ZodError } from "zod";
 import { useSchemaValidationContext } from "../../../contexts/SchemaValidationContext";
 import { validateToolResult } from "../../../lib/validateToolResult";
+import { CodeHighlighter } from "../../CodeHighlighter";
 import { SchemaWarning } from "../../SchemaWarning";
 import { Modal } from "../../ui/Modal";
 import type { RenderContext } from "../types";
@@ -30,16 +31,16 @@ function BashModalContent({
     <div className="bash-modal-sections">
       <div className="bash-modal-section">
         <div className="bash-modal-label">Command</div>
-        <pre className="bash-modal-code">
-          <code>{input.command}</code>
-        </pre>
+        <div className="bash-modal-code">
+          <CodeHighlighter code={input.command} language="bash" />
+        </div>
       </div>
       {stdout && (
         <div className="bash-modal-section">
           <div className="bash-modal-label">Output</div>
-          <pre className="bash-modal-code">
-            <code>{stdout}</code>
-          </pre>
+          <div className="bash-modal-code">
+            <CodeHighlighter code={stdout} language="plaintext" />
+          </div>
         </div>
       )}
       {stderr && (
@@ -47,9 +48,9 @@ function BashModalContent({
           <div className="bash-modal-label bash-modal-label-error">
             {isError ? "Error" : "Stderr"}
           </div>
-          <pre className="bash-modal-code bash-modal-code-error">
-            <code>{stderr}</code>
-          </pre>
+          <div className="bash-modal-code bash-modal-code-error">
+            <CodeHighlighter code={stderr} language="plaintext" />
+          </div>
         </div>
       )}
       {!stdout && !stderr && result && !result.interrupted && (

@@ -1,6 +1,6 @@
 # Remote Access
 
-Claude Anywhere runs on your development machine. To access it from your phone or another device outside your local network, you'll need to set up remote access using one of the options below.
+Yep Anywhere runs on your development machine. To access it from your phone or another device outside your local network, you'll need to set up remote access using one of the options below.
 
 All options require you to trust some external party with routing your traffic. Choose based on your comfort level and existing setup.
 
@@ -11,7 +11,7 @@ All options require you to trust some external party with routing your traffic. 
 **Setup:**
 1. Install Tailscale on your dev machine and phone
 2. Sign in with the same account on both
-3. Access Claude Anywhere at `http://<tailscale-ip>:3400`
+3. Access Yep Anywhere at `http://<tailscale-ip>:3400`
 
 **Pros:** Dead simple, encrypted, works behind NAT, free for personal use
 **Cons:** Requires Tailscale account, app on each device
@@ -40,9 +40,9 @@ All options require you to trust some external party with routing your traffic. 
    cloudflared tunnel --url http://localhost:3400
 
    # Persistent (requires CF account + domain)
-   cloudflared tunnel create claude-anywhere
-   cloudflared tunnel route dns claude-anywhere claude.yourdomain.com
-   cloudflared tunnel run claude-anywhere
+   cloudflared tunnel create yep-anywhere
+   cloudflared tunnel route dns yep-anywhere claude.yourdomain.com
+   cloudflared tunnel run yep-anywhere
    ```
 
 **Pros:** Free, handles HTTPS automatically, no port forwarding
@@ -81,7 +81,7 @@ autossh -M 0 -N -o "ServerAliveInterval 30" -o "ServerAliveCountMax 3" \
 For a systemd service, create `~/.config/systemd/user/claude-tunnel.service`:
 ```ini
 [Unit]
-Description=SSH tunnel for Claude Anywhere
+Description=SSH tunnel for Yep Anywhere
 After=network.target
 
 [Service]
@@ -104,7 +104,7 @@ systemctl --user start claude-tunnel
 
 ## Security Considerations
 
-- Claude Anywhere has access to your codebase. Only use remote access methods you trust.
+- Yep Anywhere has access to your codebase. Only use remote access methods you trust.
 - Always use HTTPS for remote access (all options above provide this).
 - Consider adding authentication (basic auth, Cloudflare Access, etc.) as an extra layer.
 - The server listens on localhost by default. Remote access methods tunnel to localhost rather than exposing on all interfaces.

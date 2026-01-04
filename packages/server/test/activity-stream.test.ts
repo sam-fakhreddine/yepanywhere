@@ -42,7 +42,7 @@ describe("Activity Stream SSE", () => {
 
     // Start the activity stream
     const streamRes = await app.request("/api/activity/fswatch", {
-      headers: { "X-Claude-Anywhere": "true" },
+      headers: { "X-Yep-Anywhere": "true" },
     });
 
     expect(streamRes.status).toBe(200);
@@ -98,7 +98,7 @@ describe("Activity Stream SSE", () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Claude-Anywhere": "true",
+          "X-Yep-Anywhere": "true",
         },
         body: JSON.stringify({ message: "Hello" }),
       },
@@ -180,7 +180,7 @@ describe("Activity Stream SSE", () => {
 
     // Start the activity stream
     const streamRes = await app.request("/api/activity/fswatch", {
-      headers: { "X-Claude-Anywhere": "true" },
+      headers: { "X-Yep-Anywhere": "true" },
     });
 
     expect(streamRes.status).toBe(200);
@@ -231,7 +231,7 @@ describe("Activity Stream SSE", () => {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "X-Claude-Anywhere": "true",
+          "X-Yep-Anywhere": "true",
         },
         body: JSON.stringify({ title: "My Custom Title" }),
       },

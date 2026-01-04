@@ -4,30 +4,30 @@ import type { Level as LogLevel } from "pino";
 import type { PermissionMode } from "./sdk/types.js";
 
 /**
- * Get the data directory for claude-anywhere state files.
+ * Get the data directory for yep-anywhere state files.
  * Supports profiles for running multiple instances (like Chrome profiles).
  *
  * Priority:
- * 1. CLAUDE_ANYWHERE_DATA_DIR - Full path override
- * 2. CLAUDE_ANYWHERE_PROFILE - Appends suffix: ~/.claude-anywhere-{profile}
- * 3. Default: ~/.claude-anywhere
+ * 1. YEP_ANYWHERE_DATA_DIR - Full path override
+ * 2. YEP_ANYWHERE_PROFILE - Appends suffix: ~/.yep-anywhere-{profile}
+ * 3. Default: ~/.yep-anywhere
  */
 export function getDataDir(): string {
-  if (process.env.CLAUDE_ANYWHERE_DATA_DIR) {
-    return process.env.CLAUDE_ANYWHERE_DATA_DIR;
+  if (process.env.YEP_ANYWHERE_DATA_DIR) {
+    return process.env.YEP_ANYWHERE_DATA_DIR;
   }
-  const profile = process.env.CLAUDE_ANYWHERE_PROFILE;
+  const profile = process.env.YEP_ANYWHERE_PROFILE;
   if (profile) {
-    return path.join(os.homedir(), `.claude-anywhere-${profile}`);
+    return path.join(os.homedir(), `.yep-anywhere-${profile}`);
   }
-  return path.join(os.homedir(), ".claude-anywhere");
+  return path.join(os.homedir(), ".yep-anywhere");
 }
 
 /**
  * Server configuration loaded from environment variables.
  */
 export interface Config {
-  /** Data directory for claude-anywhere state files (indexes, metadata, uploads, etc.) */
+  /** Data directory for yep-anywhere state files (indexes, metadata, uploads, etc.) */
   dataDir: string;
   /** Directory where Claude projects are stored */
   claudeProjectsDir: string;
@@ -61,7 +61,7 @@ export interface Config {
   maxUploadSizeBytes: number;
   /** Maximum queue size for pending requests. 0 = unlimited (default: 100) */
   maxQueueSize: number;
-  /** Directory for log files. Default: ~/.claude-anywhere/logs */
+  /** Directory for log files. Default: ~/.yep-anywhere/logs */
   logDir: string;
   /** Log filename. Default: server.log */
   logFile: string;

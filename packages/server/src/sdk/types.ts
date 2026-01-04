@@ -1,8 +1,8 @@
 // Core types for Claude SDK abstraction
 
 // Re-export PermissionMode from shared
-export type { PermissionMode } from "@claude-anywhere/shared";
-import type { PermissionMode, UploadedFile } from "@claude-anywhere/shared";
+export type { PermissionMode } from "@yep-anywhere/shared";
+import type { PermissionMode, UploadedFile } from "@yep-anywhere/shared";
 
 export interface ContentBlock {
   type: "text" | "tool_use" | "tool_result" | "image" | "thinking";

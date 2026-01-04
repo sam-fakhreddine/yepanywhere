@@ -1,4 +1,4 @@
-import { DEFAULT_PROVIDER } from "@claude-anywhere/shared";
+import { DEFAULT_PROVIDER } from "@yep-anywhere/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { type Project, type SessionSummary, toUrlProjectId } from "../types";

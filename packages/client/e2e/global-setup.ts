@@ -24,7 +24,7 @@ export default async function globalSetup() {
 
   // Always build client to ensure we test latest code
   console.log("[E2E] Building client...");
-  execSync("pnpm --filter @claude-anywhere/client build", {
+  execSync("pnpm --filter @yep-anywhere/client build", {
     cwd: repoRoot,
     stdio: "inherit",
   });

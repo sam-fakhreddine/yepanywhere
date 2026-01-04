@@ -14,7 +14,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
-import type { ModelInfo } from "@claude-anywhere/shared";
+import type { ModelInfo } from "@yep-anywhere/shared";
 import { getLogger } from "../../logging/logger.js";
 import { MessageQueue } from "../messageQueue.js";
 import type { SDKMessage } from "../types.js";
@@ -315,9 +315,11 @@ export class CodexOSSProvider implements AgentProvider {
       const userPrompt = this.extractTextFromMessage(message);
       if (!userPrompt) continue;
 
-      // Emit user message
+      // Emit user message with UUID from queue to enable deduplication
+      // The UUID was set by Process.queueMessage() and passed through MessageQueue
       yield {
         type: "user",
+        uuid: message.uuid,
         session_id: currentSessionId || `pending-${Date.now()}`,
         message: { role: "user", content: userPrompt },
       } as SDKMessage;

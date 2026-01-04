@@ -75,3 +75,44 @@ export function getResolvedTheme(): "light" | "dark" {
   }
   return stored === "light" ? "light" : "dark";
 }
+
+/**
+ * Hook to reactively get the resolved theme (light or dark).
+ * Listens for both localStorage changes and system preference changes.
+ */
+export function useResolvedTheme(): "light" | "dark" {
+  const [resolved, setResolved] = useState<"light" | "dark">(getResolvedTheme);
+
+  useEffect(() => {
+    const update = () => setResolved(getResolvedTheme());
+
+    // Listen for system preference changes
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: light)");
+    mediaQuery.addEventListener("change", update);
+
+    // Listen for storage changes (theme changed in another tab or by useTheme)
+    window.addEventListener("storage", update);
+
+    // Also listen for attribute changes on documentElement (for same-tab updates)
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (
+          mutation.type === "attributes" &&
+          mutation.attributeName === "data-theme"
+        ) {
+          update();
+          break;
+        }
+      }
+    });
+    observer.observe(document.documentElement, { attributes: true });
+
+    return () => {
+      mediaQuery.removeEventListener("change", update);
+      window.removeEventListener("storage", update);
+      observer.disconnect();
+    };
+  }, []);
+
+  return resolved;
+}

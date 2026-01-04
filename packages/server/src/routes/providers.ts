@@ -1,4 +1,4 @@
-import type { ProviderInfo } from "@claude-anywhere/shared";
+import type { ProviderInfo } from "@yep-anywhere/shared";
 import { Hono } from "hono";
 import { getAllProviders } from "../sdk/providers/index.js";
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ZodError } from "zod";
 import { useSchemaValidationContext } from "../../../contexts/SchemaValidationContext";
 import { validateToolResult } from "../../../lib/validateToolResult";
+import { CodeHighlighter, getLanguageFromPath } from "../../CodeHighlighter";
 import { SchemaWarning } from "../../SchemaWarning";
 import { Modal } from "../../ui/Modal";
 import type {
@@ -41,19 +42,15 @@ function ReadToolUse({ input }: { input: ReadInput }) {
  * Modal content for viewing file contents
  */
 function FileModalContent({ file }: { file: TextFile }) {
-  const lines = file.content.split("\n");
+  const language = getLanguageFromPath(file.filePath);
 
   return (
-    <div className="file-content-with-lines">
-      <div className="line-numbers">
-        {lines.map((_, i) => {
-          const lineNum = file.startLine + i;
-          return <div key={`line-${lineNum}`}>{lineNum}</div>;
-        })}
-      </div>
-      <pre className="line-content">
-        <code>{file.content}</code>
-      </pre>
+    <div className="file-content-modal">
+      <CodeHighlighter
+        code={file.content}
+        language={language}
+        showLineNumbers
+      />
     </div>
   );
 }

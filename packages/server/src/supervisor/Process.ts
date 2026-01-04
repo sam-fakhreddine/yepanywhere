@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import type { ProviderName, UrlProjectId } from "@claude-anywhere/shared";
+import type { ProviderName, UrlProjectId } from "@yep-anywhere/shared";
 import { getLogger } from "../logging/logger.js";
 import type { MessageQueue } from "../sdk/messageQueue.js";
 import type {
@@ -773,7 +773,10 @@ export class Process {
         const message = result.value;
 
         // Store message in history (for mock SDK that doesn't persist to disk)
-        this.messageHistory.push(message);
+        // Skip user messages - they're already added by queueMessage() to avoid duplicates
+        if (message.type !== "user") {
+          this.messageHistory.push(message);
+        }
 
         // Extract session ID from init message
         if (
@@ -814,7 +817,11 @@ export class Process {
           this.sessionIdResolvers = [];
         }
 
-        this.emit({ type: "message", message });
+        // Emit to SSE subscribers
+        // Skip user messages - they're already emitted by queueMessage() to avoid duplicates
+        if (message.type !== "user") {
+          this.emit({ type: "message", message });
+        }
 
         // Handle special message types
         if (message.type === "system" && message.subtype === "input_request") {

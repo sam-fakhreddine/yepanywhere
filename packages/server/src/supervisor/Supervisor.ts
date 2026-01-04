@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ProviderName, UrlProjectId } from "@claude-anywhere/shared";
+import type { ProviderName, UrlProjectId } from "@yep-anywhere/shared";
 import { getLogger } from "../logging/logger.js";
 import { getProvider } from "../sdk/providers/index.js";
 import type { AgentProvider } from "../sdk/providers/types.js";

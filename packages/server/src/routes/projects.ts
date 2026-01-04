@@ -1,4 +1,4 @@
-import { isUrlProjectId, toUrlProjectId } from "@claude-anywhere/shared";
+import { isUrlProjectId, toUrlProjectId } from "@yep-anywhere/shared";
 import { Hono } from "hono";
 import type { SessionIndexService } from "../indexes/index.js";
 import type { SessionMetadataService } from "../metadata/index.js";

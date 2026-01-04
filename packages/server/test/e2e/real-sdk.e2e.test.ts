@@ -94,7 +94,7 @@ describe("Real SDK E2E", () => {
     cliAvailable = true;
 
     // Create a temp directory for the test project
-    testDir = mkdtempSync(join(tmpdir(), "claude-anywhere-e2e-"));
+    testDir = mkdtempSync(join(tmpdir(), "yep-anywhere-e2e-"));
 
     // Create a simple test file
     writeFileSync(join(testDir, "test.txt"), "Hello from test file");

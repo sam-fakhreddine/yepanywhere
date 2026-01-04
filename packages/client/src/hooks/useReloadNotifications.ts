@@ -148,7 +148,7 @@ export function useReloadNotifications() {
     try {
       const res = await fetch(`${API_BASE}/dev/reload`, {
         method: "POST",
-        headers: { "X-Claude-Anywhere": "true" },
+        headers: { "X-Yep-Anywhere": "true" },
       });
       console.log("[ReloadNotifications] Reload response:", res.status);
       setPendingReloads((prev) => ({ ...prev, backend: false }));

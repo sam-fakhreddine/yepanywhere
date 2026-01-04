@@ -1,4 +1,4 @@
-import type { ProcessStateType, UrlProjectId } from "@claude-anywhere/shared";
+import type { ProcessStateType, UrlProjectId } from "@yep-anywhere/shared";
 import type { SessionStatus, SessionSummary } from "../types";
 
 // Event types matching what the server emits

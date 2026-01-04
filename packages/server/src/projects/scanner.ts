@@ -4,7 +4,7 @@ import {
   DEFAULT_PROVIDER,
   type ProviderName,
   type UrlProjectId,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 import type { Project } from "../supervisor/types.js";
 import { CODEX_SESSIONS_DIR, CodexSessionScanner } from "./codex-scanner.js";
 import { GEMINI_TMP_DIR, GeminiSessionScanner } from "./gemini-scanner.js";

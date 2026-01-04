@@ -11,7 +11,7 @@ import {
 } from "../lib/activityBus";
 
 // Re-export types for consumers
-export type { ProcessStateType } from "@claude-anywhere/shared";
+export type { ProcessStateType } from "@yep-anywhere/shared";
 export type {
   FileChangeEvent,
   FileChangeType,

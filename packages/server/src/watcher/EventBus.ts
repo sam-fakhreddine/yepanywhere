@@ -2,7 +2,7 @@
  * Simple in-memory pub/sub event bus for file change and session status events.
  */
 
-import type { UrlProjectId } from "@claude-anywhere/shared";
+import type { UrlProjectId } from "@yep-anywhere/shared";
 import type { SessionStatus, SessionSummary } from "../supervisor/types.js";
 
 export type FileChangeType = "create" | "modify" | "delete";

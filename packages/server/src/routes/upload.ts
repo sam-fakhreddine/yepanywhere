@@ -5,7 +5,7 @@ import {
   type UploadProgressMessage,
   type UploadServerMessage,
   isUrlProjectId,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import type { WSContext, WSEvents } from "hono/ws";

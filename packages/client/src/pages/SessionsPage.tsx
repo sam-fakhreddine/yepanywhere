@@ -1,4 +1,4 @@
-import type { ProviderName } from "@claude-anywhere/shared";
+import type { ProviderName } from "@yep-anywhere/shared";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import { BulkActionBar } from "../components/BulkActionBar";
@@ -53,6 +53,7 @@ export function SessionsPage() {
   const [isBulkActionPending, setIsBulkActionPending] = useState(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressSessionRef = useRef<string | null>(null);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
 
   // Filter sessions based on search, status, and provider filters
   const filteredSessions = useMemo(() => {
@@ -183,9 +184,19 @@ export function SessionsPage() {
 
   // Long-press handlers for mobile selection mode
   const handleLongPressStart = useCallback(
-    (sessionId: string) => {
+    (sessionId: string, e: React.TouchEvent | React.MouseEvent) => {
       // Already in selection mode or on desktop - don't start long-press
       if (isSelectionMode || isWideScreen) return;
+
+      // Record starting position to detect movement (scrolling)
+      if ("touches" in e) {
+        const touch = e.touches[0];
+        if (touch) {
+          touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+        }
+      } else if ("clientX" in e) {
+        touchStartPosRef.current = { x: e.clientX, y: e.clientY };
+      }
 
       longPressSessionRef.current = sessionId;
       longPressTimerRef.current = setTimeout(() => {
@@ -193,6 +204,7 @@ export function SessionsPage() {
         setIsSelectionMode(true);
         setSelectedIds(new Set([sessionId]));
         longPressSessionRef.current = null;
+        touchStartPosRef.current = null;
       }, LONG_PRESS_MS);
     },
     [isSelectionMode, isWideScreen],
@@ -204,7 +216,39 @@ export function SessionsPage() {
       longPressTimerRef.current = null;
     }
     longPressSessionRef.current = null;
+    touchStartPosRef.current = null;
   }, []);
+
+  // Cancel long press if user moves finger (scrolling)
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStartPosRef.current || !longPressTimerRef.current) return;
+
+    const touch = e.touches[0];
+    if (!touch) return;
+
+    const dx = touch.clientX - touchStartPosRef.current.x;
+    const dy = touch.clientY - touchStartPosRef.current.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Cancel if moved more than 10px (scrolling threshold)
+    if (distance > 10) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+      longPressSessionRef.current = null;
+      touchStartPosRef.current = null;
+    }
+  }, []);
+
+  // Prevent native context menu during long press
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      // Suppress context menu if long press is active or in selection mode
+      if (longPressTimerRef.current || isSelectionMode) {
+        e.preventDefault();
+      }
+    },
+    [isSelectionMode],
+  );
 
   // Bulk action handlers
   const handleBulkArchive = useCallback(async () => {
@@ -372,14 +416,16 @@ export function SessionsPage() {
                   {filteredSessions.map((session) => (
                     <div
                       key={session.id}
-                      onTouchStart={() => handleLongPressStart(session.id)}
+                      onTouchStart={(e) => handleLongPressStart(session.id, e)}
+                      onTouchMove={handleTouchMove}
                       onTouchEnd={handleLongPressEnd}
                       onTouchCancel={handleLongPressEnd}
-                      onMouseDown={() =>
-                        !isWideScreen && handleLongPressStart(session.id)
+                      onMouseDown={(e) =>
+                        !isWideScreen && handleLongPressStart(session.id, e)
                       }
                       onMouseUp={handleLongPressEnd}
                       onMouseLeave={handleLongPressEnd}
+                      onContextMenu={handleContextMenu}
                     >
                       <SessionListItem
                         session={session}
@@ -387,6 +433,7 @@ export function SessionsPage() {
                         mode="card"
                         processState={processStates[session.id]}
                         isSelected={selectedIds.has(session.id)}
+                        isSelectionMode={isSelectionMode && !isWideScreen}
                         onNavigate={() => {
                           // In selection mode on mobile, tap toggles selection
                           if (isSelectionMode && !isWideScreen) {

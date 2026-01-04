@@ -1,7 +1,7 @@
 import {
   type UrlProjectId,
   getSessionDisplayTitle,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 import { Hono } from "hono";
 import type { SessionIndexService } from "../indexes/index.js";
 import type { SessionMetadataService } from "../metadata/SessionMetadataService.js";

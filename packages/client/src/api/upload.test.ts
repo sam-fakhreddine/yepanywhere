@@ -3,7 +3,7 @@ import type {
   UploadErrorMessage,
   UploadProgressMessage,
   UploadedFile,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   UploadError,

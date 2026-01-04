@@ -1,6 +1,6 @@
-import type { UploadedFile } from "@claude-anywhere/shared";
+import type { UploadedFile } from "@yep-anywhere/shared";
 import type { RefObject } from "react";
-import { MODEL_OPTIONS, useModelSettings } from "../hooks/useModelSettings";
+import { useModelSettings } from "../hooks/useModelSettings";
 import type { ContextUsage, PermissionMode } from "../types";
 import { ContextUsageIndicator } from "./ContextUsageIndicator";
 import { ModeSelector } from "./ModeSelector";
@@ -26,9 +26,8 @@ export interface MessageInputToolbarProps {
   onListeningStart?: () => void;
   voiceDisabled?: boolean;
 
-  // Context and model
+  // Context usage
   contextUsage?: ContextUsage;
-  sessionModel?: string;
 
   // Actions
   isRunning?: boolean;
@@ -60,7 +59,6 @@ export function MessageInputToolbar({
   onListeningStart,
   voiceDisabled,
   contextUsage,
-  sessionModel,
   isRunning,
   isThinking,
   onStop,
@@ -69,8 +67,7 @@ export function MessageInputToolbar({
   disabled,
   pendingApproval,
 }: MessageInputToolbarProps) {
-  const { model, thinkingEnabled, toggleThinking, thinkingLevel } =
-    useModelSettings();
+  const { thinkingEnabled, toggleThinking, thinkingLevel } = useModelSettings();
 
   return (
     <div className="message-input-toolbar">
@@ -167,11 +164,6 @@ export function MessageInputToolbar({
             </span>
           </button>
         )}
-        <span className="model-indicator">
-          {sessionModel
-            ? sessionModel.charAt(0).toUpperCase() + sessionModel.slice(1)
-            : (MODEL_OPTIONS.find((o) => o.value === model)?.label ?? model)}
-        </span>
         <ContextUsageIndicator usage={contextUsage} size={16} />
         {/* Show stop button when thinking and nothing to send, otherwise show send */}
         {isRunning && onStop && isThinking && !canSend ? (

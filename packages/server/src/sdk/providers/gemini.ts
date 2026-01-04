@@ -19,14 +19,23 @@ import type {
   GeminiToolResultEvent,
   GeminiToolUseEvent,
   ModelInfo,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 
-/** Static list of Gemini models */
+/** Standard Gemini models (always available) */
 const GEMINI_MODELS: ModelInfo[] = [
+  { id: "auto", name: "Auto (recommended)" },
   { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro" },
   { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+  { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
+  { id: "gemini-2.0-flash-lite", name: "Gemini 2.0 Flash Lite" },
 ];
-import { parseGeminiEvent } from "@claude-anywhere/shared";
+
+/** Preview models (require previewFeatures enabled in ~/.gemini/settings.json) */
+const GEMINI_PREVIEW_MODELS: ModelInfo[] = [
+  { id: "gemini-3-pro", name: "Gemini 3 Pro (Preview)" },
+  { id: "gemini-3-flash", name: "Gemini 3 Flash (Preview)" },
+];
+import { parseGeminiEvent } from "@yep-anywhere/shared";
 import { MessageQueue } from "../messageQueue.js";
 import type { SDKMessage } from "../types.js";
 import type {
@@ -54,6 +63,15 @@ interface GeminiOAuthCreds {
   refresh_token?: string;
   expiry_date?: number;
   token_type?: string;
+}
+
+/**
+ * Settings from ~/.gemini/settings.json
+ */
+interface GeminiSettings {
+  general?: {
+    previewFeatures?: boolean;
+  };
 }
 
 /**
@@ -156,10 +174,36 @@ export class GeminiProvider implements AgentProvider {
 
   /**
    * Get available Gemini models.
-   * Returns a static list of known models.
+   * Returns standard models plus preview models if previewFeatures is enabled.
    */
   async getAvailableModels(): Promise<ModelInfo[]> {
-    return GEMINI_MODELS;
+    const models = [...GEMINI_MODELS];
+
+    // Check if preview features are enabled
+    if (this.hasPreviewFeaturesEnabled()) {
+      models.push(...GEMINI_PREVIEW_MODELS);
+    }
+
+    return models;
+  }
+
+  /**
+   * Check if preview features are enabled in ~/.gemini/settings.json
+   */
+  private hasPreviewFeaturesEnabled(): boolean {
+    const settingsPath = join(homedir(), ".gemini", "settings.json");
+    if (!existsSync(settingsPath)) {
+      return false;
+    }
+
+    try {
+      const settings: GeminiSettings = JSON.parse(
+        readFileSync(settingsPath, "utf-8"),
+      );
+      return settings.general?.previewFeatures === true;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -230,9 +274,11 @@ export class GeminiProvider implements AgentProvider {
       // Extract text from the user message
       const userPrompt = this.extractTextFromMessage(message);
 
-      // Emit user message
+      // Emit user message with UUID from queue to enable deduplication
+      // The UUID was set by Process.queueMessage() and passed through MessageQueue
       yield {
         type: "user",
+        uuid: message.uuid,
         session_id: currentSessionId,
         message: {
           role: "user",

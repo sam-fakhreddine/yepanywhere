@@ -5,7 +5,7 @@ import type {
   ProcessStateType,
   ProviderName,
   UrlProjectId,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 import type { PermissionMode, SDKMessage } from "../sdk/types.js";
 
 // Constants
@@ -22,7 +22,7 @@ export type {
   InputRequest,
   PendingInputType,
   ProcessStateType,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 
 // Project discovery
 export interface Project {
@@ -76,6 +76,8 @@ export interface SessionSummary {
   contextUsage?: ContextUsage;
   /** AI provider used for this session */
   provider: ProviderName;
+  /** Model used for this session (extracted from JSONL, e.g. "claude-opus-4-5-20251101") */
+  model?: string;
 }
 
 /**

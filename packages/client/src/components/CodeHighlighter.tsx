@@ -1,47 +1,60 @@
+import { memo, startTransition, useEffect, useMemo, useState } from "react";
+import { PrismAsyncLight } from "react-syntax-highlighter";
 import {
-  Suspense,
-  lazy,
-  memo,
-  startTransition,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-import type { SyntaxHighlighterProps } from "react-syntax-highlighter";
+  oneDark,
+  oneLight,
+} from "react-syntax-highlighter/dist/esm/styles/prism";
+import { useResolvedTheme } from "../hooks/useTheme";
 
 // Skip syntax highlighting for files with more than this many lines
 // Prism's synchronous parsing blocks the main thread
 const MAX_LINES_FOR_HIGHLIGHTING = 1000;
 
-// Lazy load the syntax highlighter and styles
-const SyntaxHighlighter = lazy(async () => {
-  const [{ PrismAsyncLight }, { oneDark }] = await Promise.all([
-    import("react-syntax-highlighter"),
-    import("react-syntax-highlighter/dist/esm/styles/prism"),
-  ]);
+/**
+ * Language mapping from file extensions to Prism language identifiers.
+ */
+const EXTENSION_TO_LANGUAGE: Record<string, string> = {
+  ts: "typescript",
+  tsx: "typescript",
+  js: "javascript",
+  jsx: "javascript",
+  py: "python",
+  rb: "ruby",
+  go: "go",
+  rs: "rust",
+  java: "java",
+  kt: "kotlin",
+  c: "c",
+  cpp: "cpp",
+  h: "c",
+  hpp: "cpp",
+  cs: "csharp",
+  swift: "swift",
+  php: "php",
+  sql: "sql",
+  sh: "bash",
+  bash: "bash",
+  zsh: "bash",
+  json: "json",
+  yaml: "yaml",
+  yml: "yaml",
+  toml: "toml",
+  xml: "xml",
+  html: "html",
+  css: "css",
+  scss: "scss",
+  md: "markdown",
+  markdown: "markdown",
+  diff: "diff",
+};
 
-  // Return a component that uses PrismAsyncLight with the theme
-  return {
-    default: function HighlighterWithTheme(
-      props: SyntaxHighlighterProps & { children: string },
-    ) {
-      return (
-        <PrismAsyncLight
-          style={oneDark}
-          PreTag="div"
-          customStyle={{
-            margin: 0,
-            padding: "0.75rem",
-            background: "transparent",
-            fontSize: "0.875rem",
-            lineHeight: 1.5,
-          }}
-          {...props}
-        />
-      );
-    },
-  };
-});
+/**
+ * Get language hint from file extension for syntax highlighting.
+ */
+export function getLanguageFromPath(filePath: string): string {
+  const ext = filePath.split(".").pop()?.toLowerCase() || "";
+  return EXTENSION_TO_LANGUAGE[ext] || "plaintext";
+}
 
 interface CodeHighlighterProps {
   code: string;
@@ -140,6 +153,7 @@ export const CodeHighlighter = memo(function CodeHighlighter({
   highlightLines,
   onLineRef,
 }: CodeHighlighterProps) {
+  const resolvedTheme = useResolvedTheme();
   const lineCount = useMemo(() => code.split("\n").length, [code]);
   const tooLarge = lineCount > MAX_LINES_FOR_HIGHLIGHTING;
 
@@ -229,32 +243,36 @@ export const CodeHighlighter = memo(function CodeHighlighter({
   // Need wrapLines for lineProps to work
   const needsWrapLines = showLineNumbers || !!lineProps;
 
+  // Pick the appropriate syntax theme based on resolved theme
+  const syntaxTheme = resolvedTheme === "light" ? oneLight : oneDark;
+
   return (
-    <Suspense
-      fallback={
-        <PlainCode
-          code={code}
-          showLineNumbers={showLineNumbers}
-          highlightLines={highlightLines}
-          onLineRef={onLineRef}
-        />
-      }
+    <PrismAsyncLight
+      language={normalizedLanguage}
+      style={syntaxTheme}
+      PreTag="div"
+      customStyle={{
+        margin: 0,
+        padding: "0.75rem",
+        background: "transparent",
+        fontSize: "0.75rem",
+        lineHeight: 1.5,
+      }}
+      codeTagProps={{
+        style: { background: "transparent" },
+      }}
+      showLineNumbers={showLineNumbers}
+      wrapLines={needsWrapLines}
+      lineProps={lineProps}
+      lineNumberStyle={{
+        minWidth: "2.5em",
+        paddingRight: "1em",
+        textAlign: "right",
+        userSelect: "none",
+        opacity: 0.5,
+      }}
     >
-      <SyntaxHighlighter
-        language={normalizedLanguage}
-        showLineNumbers={showLineNumbers}
-        wrapLines={needsWrapLines}
-        lineProps={lineProps}
-        lineNumberStyle={{
-          minWidth: "2.5em",
-          paddingRight: "1em",
-          textAlign: "right",
-          userSelect: "none",
-          opacity: 0.5,
-        }}
-      >
-        {code}
-      </SyntaxHighlighter>
-    </Suspense>
+      {code}
+    </PrismAsyncLight>
   );
 });

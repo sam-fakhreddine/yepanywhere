@@ -5,7 +5,7 @@ export interface SchemaValidationSettings {
   ignoredTools: string[];
 }
 
-const SCHEMA_VALIDATION_KEY = "claude-anywhere-schema-validation";
+const SCHEMA_VALIDATION_KEY = "yep-anywhere-schema-validation";
 const DEFAULT_SETTINGS: SchemaValidationSettings = {
   enabled: false,
   ignoredTools: [],

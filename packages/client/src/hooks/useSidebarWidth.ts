@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-const STORAGE_KEY = "claude-anywhere-sidebar-width";
+const STORAGE_KEY = "yep-anywhere-sidebar-width";
 
 // ===== Configuration Constants (easy to tweak) =====
 export const SIDEBAR_MIN_WIDTH = 280; // Current default, minimum allowed

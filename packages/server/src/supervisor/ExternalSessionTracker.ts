@@ -3,7 +3,7 @@ import {
   type DirProjectId,
   type UrlProjectId,
   asDirProjectId,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 import type { ProjectScanner } from "../projects/scanner.js";
 import type {
   BusEvent,

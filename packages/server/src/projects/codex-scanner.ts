@@ -13,7 +13,7 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import type { UrlProjectId } from "@claude-anywhere/shared";
+import type { UrlProjectId } from "@yep-anywhere/shared";
 import type { Project } from "../supervisor/types.js";
 import { encodeProjectId } from "./paths.js";
 

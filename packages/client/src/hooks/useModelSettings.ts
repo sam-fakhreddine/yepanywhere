@@ -1,9 +1,9 @@
 import { useCallback, useState } from "react";
 
-const MODEL_KEY = "claude-anywhere-model";
-const THINKING_LEVEL_KEY = "claude-anywhere-thinking-level";
-const THINKING_ENABLED_KEY = "claude-anywhere-thinking-enabled";
-const VOICE_INPUT_ENABLED_KEY = "claude-anywhere-voice-input-enabled";
+const MODEL_KEY = "yep-anywhere-model";
+const THINKING_LEVEL_KEY = "yep-anywhere-thinking-level";
+const THINKING_ENABLED_KEY = "yep-anywhere-thinking-enabled";
+const VOICE_INPUT_ENABLED_KEY = "yep-anywhere-voice-input-enabled";
 
 /**
  * Available model options.

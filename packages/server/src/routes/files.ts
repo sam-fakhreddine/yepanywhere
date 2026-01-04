@@ -5,7 +5,7 @@ import {
   type FileContentResponse,
   type FileMetadata,
   isUrlProjectId,
-} from "@claude-anywhere/shared";
+} from "@yep-anywhere/shared";
 import { Hono } from "hono";
 import type { ProjectScanner } from "../projects/scanner.js";
 

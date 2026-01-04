@@ -18,7 +18,7 @@ export const LOG_LEVELS = [
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
 export interface LogConfig {
-  /** Directory for log files. Default: ~/.claude-anywhere/logs */
+  /** Directory for log files. Default: ~/.yep-anywhere/logs */
   logDir: string;
   /** Log filename. Default: server.log */
   logFile: string;
@@ -35,7 +35,7 @@ export interface LogConfig {
 }
 
 const defaultConfig: LogConfig = {
-  logDir: path.join(os.homedir(), ".claude-anywhere", "logs"),
+  logDir: path.join(os.homedir(), ".yep-anywhere", "logs"),
   logFile: "server.log",
   consoleLevel: (process.env.LOG_LEVEL as LogLevel) || "info",
   fileLevel:

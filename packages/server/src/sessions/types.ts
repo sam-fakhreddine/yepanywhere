@@ -5,7 +5,7 @@
  * but all readers implement this interface to provide a common API.
  */
 
-import type { UrlProjectId } from "@claude-anywhere/shared";
+import type { UrlProjectId } from "@yep-anywhere/shared";
 import type { Message, Session, SessionSummary } from "../supervisor/types.js";
 
 /**

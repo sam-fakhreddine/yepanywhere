@@ -1,5 +1,5 @@
 {
-  "name": "@claude-anywhere/client",
+  "name": "@yep-anywhere/client",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
-    "@claude-anywhere/shared": "workspace:*",
+    "@yep-anywhere/shared": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",

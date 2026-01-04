@@ -68,8 +68,8 @@ export function ProjectLayout() {
   const sessionDrafts = useDrafts(sessionIds);
 
   // Inbox counts - lifted here so it survives sidebar mount/unmount transitions
-  const { totalNeedsAttention, totalActive } = useInbox({ projectId });
-  const inboxCount = totalNeedsAttention + totalActive;
+  const { totalNeedsAttention } = useInbox({ projectId });
+  const inboxCount = totalNeedsAttention;
 
   // Guard against missing projectId
   if (!projectId) {

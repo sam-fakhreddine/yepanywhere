@@ -1,4 +1,4 @@
-import type { UploadedFile } from "@claude-anywhere/shared";
+import type { UploadedFile } from "@yep-anywhere/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, uploadFile } from "../api/client";
@@ -240,56 +240,86 @@ function SessionPageContent({
 
   const handleApprove = useCallback(async () => {
     if (pendingInputRequest) {
-      await api.respondToInput(sessionId, pendingInputRequest.id, "approve");
+      try {
+        await api.respondToInput(sessionId, pendingInputRequest.id, "approve");
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        const msg = status ? `Error ${status}` : "Failed to approve";
+        showToast(msg, "error");
+      }
     }
-  }, [sessionId, pendingInputRequest]);
+  }, [sessionId, pendingInputRequest, showToast]);
 
   const handleApproveAcceptEdits = useCallback(async () => {
     if (pendingInputRequest) {
-      // Approve and switch to acceptEdits mode
-      await api.respondToInput(
-        sessionId,
-        pendingInputRequest.id,
-        "approve_accept_edits",
-      );
-      // Update local permission mode
-      setPermissionMode("acceptEdits");
+      try {
+        // Approve and switch to acceptEdits mode
+        await api.respondToInput(
+          sessionId,
+          pendingInputRequest.id,
+          "approve_accept_edits",
+        );
+        // Update local permission mode
+        setPermissionMode("acceptEdits");
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        const msg = status ? `Error ${status}` : "Failed to approve";
+        showToast(msg, "error");
+      }
     }
-  }, [sessionId, pendingInputRequest, setPermissionMode]);
+  }, [sessionId, pendingInputRequest, setPermissionMode, showToast]);
 
   const handleDeny = useCallback(async () => {
     if (pendingInputRequest) {
-      await api.respondToInput(sessionId, pendingInputRequest.id, "deny");
+      try {
+        await api.respondToInput(sessionId, pendingInputRequest.id, "deny");
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        const msg = status ? `Error ${status}` : "Failed to deny";
+        showToast(msg, "error");
+      }
     }
-  }, [sessionId, pendingInputRequest]);
+  }, [sessionId, pendingInputRequest, showToast]);
 
   const handleDenyWithFeedback = useCallback(
     async (feedback: string) => {
       if (pendingInputRequest) {
-        await api.respondToInput(
-          sessionId,
-          pendingInputRequest.id,
-          "deny",
-          undefined,
-          feedback,
-        );
+        try {
+          await api.respondToInput(
+            sessionId,
+            pendingInputRequest.id,
+            "deny",
+            undefined,
+            feedback,
+          );
+        } catch (err) {
+          const status = (err as { status?: number }).status;
+          const msg = status ? `Error ${status}` : "Failed to send feedback";
+          showToast(msg, "error");
+        }
       }
     },
-    [sessionId, pendingInputRequest],
+    [sessionId, pendingInputRequest, showToast],
   );
 
   const handleQuestionSubmit = useCallback(
     async (answers: Record<string, string>) => {
       if (pendingInputRequest) {
-        await api.respondToInput(
-          sessionId,
-          pendingInputRequest.id,
-          "approve",
-          answers,
-        );
+        try {
+          await api.respondToInput(
+            sessionId,
+            pendingInputRequest.id,
+            "approve",
+            answers,
+          );
+        } catch (err) {
+          const status = (err as { status?: number }).status;
+          const msg = status ? `Error ${status}` : "Failed to submit answer";
+          showToast(msg, "error");
+        }
       }
     },
-    [sessionId, pendingInputRequest],
+    [sessionId, pendingInputRequest, showToast],
   );
 
   // Handle file attachment uploads
@@ -590,7 +620,10 @@ function SessionPageContent({
                   <span className="archived-badge">Archived</span>
                 )}
                 {!loading && session?.provider && (
-                  <ProviderBadge provider={session.provider} />
+                  <ProviderBadge
+                    provider={session.provider}
+                    model={session.model}
+                  />
                 )}
                 {!loading && (
                   <SessionMenu
@@ -688,7 +721,6 @@ function SessionPageContent({
                     isHeld={isHeld}
                     onHoldChange={setHold}
                     contextUsage={session?.contextUsage}
-                    sessionModel={session?.model}
                     isRunning={status.state === "owned"}
                     isThinking={processState === "running"}
                     onStop={handleAbort}
@@ -742,7 +774,6 @@ function SessionPageContent({
                 onAttach={handleAttach}
                 onRemoveAttachment={handleRemoveAttachment}
                 uploadProgress={uploadProgress}
-                sessionModel={session?.model}
               />
             )}
           </div>
