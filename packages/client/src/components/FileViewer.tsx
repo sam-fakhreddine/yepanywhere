@@ -3,7 +3,6 @@ import { memo, useCallback, useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../api/client";
-import { CodeHighlighter } from "./CodeHighlighter";
 
 interface FileViewerProps {
   projectId: string;
@@ -249,22 +248,53 @@ export const FileViewer = memo(function FileViewer({
         );
       }
 
-      // Fallback: client-side syntax highlighting
+      // Fallback: plain code (no syntax highlighting available)
+      const lines = content.split("\n");
+      const highlightStart = lineNumber ?? 0;
+      const highlightEnd = lineEnd ?? highlightStart;
+
       return (
         <div className="file-viewer-code" data-language={language}>
-          <CodeHighlighter
-            code={content}
-            language={language}
-            showLineNumbers
-            highlightLines={
-              lineNumber ? { start: lineNumber, end: lineEnd } : undefined
-            }
-            onLineRef={
-              lineNumber
-                ? (_lineNum, el) => setHighlightedLineRef(el)
-                : undefined
-            }
-          />
+          <div className="code-highlighter-plain">
+            <div className="code-line-numbers">
+              {lines.map((_, i) => (
+                <div key={`ln-${i + 1}`}>{i + 1}</div>
+              ))}
+            </div>
+            <pre className="code-content">
+              <code>
+                {lines.map((line, i) => {
+                  const num = i + 1;
+                  const isHighlighted =
+                    lineNumber && num >= highlightStart && num <= highlightEnd;
+                  return (
+                    <div
+                      key={`line-${i + 1}`}
+                      ref={
+                        lineNumber && num === highlightStart
+                          ? (el) => setHighlightedLineRef(el)
+                          : undefined
+                      }
+                      className={isHighlighted ? "highlighted-line" : undefined}
+                      style={
+                        isHighlighted
+                          ? {
+                              backgroundColor: "rgba(255, 255, 0, 0.15)",
+                              marginLeft: "-0.75rem",
+                              marginRight: "-0.75rem",
+                              paddingLeft: "0.75rem",
+                              paddingRight: "0.75rem",
+                            }
+                          : undefined
+                      }
+                    >
+                      {line || " "}
+                    </div>
+                  );
+                })}
+              </code>
+            </pre>
+          </div>
         </div>
       );
     }

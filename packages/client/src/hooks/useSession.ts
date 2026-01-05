@@ -954,7 +954,7 @@ export function useSession(
         if (modeData.permissionMode && modeData.modeVersion !== undefined) {
           applyServerModeUpdate(modeData.permissionMode, modeData.modeVersion);
         }
-      } else if (data.eventType === "augment") {
+      } else if (data.eventType === "markdown-augment") {
         // Handle streaming markdown augment events (server-rendered blocks)
         const augmentData = data as {
           eventType: string;

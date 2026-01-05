@@ -3,10 +3,8 @@ import type { ZodError } from "zod";
 import { useEditAugment } from "../../../contexts/EditAugmentContext";
 import { useSchemaValidationContext } from "../../../contexts/SchemaValidationContext";
 import { validateToolResult } from "../../../lib/validateToolResult";
-import { CodeHighlighter } from "../../CodeHighlighter";
 import { SchemaWarning } from "../../SchemaWarning";
 import { Modal } from "../../ui/Modal";
-import type { RenderContext } from "../types";
 import type { EditInput, EditResult, PatchHunk, ToolRenderer } from "./types";
 
 const MAX_VISIBLE_LINES = 12;
@@ -26,41 +24,26 @@ function isPlanFile(filePath: string): boolean {
 }
 
 /**
- * Create diff lines from old/new strings (for pending state preview)
+ * Compute change summary from structuredPatch
  */
-function createDiffLines(oldStr: string, newStr: string): string[] {
-  const oldLines = oldStr ? oldStr.split("\n") : [];
-  const newLines = newStr ? newStr.split("\n") : [];
-  const lines: string[] = [];
+function computeChangeSummary(structuredPatch: PatchHunk[]): string | null {
+  if (!structuredPatch || structuredPatch.length === 0) return null;
 
-  for (const line of oldLines) {
-    lines.push(`-${line}`);
-  }
-  for (const line of newLines) {
-    lines.push(`+${line}`);
-  }
+  const additions = structuredPatch
+    .flatMap((h) => h.lines)
+    .filter((l) => l.startsWith("+")).length;
+  const deletions = structuredPatch
+    .flatMap((h) => h.lines)
+    .filter((l) => l.startsWith("-")).length;
 
-  return lines;
-}
-
-/**
- * Compute change summary from old/new strings
- */
-function computeChangeSummaryFromStrings(
-  oldStr: string,
-  newStr: string,
-): string | null {
-  const oldLineCount = oldStr ? oldStr.split("\n").length : 0;
-  const newLineCount = newStr ? newStr.split("\n").length : 0;
-
-  if (oldLineCount === 0 && newLineCount > 0) {
-    return `Adding ${newLineCount} line${newLineCount !== 1 ? "s" : ""}`;
+  if (additions > 0 && deletions > 0) {
+    return `Modified ${additions + deletions} lines`;
   }
-  if (newLineCount === 0 && oldLineCount > 0) {
-    return `Removing ${oldLineCount} line${oldLineCount !== 1 ? "s" : ""}`;
+  if (additions > 0) {
+    return `Added ${additions} line${additions !== 1 ? "s" : ""}`;
   }
-  if (oldLineCount > 0 && newLineCount > 0) {
-    return `Replacing ${oldLineCount} line${oldLineCount !== 1 ? "s" : ""}`;
+  if (deletions > 0) {
+    return `Removed ${deletions} line${deletions !== 1 ? "s" : ""}`;
   }
   return null;
 }
@@ -160,6 +143,7 @@ function DiffHunk({ hunk }: { hunk: PatchHunk }) {
 
 /**
  * Edit tool use - shows file path and diff preview
+ * Requires server augment for proper unified diff display.
  */
 function EditToolUse({
   input,
@@ -172,38 +156,21 @@ function EditToolUse({
   const fileName = getFileName(augment?.filePath ?? input.file_path);
   const isPlan = isPlanFile(augment?.filePath ?? input.file_path);
 
-  const diffLines = useMemo(() => {
-    // Prefer augment's structuredPatch if available (has proper context lines)
-    if (augment?.structuredPatch && augment.structuredPatch.length > 0) {
-      return augment.structuredPatch.flatMap((hunk) => hunk.lines);
-    }
-    return createDiffLines(input.old_string, input.new_string);
-  }, [augment?.structuredPatch, input.old_string, input.new_string]);
+  // Require augment - show loading state if not available
+  if (!augment?.structuredPatch || augment.structuredPatch.length === 0) {
+    return (
+      <div className="edit-result">
+        <div className="edit-header">
+          <span className="file-path">{fileName}</span>
+          {isPlan && <span className="badge badge-muted">Plan</span>}
+        </div>
+        <div className="edit-loading">Computing diff...</div>
+      </div>
+    );
+  }
 
-  const changeSummary = useMemo(() => {
-    // Prefer augment's structuredPatch for computing summary
-    if (augment?.structuredPatch && augment.structuredPatch.length > 0) {
-      const additions = augment.structuredPatch
-        .flatMap((h) => h.lines)
-        .filter((l) => l.startsWith("+")).length;
-      const deletions = augment.structuredPatch
-        .flatMap((h) => h.lines)
-        .filter((l) => l.startsWith("-")).length;
-
-      if (additions > 0 && deletions > 0) {
-        return `Modified ${additions + deletions} lines`;
-      }
-      if (additions > 0) {
-        return `Added ${additions} line${additions !== 1 ? "s" : ""}`;
-      }
-      if (deletions > 0) {
-        return `Removed ${deletions} line${deletions !== 1 ? "s" : ""}`;
-      }
-      return null;
-    }
-    return computeChangeSummaryFromStrings(input.old_string, input.new_string);
-  }, [augment?.structuredPatch, input.old_string, input.new_string]);
-
+  const diffLines = augment.structuredPatch.flatMap((hunk) => hunk.lines);
+  const changeSummary = computeChangeSummary(augment.structuredPatch);
   const isTruncated = diffLines.length > MAX_VISIBLE_LINES;
 
   return (
@@ -217,7 +184,7 @@ function EditToolUse({
       )}
       <div className={`diff-view-container ${isTruncated ? "truncated" : ""}`}>
         <div className="diff-view">
-          {augment?.diffHtml ? (
+          {augment.diffHtml ? (
             <HighlightedDiff
               diffHtml={augment.diffHtml}
               truncateLines={isTruncated ? MAX_VISIBLE_LINES : undefined}
@@ -251,35 +218,22 @@ function DiffModalContent({
     );
   }
 
-  // Fallback: combine all hunks and highlight client-side
+  // Fallback: combine all hunks (plain text)
   const diffText = structuredPatch
     .map((hunk) => hunk.lines.join("\n"))
     .join("\n");
 
   return (
     <div className="diff-modal-content">
-      <CodeHighlighter code={diffText} language="diff" />
-    </div>
-  );
-}
-
-/**
- * Modal content for viewing diff from input (pending state)
- */
-function DiffInputModalContent({ input }: { input: EditInput }) {
-  const diffLines = createDiffLines(input.old_string, input.new_string);
-  const diffText = diffLines.join("\n");
-
-  return (
-    <div className="diff-modal-content">
-      <CodeHighlighter code={diffText} language="diff" />
+      <DiffLines lines={diffText.split("\n")} />
     </div>
   );
 }
 
 /**
  * Collapsed preview showing diff with expand button
- * Clicking opens a modal with the full diff
+ * Clicking opens a modal with the full diff.
+ * Requires server augment for proper unified diff display.
  */
 function EditCollapsedPreview({
   input,
@@ -334,53 +288,9 @@ function EditCollapsedPreview({
   const fileName = getFileName(filePath);
   const isPlan = isPlanFile(filePath);
 
-  // Get diff lines - prefer structuredPatch from result, then augment, fall back to input
-  const diffLines = useMemo(() => {
-    if (result?.structuredPatch && result.structuredPatch.length > 0) {
-      return result.structuredPatch.flatMap((hunk) => hunk.lines);
-    }
-    // Use augment's structuredPatch for pending edits (has proper context lines)
-    if (augment?.structuredPatch && augment.structuredPatch.length > 0) {
-      return augment.structuredPatch.flatMap((hunk) => hunk.lines);
-    }
-    return createDiffLines(
-      result?.oldString ?? input.old_string,
-      result?.newString ?? input.new_string,
-    );
-  }, [result, augment, input]);
-
-  const isTruncated = diffLines.length > MAX_VISIBLE_LINES;
-  const displayLines = isTruncated
-    ? diffLines.slice(0, MAX_VISIBLE_LINES)
-    : diffLines;
-
-  const changeSummary = useMemo(() => {
-    // Prefer result's structuredPatch, then augment's, then fall back to string-based computation
-    const structuredPatch = result?.structuredPatch ?? augment?.structuredPatch;
-    if (structuredPatch && structuredPatch.length > 0) {
-      const additions = structuredPatch
-        .flatMap((h) => h.lines)
-        .filter((l) => l.startsWith("+")).length;
-      const deletions = structuredPatch
-        .flatMap((h) => h.lines)
-        .filter((l) => l.startsWith("-")).length;
-
-      if (additions > 0 && deletions > 0) {
-        return `Modified ${additions + deletions} lines`;
-      }
-      if (additions > 0) {
-        return `Added ${additions} line${additions !== 1 ? "s" : ""}`;
-      }
-      if (deletions > 0) {
-        return `Removed ${deletions} line${deletions !== 1 ? "s" : ""}`;
-      }
-      return null;
-    }
-    return computeChangeSummaryFromStrings(
-      result?.oldString ?? input.old_string,
-      result?.newString ?? input.new_string,
-    );
-  }, [result, augment, input]);
+  // Get structuredPatch - prefer result, then augment
+  const structuredPatch =
+    result?.structuredPatch ?? augment?.structuredPatch ?? [];
 
   if (isError) {
     // Extract error message - can be a string or object with content
@@ -405,6 +315,23 @@ function EditCollapsedPreview({
       </div>
     );
   }
+
+  // Require structuredPatch - show loading if not available
+  if (structuredPatch.length === 0) {
+    return (
+      <div className="edit-collapsed-preview">
+        <div className="edit-header">
+          <span className="file-path">{fileName}</span>
+          {isPlan && <span className="badge badge-muted">Plan</span>}
+        </div>
+        <div className="edit-loading">Computing diff...</div>
+      </div>
+    );
+  }
+
+  const diffLines = structuredPatch.flatMap((hunk) => hunk.lines);
+  const isTruncated = diffLines.length > MAX_VISIBLE_LINES;
+  const changeSummary = computeChangeSummary(structuredPatch);
 
   return (
     <>
@@ -432,7 +359,7 @@ function EditCollapsedPreview({
                 truncateLines={isTruncated ? MAX_VISIBLE_LINES : undefined}
               />
             ) : (
-              <DiffLines lines={displayLines} />
+              <DiffLines lines={diffLines} />
             )}
           </div>
           {isTruncated && <div className="diff-fade-overlay" />}
@@ -450,19 +377,10 @@ function EditCollapsedPreview({
           title={<span className="file-path">{fileName}</span>}
           onClose={handleClose}
         >
-          {result?.structuredPatch && result.structuredPatch.length > 0 ? (
-            <DiffModalContent
-              diffHtml={augment?.diffHtml}
-              structuredPatch={result.structuredPatch}
-            />
-          ) : augment?.structuredPatch && augment.structuredPatch.length > 0 ? (
-            <DiffModalContent
-              diffHtml={augment.diffHtml}
-              structuredPatch={augment.structuredPatch}
-            />
-          ) : (
-            <DiffInputModalContent input={input} />
-          )}
+          <DiffModalContent
+            diffHtml={augment?.diffHtml}
+            structuredPatch={structuredPatch}
+          />
         </Modal>
       )}
     </>

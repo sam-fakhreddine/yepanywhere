@@ -8,6 +8,7 @@ import {
   getFontSizeLabel,
   useFontSize,
 } from "../hooks/useFontSize";
+import { useFunPhrases } from "../hooks/useFunPhrases";
 import {
   MODEL_OPTIONS,
   THINKING_LEVEL_OPTIONS,
@@ -33,6 +34,7 @@ export function SettingsPage() {
   const { fontSize, setFontSize } = useFontSize();
   const { theme, setTheme } = useTheme();
   const { streamingEnabled, setStreamingEnabled } = useStreamingEnabled();
+  const { funPhrasesEnabled, setFunPhrasesEnabled } = useFunPhrases();
   const {
     model,
     setModel,
@@ -174,6 +176,23 @@ export function SettingsPage() {
                       type="checkbox"
                       checked={streamingEnabled}
                       onChange={(e) => setStreamingEnabled(e.target.checked)}
+                    />
+                    <span className="toggle-slider" />
+                  </label>
+                </div>
+                <div className="settings-item">
+                  <div className="settings-item-info">
+                    <strong>Fun Phrases</strong>
+                    <p>
+                      Show playful status messages while waiting for responses.
+                      Disable to show only "Thinking..."
+                    </p>
+                  </div>
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={funPhrasesEnabled}
+                      onChange={(e) => setFunPhrasesEnabled(e.target.checked)}
                     />
                     <span className="toggle-slider" />
                   </label>

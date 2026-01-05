@@ -156,7 +156,7 @@ export function createStreamRoutes(deps: StreamDeps): Hono {
           for (const augment of result.augments) {
             await stream.writeSSE({
               id: String(eventId++),
-              event: "augment",
+              event: "markdown-augment",
               data: JSON.stringify({
                 blockIndex: augment.blockIndex,
                 html: augment.html,
@@ -201,7 +201,7 @@ export function createStreamRoutes(deps: StreamDeps): Hono {
           for (const augment of result.augments) {
             await stream.writeSSE({
               id: String(eventId++),
-              event: "augment",
+              event: "markdown-augment",
               data: JSON.stringify({
                 blockIndex: augment.blockIndex,
                 html: augment.html,

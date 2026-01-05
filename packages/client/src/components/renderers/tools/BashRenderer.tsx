@@ -2,10 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { ZodError } from "zod";
 import { useSchemaValidationContext } from "../../../contexts/SchemaValidationContext";
 import { validateToolResult } from "../../../lib/validateToolResult";
-import { CodeHighlighter } from "../../CodeHighlighter";
 import { SchemaWarning } from "../../SchemaWarning";
 import { Modal } from "../../ui/Modal";
-import type { RenderContext } from "../types";
 import type { BashInput, BashResult, ToolRenderer } from "./types";
 
 const MAX_LINES_COLLAPSED = 20;
@@ -32,14 +30,18 @@ function BashModalContent({
       <div className="bash-modal-section">
         <div className="bash-modal-label">Command</div>
         <div className="bash-modal-code">
-          <CodeHighlighter code={input.command} language="bash" />
+          <pre className="code-block">
+            <code>{input.command}</code>
+          </pre>
         </div>
       </div>
       {stdout && (
         <div className="bash-modal-section">
           <div className="bash-modal-label">Output</div>
           <div className="bash-modal-code">
-            <CodeHighlighter code={stdout} language="plaintext" />
+            <pre className="code-block">
+              <code>{stdout}</code>
+            </pre>
           </div>
         </div>
       )}
@@ -49,7 +51,9 @@ function BashModalContent({
             {isError ? "Error" : "Stderr"}
           </div>
           <div className="bash-modal-code bash-modal-code-error">
-            <CodeHighlighter code={stderr} language="plaintext" />
+            <pre className="code-block code-block-error">
+              <code>{stderr}</code>
+            </pre>
           </div>
         </div>
       )}
