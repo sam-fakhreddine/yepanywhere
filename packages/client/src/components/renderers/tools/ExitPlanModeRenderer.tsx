@@ -6,6 +6,16 @@ import type {
   ToolRenderer,
 } from "./types";
 
+/** Extended input type with server-rendered HTML */
+interface ExitPlanModeInputWithHtml extends ExitPlanModeInput {
+  _renderedHtml?: string;
+}
+
+/** Extended result type with server-rendered HTML */
+interface ExitPlanModeResultWithHtml extends ExitPlanModeResult {
+  _renderedHtml?: string;
+}
+
 export const exitPlanModeRenderer: ToolRenderer<
   ExitPlanModeInput,
   ExitPlanModeResult
@@ -23,11 +33,15 @@ export const exitPlanModeRenderer: ToolRenderer<
 
   // Render inline without any tool-row wrapper - full control over rendering
   renderInline(input, result, isError, status) {
-    const planInput = input as ExitPlanModeInput;
-    const planResult = result as ExitPlanModeResult;
+    const planInput = input as ExitPlanModeInputWithHtml;
+    const planResult = result as ExitPlanModeResultWithHtml;
 
     // Get plan content from input (tool_use) or result (tool_result)
     const plan: string | undefined = planInput?.plan || planResult?.plan;
+
+    // Get pre-rendered HTML from server (if available)
+    const renderedHtml: string | undefined =
+      planInput?._renderedHtml || planResult?._renderedHtml;
 
     if (isError) {
       const errorResult = result as unknown as
@@ -43,7 +57,7 @@ export const exitPlanModeRenderer: ToolRenderer<
     }
 
     // Show "Planning..." only if we don't have plan content yet
-    if (!plan) {
+    if (!plan && !renderedHtml) {
       if (status === "pending") {
         return <div className="exitplan-pending">Planning...</div>;
       }
@@ -51,11 +65,19 @@ export const exitPlanModeRenderer: ToolRenderer<
     }
 
     // Show the plan content (works for both pending and complete states)
+    // Prefer server-rendered HTML if available for consistent styling
     return (
       <div
         className={`exitplan-inline ${status === "pending" ? "pending" : ""}`}
       >
-        <Markdown remarkPlugins={[remarkGfm]}>{plan}</Markdown>
+        {renderedHtml ? (
+          // Server-rendered HTML with shiki syntax highlighting
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: server-rendered markdown is safe
+          <div dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+        ) : (
+          // Fallback to client-side markdown rendering
+          <Markdown remarkPlugins={[remarkGfm]}>{plan}</Markdown>
+        )}
       </div>
     );
   },

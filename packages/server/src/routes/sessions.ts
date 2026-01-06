@@ -15,6 +15,7 @@ import {
 import {
   type MarkdownAugment,
   computeMarkdownAugments,
+  renderMarkdownToHtml,
 } from "../augments/markdown-augments.js";
 import type { SessionMetadataService } from "../metadata/index.js";
 import type { NotificationService } from "../notifications/index.js";
@@ -183,6 +184,79 @@ function extractEditToolUses(
   }
 
   return results;
+}
+
+/** ExitPlanMode tool_use input with rendered HTML */
+interface ExitPlanModeInput {
+  plan?: string;
+  _renderedHtml?: string;
+}
+
+/** ExitPlanMode tool_result structured data */
+interface ExitPlanModeResult {
+  plan?: string;
+  _renderedHtml?: string;
+}
+
+/**
+ * Render ExitPlanMode plan HTML directly into messages.
+ * Adds _renderedHtml to tool_use input and tool_result structured data.
+ */
+async function augmentExitPlanModeMessages(messages: Message[]): Promise<void> {
+  const promises: Promise<void>[] = [];
+
+  for (const msg of messages) {
+    // Check assistant messages for ExitPlanMode tool_use
+    if (msg.type === "assistant") {
+      const content = msg.message?.content;
+      if (!Array.isArray(content)) continue;
+
+      for (const block of content) {
+        if (
+          block.type === "tool_use" &&
+          block.name === "ExitPlanMode" &&
+          block.input
+        ) {
+          const input = block.input as ExitPlanModeInput;
+          if (input.plan && !input._renderedHtml) {
+            promises.push(
+              renderMarkdownToHtml(input.plan)
+                .then((html) => {
+                  input._renderedHtml = html;
+                })
+                .catch(() => {
+                  // Ignore render errors
+                }),
+            );
+          }
+        }
+      }
+    }
+
+    // Check user messages for ExitPlanMode tool_result
+    if (msg.type === "user") {
+      const toolUseResult = (msg as Record<string, unknown>).toolUseResult as
+        | ExitPlanModeResult
+        | undefined;
+      const toolUseResultSnake = (msg as Record<string, unknown>)
+        .tool_use_result as ExitPlanModeResult | undefined;
+      const result = toolUseResult ?? toolUseResultSnake;
+
+      if (result?.plan && !result._renderedHtml) {
+        promises.push(
+          renderMarkdownToHtml(result.plan)
+            .then((html) => {
+              result._renderedHtml = html;
+            })
+            .catch(() => {
+              // Ignore render errors
+            }),
+        );
+      }
+    }
+  }
+
+  await Promise.all(promises);
 }
 
 export function createSessionsRoutes(deps: SessionsDeps): Hono {
@@ -423,6 +497,10 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
       msg.uuid ?? msg.id ?? "";
     const markdownAugments: Record<string, MarkdownAugment> =
       await computeMarkdownAugments(session.messages, getMessageId);
+
+    // Render ExitPlanMode plan HTML directly into messages
+    // This adds _renderedHtml to tool_use input and tool_result structured data
+    await augmentExitPlanModeMessages(session.messages);
 
     return c.json({
       session: {

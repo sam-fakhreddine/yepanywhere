@@ -13,6 +13,18 @@ import { getLogger } from "../logging/logger.js";
 import type { Supervisor } from "../supervisor/Supervisor.js";
 import type { ProcessEvent } from "../supervisor/types.js";
 
+/** ExitPlanMode tool_use input with rendered HTML */
+interface ExitPlanModeInput {
+  plan?: string;
+  _renderedHtml?: string;
+}
+
+/** ExitPlanMode tool_result structured data */
+interface ExitPlanModeResult {
+  plan?: string;
+  _renderedHtml?: string;
+}
+
 export interface StreamDeps {
   supervisor: Supervisor;
 }
@@ -96,6 +108,62 @@ export function createStreamRoutes(deps: StreamDeps): Hono {
         if (message.type !== "stream_event") return false;
         const event = message.event as Record<string, unknown> | undefined;
         return event?.type === "message_stop";
+      };
+
+      // Helper to render ExitPlanMode plan HTML and mutate the message
+      // Adds _renderedHtml to tool_use input and tool_result structured data
+      const augmentExitPlanMode = async (
+        message: Record<string, unknown>,
+      ): Promise<void> => {
+        // Check for assistant message with ExitPlanMode tool_use
+        if (message.type === "assistant") {
+          const innerMessage = message.message as
+            | Record<string, unknown>
+            | undefined;
+          const content = innerMessage?.content ?? message.content;
+          if (!Array.isArray(content)) return;
+
+          for (const block of content) {
+            if (
+              typeof block === "object" &&
+              block !== null &&
+              (block as Record<string, unknown>).type === "tool_use" &&
+              (block as Record<string, unknown>).name === "ExitPlanMode"
+            ) {
+              const input = (block as Record<string, unknown>)
+                .input as ExitPlanModeInput;
+              if (input?.plan && !input._renderedHtml) {
+                try {
+                  input._renderedHtml = await renderMarkdownToHtml(input.plan);
+                } catch (err) {
+                  log.warn(
+                    { err, sessionId },
+                    "Failed to render ExitPlanMode plan HTML",
+                  );
+                }
+              }
+            }
+          }
+        }
+
+        // Check for user message with tool_result and tool_use_result
+        if (message.type === "user") {
+          const toolUseResult = message.tool_use_result as
+            | ExitPlanModeResult
+            | undefined;
+          if (toolUseResult?.plan && !toolUseResult._renderedHtml) {
+            try {
+              toolUseResult._renderedHtml = await renderMarkdownToHtml(
+                toolUseResult.plan,
+              );
+            } catch (err) {
+              log.warn(
+                { err, sessionId },
+                "Failed to render ExitPlanMode result plan HTML",
+              );
+            }
+          }
+        }
       };
 
       // Helper to extract Edit tool_use from assistant messages
@@ -348,6 +416,10 @@ export function createStreamRoutes(deps: StreamDeps): Hono {
                   }
                 }
               }
+
+              // Render ExitPlanMode plan HTML directly into the message
+              // This adds _renderedHtml to tool_use input and tool_result structured data
+              await augmentExitPlanMode(msg);
 
               // Send the message to client (raw text delivery)
               await stream.writeSSE({
