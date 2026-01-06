@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ZodError } from "zod";
 import { useSchemaValidationContext } from "../../../contexts/SchemaValidationContext";
+import {
+  classifyToolError,
+  getErrorClassSuffix,
+  isUserRejection,
+} from "../../../lib/classifyToolError";
 import { validateToolResult } from "../../../lib/validateToolResult";
 import { SchemaWarning } from "../../SchemaWarning";
 import { Modal } from "../../ui/Modal";
@@ -295,15 +300,37 @@ function EditCollapsedPreview({
         errorMessage = String(errorResult.content);
       }
     }
+
+    // Classify the error for appropriate styling
+    const classification = errorMessage
+      ? classifyToolError(errorMessage)
+      : {
+          classification: "unknown" as const,
+          label: "Error",
+          cleanedMessage: "",
+        };
+    const classSuffix = getErrorClassSuffix(classification.classification);
+    const isRejection = isUserRejection(classification.classification);
+
     return (
-      <div className="edit-collapsed-preview edit-collapsed-error">
+      <div className={`edit-collapsed-preview edit-collapsed-${classSuffix}`}>
         {showValidationWarning && validationErrors && (
           <SchemaWarning toolName="Edit" errors={validationErrors} />
         )}
-        <span className="badge badge-error">Edit failed</span>
-        {errorMessage && (
-          <span className="edit-error-message">{errorMessage}</span>
-        )}
+        <span className={`badge badge-${classSuffix}`}>
+          {isRejection
+            ? classification.label
+            : `Edit ${classification.label.toLowerCase()}`}
+        </span>
+        {classification.userReason ? (
+          <span className="edit-error-message">
+            {classification.userReason}
+          </span>
+        ) : classification.cleanedMessage && !isRejection ? (
+          <span className="edit-error-message">
+            {classification.cleanedMessage}
+          </span>
+        ) : null}
       </div>
     );
   }
@@ -540,15 +567,35 @@ function EditToolResult({
         errorMessage = String(errorResult.content);
       }
     }
+
+    // Classify the error for appropriate styling
+    const classification = errorMessage
+      ? classifyToolError(errorMessage)
+      : {
+          classification: "unknown" as const,
+          label: "Error",
+          cleanedMessage: "",
+        };
+    const classSuffix = getErrorClassSuffix(classification.classification);
+    const isRejection = isUserRejection(classification.classification);
+
     return (
-      <div className="edit-result edit-result-error">
+      <div className={`edit-result edit-result-${classSuffix}`}>
         {showValidationWarning && validationErrors && (
           <SchemaWarning toolName="Edit" errors={validationErrors} />
         )}
-        <span className="badge badge-error">Edit failed</span>
-        {errorMessage && (
-          <div className="edit-error-message">{errorMessage}</div>
-        )}
+        <span className={`badge badge-${classSuffix}`}>
+          {isRejection
+            ? classification.label
+            : `Edit ${classification.label.toLowerCase()}`}
+        </span>
+        {classification.userReason ? (
+          <div className="edit-error-message">{classification.userReason}</div>
+        ) : classification.cleanedMessage && !isRejection ? (
+          <div className="edit-error-message">
+            {classification.cleanedMessage}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -666,7 +713,23 @@ export const editRenderer: ToolRenderer<EditInput, EditResult> = {
   },
 
   getResultSummary(result, isError) {
-    if (isError) return "Failed";
+    if (isError) {
+      // Extract error message for classification
+      let errorMessage: string | null = null;
+      if (typeof result === "string") {
+        errorMessage = result;
+      } else if (typeof result === "object" && result !== null) {
+        const errorResult = result as { content?: unknown };
+        if (errorResult.content) {
+          errorMessage = String(errorResult.content);
+        }
+      }
+      if (errorMessage) {
+        const classification = classifyToolError(errorMessage);
+        return classification.label;
+      }
+      return "Error";
+    }
     const r = result as EditResult;
     return r?.filePath ? getFileName(r.filePath) : "file";
   },
