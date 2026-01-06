@@ -875,4 +875,147 @@ code
       expect(charStreaming).toEqual(wholeStreaming);
     });
   });
+
+  describe("streaming lists", () => {
+    it("returns null when not in a list", () => {
+      const detector = new BlockDetector();
+      detector.feed("Hello world");
+
+      expect(detector.getStreamingList()).toBeNull();
+    });
+
+    it("returns null for paragraph state", () => {
+      const detector = new BlockDetector();
+      detector.feed("Some paragraph text\nmore text");
+
+      expect(detector.getStreamingList()).toBeNull();
+    });
+
+    it("returns null for code block state", () => {
+      const detector = new BlockDetector();
+      detector.feed("```js\ncode");
+
+      expect(detector.getStreamingList()).toBeNull();
+    });
+
+    it("returns streaming bullet list when in list state", () => {
+      const detector = new BlockDetector();
+      detector.feed("- item 1\n");
+
+      const streaming = detector.getStreamingList();
+      expect(streaming).not.toBeNull();
+      expect(streaming).toMatchObject({
+        content: "- item 1\n",
+        listType: "bullet",
+        startOffset: 0,
+      });
+    });
+
+    it("returns streaming numbered list when in list state", () => {
+      const detector = new BlockDetector();
+      detector.feed("1. first item\n");
+
+      const streaming = detector.getStreamingList();
+      expect(streaming).not.toBeNull();
+      expect(streaming).toMatchObject({
+        content: "1. first item\n",
+        listType: "numbered",
+        startOffset: 0,
+      });
+    });
+
+    it("returns streaming list with accumulated content", () => {
+      const detector = new BlockDetector();
+      detector.feed("1. first\n2. second\n3. third");
+
+      const streaming = detector.getStreamingList();
+      expect(streaming).not.toBeNull();
+      expect(streaming).toMatchObject({
+        content: "1. first\n2. second\n3. third",
+        listType: "numbered",
+        startOffset: 0,
+      });
+    });
+
+    it("returns null after list completes with double newline", () => {
+      const detector = new BlockDetector();
+      detector.feed("- item 1\n- item 2\n\n");
+
+      expect(detector.getStreamingList()).toBeNull();
+    });
+
+    it("returns null after list completes with new block", () => {
+      const detector = new BlockDetector();
+      detector.feed("- item 1\n# Heading\n");
+
+      expect(detector.getStreamingList()).toBeNull();
+    });
+
+    it("updates content as more chunks arrive", () => {
+      const detector = new BlockDetector();
+
+      detector.feed("1. first");
+      let streaming = detector.getStreamingList();
+      expect(streaming?.content).toBe("1. first");
+
+      detector.feed("\n2. second");
+      streaming = detector.getStreamingList();
+      expect(streaming?.content).toBe("1. first\n2. second");
+
+      detector.feed("\n3. third");
+      streaming = detector.getStreamingList();
+      expect(streaming?.content).toBe("1. first\n2. second\n3. third");
+    });
+
+    it("tracks correct startOffset after preceding blocks", () => {
+      const detector = new BlockDetector();
+
+      // First, a paragraph
+      detector.feed("Hello\n\n");
+      // Now a list
+      detector.feed("1. item");
+
+      const streaming = detector.getStreamingList();
+      expect(streaming).not.toBeNull();
+      expect(streaming?.startOffset).toBe(7); // "Hello\n\n" is 7 chars
+    });
+
+    it("handles asterisk bullet lists", () => {
+      const detector = new BlockDetector();
+      detector.feed("* item 1\n* item 2");
+
+      const streaming = detector.getStreamingList();
+      expect(streaming).not.toBeNull();
+      expect(streaming?.listType).toBe("bullet");
+    });
+
+    it("handles list items with multi-line content", () => {
+      const detector = new BlockDetector();
+      detector.feed("1. first item\n   continued on next line\n2. second");
+
+      const streaming = detector.getStreamingList();
+      expect(streaming).not.toBeNull();
+      expect(streaming?.content).toBe(
+        "1. first item\n   continued on next line\n2. second",
+      );
+    });
+
+    it("char-by-char streaming list matches whole string", () => {
+      const input = "1. first item\n2. second item\n3. third item";
+
+      // Feed whole string
+      const wholeDetector = new BlockDetector();
+      wholeDetector.feed(input);
+      const wholeStreaming = wholeDetector.getStreamingList();
+
+      // Feed char by char
+      const charDetector = new BlockDetector();
+      for (const char of input) {
+        charDetector.feed(char);
+      }
+      const charStreaming = charDetector.getStreamingList();
+
+      expect(charStreaming).toEqual(wholeStreaming);
+    });
+  });
 });

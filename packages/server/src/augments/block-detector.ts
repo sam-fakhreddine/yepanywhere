@@ -21,6 +21,12 @@ export interface StreamingCodeBlock {
   startOffset: number;
 }
 
+export interface StreamingList {
+  content: string;
+  listType: "bullet" | "numbered";
+  startOffset: number;
+}
+
 type BlockState =
   | { kind: "none" }
   | { kind: "paragraph"; startOffset: number }
@@ -99,6 +105,23 @@ export class BlockDetector {
     return {
       content: this.buffer,
       lang: this.state.lang || undefined,
+      startOffset: this.state.startOffset,
+    };
+  }
+
+  /**
+   * Get the current streaming list if we're in a list state.
+   * Returns null if not currently inside a list.
+   * This enables optimistic rendering of lists before they complete.
+   */
+  getStreamingList(): StreamingList | null {
+    if (this.state.kind !== "list") {
+      return null;
+    }
+
+    return {
+      content: this.buffer,
+      listType: this.state.listType,
       startOffset: this.state.startOffset,
     };
   }

@@ -103,6 +103,23 @@ export async function createStreamCoordinator(
         };
       }
 
+      // Check if we're in a streaming list
+      const streamingList = detector.getStreamingList();
+      if (streamingList) {
+        // Render the streaming list optimistically at the next block index
+        const streamingAugment = generator.renderStreamingList(
+          streamingList,
+          blockIndex,
+        );
+        augments.push(streamingAugment);
+        // Don't render pending as inline text - it's being rendered as a list
+        return {
+          raw: chunk,
+          augments,
+          pendingHtml: "",
+        };
+      }
+
       // Render pending text with inline formatting
       const pendingHtml = generator.renderPending(detector.pending);
 

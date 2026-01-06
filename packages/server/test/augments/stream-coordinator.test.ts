@@ -267,9 +267,18 @@ describe("StreamCoordinator", () => {
         allAugments.push(...result.augments);
       }
 
-      expect(allAugments).toHaveLength(1);
-      expect(allAugments[0]?.type).toBe("list");
-      expect(allAugments[0]?.html).toContain("<li>");
+      // Now emits streaming augments during list construction, plus final completed
+      // All should be type "list" and contain <li> elements
+      expect(allAugments.length).toBeGreaterThanOrEqual(1);
+      for (const augment of allAugments) {
+        expect(augment.type).toBe("list");
+        expect(augment.blockIndex).toBe(0);
+      }
+      // Final augment should have the complete list
+      const finalAugment = allAugments[allAugments.length - 1];
+      expect(finalAugment?.html).toContain("<li>");
+      expect(finalAugment?.html).toContain("item 1");
+      expect(finalAugment?.html).toContain("item 2");
     });
 
     it("handles blockquote streaming", async () => {
@@ -466,6 +475,113 @@ describe("StreamCoordinator", () => {
       // Complete second and add third
       await coordinator.onChunk("\n```\n");
       const result3 = await coordinator.onChunk("```rust\ncode3");
+      expect(result3.augments[0]?.blockIndex).toBe(2);
+    });
+  });
+
+  describe("streaming lists (optimistic rendering)", () => {
+    it("emits augment immediately when list starts", async () => {
+      const result = await coordinator.onChunk("1. first item\n");
+
+      expect(result.augments).toHaveLength(1);
+      expect(result.augments[0]?.type).toBe("list");
+      expect(result.augments[0]?.blockIndex).toBe(0);
+      expect(result.augments[0]?.html).toContain("<ol>");
+      expect(result.augments[0]?.html).toContain("<li>");
+    });
+
+    it("has empty pendingHtml when streaming list", async () => {
+      const result = await coordinator.onChunk("- item 1\n- item 2");
+
+      expect(result.pendingHtml).toBe("");
+      expect(result.augments).toHaveLength(1);
+    });
+
+    it("updates same blockIndex as list items stream in", async () => {
+      const result1 = await coordinator.onChunk("1. first\n");
+      const result2 = await coordinator.onChunk("2. second\n");
+      const result3 = await coordinator.onChunk("3. third\n");
+
+      expect(result1.augments[0]?.blockIndex).toBe(0);
+      expect(result2.augments[0]?.blockIndex).toBe(0);
+      expect(result3.augments[0]?.blockIndex).toBe(0);
+
+      // Content should accumulate
+      expect(result3.augments[0]?.html).toContain("first");
+      expect(result3.augments[0]?.html).toContain("second");
+      expect(result3.augments[0]?.html).toContain("third");
+    });
+
+    it("increments blockIndex correctly after list completes", async () => {
+      // Streaming list then complete
+      await coordinator.onChunk("- item 1\n- item 2\n\n");
+
+      // Next block should be index 1
+      const result = await coordinator.onChunk("# Next Heading\n");
+      expect(result.augments[0]?.blockIndex).toBe(1);
+    });
+
+    it("handles paragraph before streaming list", async () => {
+      const result1 = await coordinator.onChunk("Some text\n\n");
+      expect(result1.augments).toHaveLength(1);
+      expect(result1.augments[0]?.type).toBe("paragraph");
+      expect(result1.augments[0]?.blockIndex).toBe(0);
+
+      const result2 = await coordinator.onChunk("1. first\n2. second");
+      expect(result2.augments).toHaveLength(1);
+      expect(result2.augments[0]?.type).toBe("list");
+      expect(result2.augments[0]?.blockIndex).toBe(1);
+    });
+
+    it("renders bullet list correctly", async () => {
+      const result = await coordinator.onChunk("- item one\n- item two\n");
+
+      expect(result.augments).toHaveLength(1);
+      expect(result.augments[0]?.type).toBe("list");
+      expect(result.augments[0]?.html).toContain("<ul>");
+      expect(result.augments[0]?.html).toContain("item one");
+      expect(result.augments[0]?.html).toContain("item two");
+    });
+
+    it("handles char-by-char streaming of list", async () => {
+      const listContent = "1. first item\n2. second item\n\n";
+      const augmentsByChunk: number[] = [];
+
+      for (const char of listContent) {
+        const result = await coordinator.onChunk(char);
+        augmentsByChunk.push(result.augments.length);
+      }
+
+      // Should have streaming augments while in list, then final completion
+      const totalAugments = augmentsByChunk.reduce((a, b) => a + b, 0);
+      expect(totalAugments).toBeGreaterThan(1); // Multiple updates during streaming
+    });
+
+    it("transitions from streaming to completed correctly", async () => {
+      // Start streaming list
+      const result1 = await coordinator.onChunk("- item 1\n- item 2");
+      expect(result1.augments[0]?.blockIndex).toBe(0);
+
+      // Complete the list
+      const result2 = await coordinator.onChunk("\n\n");
+      expect(result2.augments[0]?.blockIndex).toBe(0); // Same index
+
+      // New block should get next index
+      const result3 = await coordinator.onChunk("Next para\n\n");
+      expect(result3.augments[0]?.blockIndex).toBe(1);
+    });
+
+    it("handles multiple lists with correct indices", async () => {
+      // First list (streaming then complete)
+      await coordinator.onChunk("- item 1\n- item 2\n\n");
+
+      // Second list (streaming)
+      const result = await coordinator.onChunk("1. first\n2. second");
+      expect(result.augments[0]?.blockIndex).toBe(1);
+
+      // Complete second and add third
+      await coordinator.onChunk("\n\n");
+      const result3 = await coordinator.onChunk("* one\n* two");
       expect(result3.augments[0]?.blockIndex).toBe(2);
     });
   });

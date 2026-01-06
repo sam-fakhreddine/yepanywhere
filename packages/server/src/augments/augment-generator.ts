@@ -13,7 +13,11 @@ import {
   bundledLanguages,
   createHighlighter,
 } from "shiki";
-import type { CompletedBlock, StreamingCodeBlock } from "./block-detector.js";
+import type {
+  CompletedBlock,
+  StreamingCodeBlock,
+  StreamingList,
+} from "./block-detector.js";
 
 export interface Augment {
   blockIndex: number;
@@ -33,6 +37,7 @@ export interface AugmentGenerator {
     block: StreamingCodeBlock,
     blockIndex: number,
   ): Promise<Augment>; // Render incomplete code block optimistically
+  renderStreamingList(block: StreamingList, blockIndex: number): Augment; // Render incomplete list optimistically
 }
 
 /**
@@ -99,6 +104,16 @@ export async function createAugmentGenerator(
         theme,
       );
       return { blockIndex, html, type: "code" };
+    },
+
+    renderStreamingList(block: StreamingList, blockIndex: number): Augment {
+      const html = renderMarkdownBlock({
+        type: "list",
+        content: block.content,
+        startOffset: block.startOffset,
+        endOffset: block.startOffset + block.content.length,
+      });
+      return { blockIndex, html, type: "list" };
     },
   };
 }
