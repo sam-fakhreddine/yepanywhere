@@ -7,7 +7,7 @@
  */
 
 import type { EditAugment, PatchHunk } from "@yep-anywhere/shared";
-import { diffWords, structuredPatch } from "diff";
+import { diffWordsWithSpace, structuredPatch } from "diff";
 import { getLanguageForPath, highlightCode } from "../highlighting/index.js";
 
 /** Number of context lines to include in the diff */
@@ -101,6 +101,96 @@ function extractShikiLines(html: string): string[] {
 }
 
 /**
+ * Information about word-level diffs for specific lines within a hunk.
+ */
+interface HunkWordDiffs {
+  /** Map from old line index (0-based within oldLines array) to word diff */
+  oldLineDiffs: Map<number, WordDiffSegment[]>;
+  /** Map from new line index (0-based within newLines array) to word diff */
+  newLineDiffs: Map<number, WordDiffSegment[]>;
+}
+
+/**
+ * Pre-compute word diffs for replacement pairs in a hunk.
+ * Returns maps from line indices to word diffs.
+ */
+function computeHunkWordDiffs(
+  hunk: PatchHunk,
+  hunkOldStartIdx: number, // Starting index in oldLines for this hunk
+  hunkNewStartIdx: number, // Starting index in newLines for this hunk
+): HunkWordDiffs {
+  const oldLineDiffs = new Map<number, WordDiffSegment[]>();
+  const newLineDiffs = new Map<number, WordDiffSegment[]>();
+
+  // Find replacement pairs in this hunk
+  const { pairs } = findReplacePairs(hunk.lines);
+
+  // For each pair, compute word diff and store by absolute line index
+  // We need to map the pair's relative indices back to the oldLines/newLines arrays
+
+  // Track how many - and + lines we've seen to compute absolute indices
+  let oldOffset = 0;
+  let newOffset = 0;
+  let currentRemovals: Array<{ absIdx: number; text: string }> = [];
+  let currentAdditions: Array<{ absIdx: number; text: string }> = [];
+
+  const flushPairs = () => {
+    const pairCount = Math.min(currentRemovals.length, currentAdditions.length);
+    for (let i = 0; i < pairCount; i++) {
+      const removal = currentRemovals[i];
+      const addition = currentAdditions[i];
+      if (removal && addition) {
+        const wordDiff = computeWordDiff(removal.text, addition.text);
+        // Only add if there are actual changes (not all unchanged)
+        const hasChanges = wordDiff.some(
+          (seg) => seg.type === "removed" || seg.type === "added",
+        );
+        if (hasChanges) {
+          oldLineDiffs.set(removal.absIdx, wordDiff);
+          newLineDiffs.set(addition.absIdx, wordDiff);
+        }
+      }
+    }
+    currentRemovals = [];
+    currentAdditions = [];
+  };
+
+  for (const line of hunk.lines) {
+    const prefix = line[0];
+    const text = line.slice(1);
+
+    if (prefix === "-") {
+      // If we were collecting additions, flush first
+      if (currentAdditions.length > 0) {
+        flushPairs();
+      }
+      currentRemovals.push({
+        absIdx: hunkOldStartIdx + oldOffset,
+        text,
+      });
+      oldOffset++;
+    } else if (prefix === "+") {
+      currentAdditions.push({
+        absIdx: hunkNewStartIdx + newOffset,
+        text,
+      });
+      newOffset++;
+    } else if (prefix === " ") {
+      flushPairs();
+      oldOffset++;
+      newOffset++;
+    } else if (line.startsWith("@@")) {
+      flushPairs();
+    }
+  }
+
+  // Flush any remaining pairs
+  flushPairs();
+
+  return { oldLineDiffs, newLineDiffs };
+}
+
+/**
  * Build syntax-highlighted diff HTML by highlighting old_string and new_string
  * separately with the file's language, then reconstructing the diff.
  *
@@ -131,6 +221,28 @@ async function highlightDiffWithSyntax(
   const oldLines = oldResult ? extractShikiLines(oldResult.html) : [];
   const newLines = newResult ? extractShikiLines(newResult.html) : [];
 
+  // Pre-compute word diffs for all hunks
+  const allOldLineDiffs = new Map<number, WordDiffSegment[]>();
+  const allNewLineDiffs = new Map<number, WordDiffSegment[]>();
+
+  for (const hunk of hunks) {
+    const hunkOldStartIdx = hunk.oldStart - 1; // Convert to 0-indexed
+    const hunkNewStartIdx = hunk.newStart - 1;
+    const { oldLineDiffs, newLineDiffs } = computeHunkWordDiffs(
+      hunk,
+      hunkOldStartIdx,
+      hunkNewStartIdx,
+    );
+
+    // Merge into global maps
+    for (const [idx, diff] of oldLineDiffs) {
+      allOldLineDiffs.set(idx, diff);
+    }
+    for (const [idx, diff] of newLineDiffs) {
+      allNewLineDiffs.set(idx, diff);
+    }
+  }
+
   // Build diff HTML by mapping hunk lines to highlighted source lines
   const resultLines: string[] = [];
 
@@ -156,11 +268,23 @@ async function highlightDiffWithSyntax(
       } else if (prefix === "-") {
         // Deleted line - use old
         lineClass = "line line-deleted";
-        content = oldLines[oldIdx++] ?? "";
+        content = oldLines[oldIdx] ?? "";
+        // Apply word diff if available
+        const wordDiff = allOldLineDiffs.get(oldIdx);
+        if (wordDiff) {
+          content = injectWordDiffMarkers(content, wordDiff, "old");
+        }
+        oldIdx++;
       } else if (prefix === "+") {
         // Inserted line - use new
         lineClass = "line line-inserted";
-        content = newLines[newIdx++] ?? "";
+        content = newLines[newIdx] ?? "";
+        // Apply word diff if available
+        const wordDiff = allNewLineDiffs.get(newIdx);
+        if (wordDiff) {
+          content = injectWordDiffMarkers(content, wordDiff, "new");
+        }
+        newIdx++;
       } else {
         continue; // Skip unexpected
       }
@@ -407,19 +531,333 @@ export interface WordDiffSegment {
 
 /**
  * Compute word-level diff between two strings.
- * Uses jsdiff's diffWords to find word-by-word changes.
+ * Uses jsdiff's diffWordsWithSpace to find word-by-word changes.
+ * Unlike diffWords, this treats whitespace as significant, so leading
+ * indentation is preserved as unchanged when only words change.
  *
  * @param oldLine - The original string
  * @param newLine - The modified string
  * @returns Array of diff segments with their types
  */
 function computeWordDiff(oldLine: string, newLine: string): WordDiffSegment[] {
-  const changes = diffWords(oldLine, newLine);
+  const changes = diffWordsWithSpace(oldLine, newLine);
 
   return changes.map((change) => ({
     text: change.value,
     type: change.added ? "added" : change.removed ? "removed" : "unchanged",
   }));
+}
+
+/**
+ * Maps HTML entity names to their decoded characters.
+ */
+const HTML_ENTITY_MAP: Record<string, string> = {
+  "&lt;": "<",
+  "&gt;": ">",
+  "&amp;": "&",
+  "&quot;": '"',
+  "&#039;": "'",
+  "&apos;": "'",
+};
+
+/**
+ * Represents a segment of HTML that is either text content or a tag.
+ */
+interface HtmlSegment {
+  type: "text" | "tag";
+  content: string;
+  // For text segments, the decoded plain text
+  plainText?: string;
+}
+
+/**
+ * Parse HTML into segments of text content and tags.
+ * Text content has HTML entities decoded for matching against plain text.
+ */
+function parseHtmlSegments(html: string): HtmlSegment[] {
+  const segments: HtmlSegment[] = [];
+  const tagRegex = /<[^>]*>/g;
+  let lastIndex = 0;
+
+  for (const match of html.matchAll(tagRegex)) {
+    // Add text content before this tag
+    if (match.index > lastIndex) {
+      const content = html.slice(lastIndex, match.index);
+      segments.push({
+        type: "text",
+        content,
+        plainText: decodeHtmlEntities(content),
+      });
+    }
+
+    // Add the tag itself
+    segments.push({
+      type: "tag",
+      content: match[0],
+    });
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add any remaining text after the last tag
+  if (lastIndex < html.length) {
+    const content = html.slice(lastIndex);
+    segments.push({
+      type: "text",
+      content,
+      plainText: decodeHtmlEntities(content),
+    });
+  }
+
+  return segments;
+}
+
+/**
+ * Decode HTML entities in a string to their plain text equivalents.
+ * Handles named entities (&lt;), decimal entities (&#60;), and hex entities (&#x3C;).
+ */
+function decodeHtmlEntities(html: string): string {
+  return html.replace(/&[^;]+;/g, (entity) => {
+    // Check named entity map first
+    if (HTML_ENTITY_MAP[entity]) {
+      return HTML_ENTITY_MAP[entity];
+    }
+
+    // Handle numeric entities: &#60; (decimal) or &#x3C; (hex)
+    if (entity.startsWith("&#")) {
+      const isHex = entity[2] === "x" || entity[2] === "X";
+      const numStr = isHex ? entity.slice(3, -1) : entity.slice(2, -1);
+      const codePoint = Number.parseInt(numStr, isHex ? 16 : 10);
+      if (!Number.isNaN(codePoint)) {
+        return String.fromCodePoint(codePoint);
+      }
+    }
+
+    return entity;
+  });
+}
+
+/**
+ * Inject word-level diff markers into syntax-highlighted HTML.
+ *
+ * This function takes syntax-highlighted HTML (from Shiki) and a word diff,
+ * then wraps changed portions in <span class="diff-word-removed"> or
+ * <span class="diff-word-added"> tags without breaking the HTML structure.
+ *
+ * @param html - Syntax-highlighted HTML for a single line (inner content of <span class="line">)
+ * @param wordDiff - Word diff segments from computeWordDiff()
+ * @param mode - Whether this is the 'old' (removed) or 'new' (added) line
+ * @returns HTML with word diff markers injected
+ */
+function injectWordDiffMarkers(
+  html: string,
+  wordDiff: WordDiffSegment[],
+  mode: "old" | "new",
+): string {
+  // Determine which segment type to highlight based on mode
+  const targetType = mode === "old" ? "removed" : "added";
+  const cssClass = mode === "old" ? "diff-word-removed" : "diff-word-added";
+
+  // Build the plain text that should appear in this version
+  // In 'old' mode: unchanged + removed
+  // In 'new' mode: unchanged + added
+  const relevantSegments = wordDiff.filter(
+    (seg) => seg.type === "unchanged" || seg.type === targetType,
+  );
+
+  // Parse HTML into text and tag segments
+  const htmlSegments = parseHtmlSegments(html);
+
+  // Build result by walking through word diff segments and HTML segments together
+  const result: string[] = [];
+  let htmlSegmentIndex = 0;
+  let htmlTextOffset = 0; // Offset within current text segment's plainText
+
+  for (const segment of relevantSegments) {
+    const segmentText = segment.text;
+    let remaining = segmentText.length;
+    const needsHighlight = segment.type === targetType;
+
+    // Track if we're in the middle of a highlight span
+    let highlightParts: string[] = [];
+
+    while (remaining > 0) {
+      const htmlSeg = htmlSegments[htmlSegmentIndex];
+      if (!htmlSeg) break;
+
+      if (htmlSeg.type === "tag") {
+        // Tags pass through unchanged
+        // If we're collecting highlight parts, we need to close/reopen the highlight
+        if (needsHighlight && highlightParts.length > 0) {
+          // Flush accumulated highlight parts before the tag
+          result.push(
+            `<span class="${cssClass}">${highlightParts.join("")}</span>`,
+          );
+          highlightParts = [];
+        }
+        result.push(htmlSeg.content);
+        htmlSegmentIndex++;
+        continue;
+      }
+
+      // Text segment
+      const plainText = htmlSeg.plainText ?? "";
+      const availableText = plainText.slice(htmlTextOffset);
+      const availableLen = availableText.length;
+
+      if (availableLen === 0) {
+        // Move to next segment
+        htmlSegmentIndex++;
+        htmlTextOffset = 0;
+        continue;
+      }
+
+      // How much of this text segment do we need?
+      const takeLen = Math.min(remaining, availableLen);
+      const takenPlainText = availableText.slice(0, takeLen);
+
+      // Convert taken plain text back to HTML (re-encode entities)
+      const takenHtml = convertPlainTextToHtml(
+        htmlSeg.content,
+        htmlTextOffset,
+        takenPlainText,
+      );
+
+      if (needsHighlight) {
+        highlightParts.push(takenHtml);
+      } else {
+        result.push(takenHtml);
+      }
+
+      remaining -= takeLen;
+      htmlTextOffset += takeLen;
+
+      // If we've consumed this segment, move to next
+      if (htmlTextOffset >= plainText.length) {
+        htmlSegmentIndex++;
+        htmlTextOffset = 0;
+      }
+    }
+
+    // Flush any remaining highlight parts
+    if (needsHighlight && highlightParts.length > 0) {
+      result.push(
+        `<span class="${cssClass}">${highlightParts.join("")}</span>`,
+      );
+    }
+  }
+
+  // Append any remaining HTML segments (tags after all text is consumed)
+  for (let i = htmlSegmentIndex; i < htmlSegments.length; i++) {
+    const htmlSeg = htmlSegments[i];
+    if (!htmlSeg) continue;
+
+    if (htmlSeg.type === "tag") {
+      result.push(htmlSeg.content);
+    } else if (i === htmlSegmentIndex && htmlTextOffset > 0) {
+      // First remaining segment may have a partial offset
+      const remainingText = (htmlSeg.plainText ?? "").slice(htmlTextOffset);
+      if (remainingText.length > 0) {
+        result.push(
+          htmlSeg.content.slice(
+            findHtmlOffsetForPlainTextOffset(htmlSeg.content, htmlTextOffset),
+          ),
+        );
+      }
+    } else {
+      // Full text segment
+      result.push(htmlSeg.content);
+    }
+  }
+
+  return result.join("");
+}
+
+/**
+ * Convert a portion of plain text back to its HTML representation,
+ * using the original HTML as a reference for entity encoding.
+ *
+ * @param originalHtml - The original HTML text segment (with entities)
+ * @param startPlainOffset - Starting offset in the decoded plain text
+ * @param plainText - The plain text portion we want to convert
+ * @returns The HTML representation of the plain text
+ */
+function convertPlainTextToHtml(
+  originalHtml: string,
+  startPlainOffset: number,
+  plainText: string,
+): string {
+  // Find the starting position in the original HTML
+  const htmlStart = findHtmlOffsetForPlainTextOffset(
+    originalHtml,
+    startPlainOffset,
+  );
+
+  // Find the ending position
+  const htmlEnd = findHtmlOffsetForPlainTextOffset(
+    originalHtml,
+    startPlainOffset + plainText.length,
+  );
+
+  return originalHtml.slice(htmlStart, htmlEnd);
+}
+
+/**
+ * Check if an HTML entity decodes to a single character.
+ * Handles named entities, decimal entities (&#60;), and hex entities (&#x3C;).
+ */
+function isValidHtmlEntity(entity: string): boolean {
+  if (HTML_ENTITY_MAP[entity]) {
+    return true;
+  }
+
+  // Check numeric entities: &#60; or &#x3C;
+  if (entity.startsWith("&#")) {
+    const isHex = entity[2] === "x" || entity[2] === "X";
+    const numStr = isHex ? entity.slice(3, -1) : entity.slice(2, -1);
+    const codePoint = Number.parseInt(numStr, isHex ? 16 : 10);
+    return !Number.isNaN(codePoint);
+  }
+
+  return false;
+}
+
+/**
+ * Find the position in HTML string that corresponds to a position in decoded plain text.
+ *
+ * @param html - HTML string (may contain entities)
+ * @param plainOffset - Offset in the decoded plain text
+ * @returns Offset in the HTML string
+ */
+function findHtmlOffsetForPlainTextOffset(
+  html: string,
+  plainOffset: number,
+): number {
+  let htmlPos = 0;
+  let plainPos = 0;
+
+  while (plainPos < plainOffset && htmlPos < html.length) {
+    // Check for HTML entity
+    if (html[htmlPos] === "&") {
+      // Find the end of the entity
+      const semiPos = html.indexOf(";", htmlPos);
+      if (semiPos !== -1) {
+        const entity = html.slice(htmlPos, semiPos + 1);
+        if (isValidHtmlEntity(entity)) {
+          // This entity decodes to one character
+          htmlPos = semiPos + 1;
+          plainPos++;
+          continue;
+        }
+      }
+    }
+
+    // Regular character
+    htmlPos++;
+    plainPos++;
+  }
+
+  return htmlPos;
 }
 
 /**
@@ -434,4 +872,5 @@ export const __test__ = {
   escapeHtml,
   computeWordDiff,
   findReplacePairs,
+  injectWordDiffMarkers,
 };

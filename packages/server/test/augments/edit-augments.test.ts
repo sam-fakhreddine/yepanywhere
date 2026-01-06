@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   __test__,
   computeEditAugment,
+  type WordDiffSegment,
 } from "../../src/augments/edit-augments.js";
 
 const {
@@ -11,6 +12,7 @@ const {
   patchToUnifiedText,
   escapeHtml,
   computeWordDiff,
+  injectWordDiffMarkers,
 } = __test__;
 
 describe("computeEditAugment", () => {
@@ -636,9 +638,10 @@ describe("computeWordDiff", () => {
 
   it("handles word addition", () => {
     const result = computeWordDiff("a b", "a b c");
+    // diffWordsWithSpace keeps whitespace separate, so " c" is added (space + word)
     expect(result).toEqual([
-      { text: "a b ", type: "unchanged" },
-      { text: "c", type: "added" },
+      { text: "a b", type: "unchanged" },
+      { text: " c", type: "added" },
     ]);
   });
 
@@ -652,10 +655,14 @@ describe("computeWordDiff", () => {
 
   it("handles multiple changes", () => {
     const result = computeWordDiff("one two three", "one TWO THREE");
+    // diffWordsWithSpace treats each word and space separately
     expect(result).toEqual([
       { text: "one ", type: "unchanged" },
-      { text: "two three", type: "removed" },
-      { text: "TWO THREE", type: "added" },
+      { text: "two", type: "removed" },
+      { text: "TWO", type: "added" },
+      { text: " ", type: "unchanged" },
+      { text: "three", type: "removed" },
+      { text: "THREE", type: "added" },
     ]);
   });
 
@@ -676,10 +683,13 @@ describe("computeWordDiff", () => {
 
   it("preserves whitespace correctly", () => {
     const result = computeWordDiff("  hello  ", "  world  ");
-    // Whitespace should be preserved in the output
-    expect(result.map((s) => s.text).join("")).toBe("  hello    world  ");
-    expect(result.some((s) => s.type === "removed")).toBe(true);
-    expect(result.some((s) => s.type === "added")).toBe(true);
+    // diffWordsWithSpace treats leading/trailing whitespace as separate unchanged segments
+    expect(result).toEqual([
+      { text: "  ", type: "unchanged" },
+      { text: "hello", type: "removed" },
+      { text: "world", type: "added" },
+      { text: "  ", type: "unchanged" },
+    ]);
   });
 
   it("handles punctuation as separate tokens", () => {
@@ -862,5 +872,429 @@ describe("findReplacePairs", () => {
     expect(result.pairs).toEqual([]);
     expect(result.unpairedRemovals).toEqual([]);
     expect(result.unpairedAdditions).toEqual([]);
+  });
+});
+
+describe("computeEditAugment with word-level diffs", () => {
+  it("includes word diff markers in diffHtml for simple replacement", async () => {
+    const augment = await computeEditAugment("tool-word", {
+      file_path: "/test/file.ts",
+      old_string: "const x = 1;",
+      new_string: "const y = 2;",
+    });
+
+    // Should have word-level markers for the changed parts
+    expect(augment.diffHtml).toContain('class="diff-word-removed"');
+    expect(augment.diffHtml).toContain('class="diff-word-added"');
+  });
+
+  it("does not add word diff markers for pure additions", async () => {
+    const augment = await computeEditAugment("tool-add", {
+      file_path: "/test/file.ts",
+      old_string: "",
+      new_string: "new line",
+    });
+
+    // Pure addition - no word diff (no paired lines)
+    expect(augment.diffHtml).not.toContain('class="diff-word-');
+  });
+
+  it("does not add word diff markers for pure deletions", async () => {
+    const augment = await computeEditAugment("tool-del", {
+      file_path: "/test/file.ts",
+      old_string: "old line",
+      new_string: "",
+    });
+
+    // Pure deletion - no word diff (no paired lines)
+    expect(augment.diffHtml).not.toContain('class="diff-word-');
+  });
+
+  it("handles multi-line replacements with word diffs", async () => {
+    const augment = await computeEditAugment("tool-multi", {
+      file_path: "/test/file.ts",
+      old_string: "const a = 1;\nconst b = 2;",
+      new_string: "const a = 10;\nconst c = 2;",
+    });
+
+    // Should have word-level markers for the changed parts
+    expect(augment.diffHtml).toContain('class="diff-word-removed"');
+    expect(augment.diffHtml).toContain('class="diff-word-added"');
+  });
+
+  it("does not add word diff markers when lines are identical", async () => {
+    const augment = await computeEditAugment("tool-same", {
+      file_path: "/test/file.ts",
+      old_string: "const x = 1;",
+      new_string: "const x = 1;",
+    });
+
+    // No changes, no hunks, no word diff markers
+    expect(augment.diffHtml).not.toContain('class="diff-word-');
+  });
+
+  it("applies word diff markers to syntax-highlighted code", async () => {
+    const augment = await computeEditAugment("tool-syntax", {
+      file_path: "/test/file.ts",
+      old_string: "const foo = 'hello';",
+      new_string: "const bar = 'hello';",
+    });
+
+    // Should have shiki highlighting and word diff markers
+    expect(augment.diffHtml).toContain("shiki");
+    expect(augment.diffHtml).toContain('class="diff-word-removed"');
+    expect(augment.diffHtml).toContain('class="diff-word-added"');
+    // The actual changed tokens should be wrapped
+    expect(augment.diffHtml).toContain("foo");
+    expect(augment.diffHtml).toContain("bar");
+  });
+
+  it("handles context lines without word diff markers", async () => {
+    const oldCode = "line1\nchanged old\nline3";
+    const newCode = "line1\nchanged new\nline3";
+
+    const augment = await computeEditAugment("tool-context", {
+      file_path: "/test/file.ts",
+      old_string: oldCode,
+      new_string: newCode,
+    });
+
+    // Should have context lines without word diff markers
+    expect(augment.diffHtml).toContain('class="line line-context"');
+    // Word diff should only be in the changed line
+    expect(augment.diffHtml).toContain('class="diff-word-removed"');
+    expect(augment.diffHtml).toContain('class="diff-word-added"');
+  });
+
+  it("handles replacements separated by context lines", async () => {
+    const oldCode = "first old\ncontext1\ncontext2\ncontext3\nsecond old";
+    const newCode = "first new\ncontext1\ncontext2\ncontext3\nsecond new";
+
+    const augment = await computeEditAugment("tool-separated", {
+      file_path: "/test/file.ts",
+      old_string: oldCode,
+      new_string: newCode,
+    });
+
+    // Both replacement pairs should have word diff markers
+    const removedMatches = augment.diffHtml.match(
+      /class="diff-word-removed"/g,
+    );
+    const addedMatches = augment.diffHtml.match(/class="diff-word-added"/g);
+
+    // Should have markers for both changed lines
+    expect(removedMatches?.length).toBeGreaterThanOrEqual(2);
+    expect(addedMatches?.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("injectWordDiffMarkers", () => {
+  // Helper to create word diff segments
+  const unchanged = (text: string): WordDiffSegment => ({
+    text,
+    type: "unchanged",
+  });
+  const removed = (text: string): WordDiffSegment => ({ text, type: "removed" });
+  const added = (text: string): WordDiffSegment => ({ text, type: "added" });
+
+  describe("plain text (no HTML tags)", () => {
+    it("wraps removed word in old mode", () => {
+      const html = "const x = 1";
+      const wordDiff = [unchanged("const "), removed("x"), added("y"), unchanged(" = 1")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe('const <span class="diff-word-removed">x</span> = 1');
+    });
+
+    it("wraps added word in new mode", () => {
+      const html = "const y = 1";
+      const wordDiff = [unchanged("const "), removed("x"), added("y"), unchanged(" = 1")];
+      const result = injectWordDiffMarkers(html, wordDiff, "new");
+      expect(result).toBe('const <span class="diff-word-added">y</span> = 1');
+    });
+
+    it("returns unchanged HTML when no changes match mode", () => {
+      const html = "const x = 1";
+      const wordDiff = [unchanged("const x = 1")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe("const x = 1");
+    });
+  });
+
+  describe("single token fully changed", () => {
+    it("wraps entire token content when fully removed", () => {
+      const html = '<span style="color:red">old</span>';
+      const wordDiff = [removed("old"), added("new")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe(
+        '<span style="color:red"><span class="diff-word-removed">old</span></span>',
+      );
+    });
+
+    it("wraps entire token content when fully added", () => {
+      const html = '<span style="color:red">new</span>';
+      const wordDiff = [removed("old"), added("new")];
+      const result = injectWordDiffMarkers(html, wordDiff, "new");
+      expect(result).toBe(
+        '<span style="color:red"><span class="diff-word-added">new</span></span>',
+      );
+    });
+  });
+
+  describe("partial token change", () => {
+    it("wraps only changed portion within token", () => {
+      const html = '<span style="color:blue">hello world</span>';
+      const wordDiff = [unchanged("hello "), removed("world"), added("there")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe(
+        '<span style="color:blue">hello <span class="diff-word-removed">world</span></span>',
+      );
+    });
+
+    it("handles change at start of token", () => {
+      const html = '<span style="color:blue">hello world</span>';
+      const wordDiff = [removed("hello"), added("hi"), unchanged(" world")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe(
+        '<span style="color:blue"><span class="diff-word-removed">hello</span> world</span>',
+      );
+    });
+  });
+
+  describe("change spans multiple tokens", () => {
+    it("wraps each token portion separately", () => {
+      const html =
+        '<span style="color:red">const</span> <span style="color:blue">x</span>';
+      const wordDiff = [removed("const x"), added("let y")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      // The entire "const x" should be wrapped, but respecting HTML structure
+      expect(result).toContain('class="diff-word-removed"');
+      expect(result).toContain("const");
+      expect(result).toContain("x");
+    });
+  });
+
+  describe("multiple changes in one line", () => {
+    it("wraps all removed segments", () => {
+      const html = "a b c d e";
+      const wordDiff = [
+        unchanged("a "),
+        removed("b"),
+        added("B"),
+        unchanged(" c "),
+        removed("d"),
+        added("D"),
+        unchanged(" e"),
+      ];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe(
+        'a <span class="diff-word-removed">b</span> c <span class="diff-word-removed">d</span> e',
+      );
+    });
+
+    it("wraps all added segments", () => {
+      const html = "a B c D e";
+      const wordDiff = [
+        unchanged("a "),
+        removed("b"),
+        added("B"),
+        unchanged(" c "),
+        removed("d"),
+        added("D"),
+        unchanged(" e"),
+      ];
+      const result = injectWordDiffMarkers(html, wordDiff, "new");
+      expect(result).toBe(
+        'a <span class="diff-word-added">B</span> c <span class="diff-word-added">D</span> e',
+      );
+    });
+  });
+
+  describe("no changes", () => {
+    it("returns HTML unchanged when word diff is all unchanged", () => {
+      const html = '<span style="color:red">hello</span> world';
+      const wordDiff = [unchanged("hello world")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe(html);
+    });
+
+    it("returns only text for the given mode when no segments to highlight", () => {
+      // The HTML "hello world" represents the NEW line (with the addition)
+      // But in old mode, we only want to render "hello " (unchanged portions)
+      const html = "hello ";
+      const wordDiff = [unchanged("hello "), added("world")]; // Only addition, no removal
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      // In old mode, we render unchanged + removed - since there are no removed segments, just unchanged
+      expect(result).toBe("hello ");
+    });
+  });
+
+  describe("empty segments", () => {
+    it("handles empty word diff array", () => {
+      // Empty word diff means no text to render - should return empty string
+      // The html param is irrelevant when wordDiff is empty
+      const html = "";
+      const result = injectWordDiffMarkers(html, [], "old");
+      expect(result).toBe("");
+    });
+
+    it("handles empty strings in segments", () => {
+      const html = "hello";
+      const wordDiff = [unchanged(""), unchanged("hello"), unchanged("")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe("hello");
+    });
+
+    it("handles empty HTML input", () => {
+      const html = "";
+      const wordDiff = [unchanged("")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe("");
+    });
+  });
+
+  describe("HTML entities", () => {
+    it("handles &lt; entity correctly", () => {
+      const html = "a &lt; b";
+      const wordDiff = [unchanged("a "), removed("<"), added(">"), unchanged(" b")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe('a <span class="diff-word-removed">&lt;</span> b');
+    });
+
+    it("handles &gt; entity correctly", () => {
+      const html = "a &gt; b";
+      const wordDiff = [unchanged("a "), removed(">"), added("<"), unchanged(" b")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe('a <span class="diff-word-removed">&gt;</span> b');
+    });
+
+    it("handles &amp; entity correctly", () => {
+      const html = "a &amp; b";
+      const wordDiff = [unchanged("a "), removed("&"), added("|"), unchanged(" b")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe('a <span class="diff-word-removed">&amp;</span> b');
+    });
+
+    it("handles &quot; entity correctly", () => {
+      const html = 'say &quot;hello&quot;';
+      const wordDiff = [unchanged('say "'), removed("hello"), added("world"), unchanged('"')];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe(
+        'say &quot;<span class="diff-word-removed">hello</span>&quot;',
+      );
+    });
+
+    it("handles multiple entities in changed text", () => {
+      const html = "&lt;div&gt;";
+      const wordDiff = [removed("<div>"), added("<span>")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe('<span class="diff-word-removed">&lt;div&gt;</span>');
+    });
+
+    it("handles hex entity &#x3C; (Shiki-style < encoding)", () => {
+      const html = "a &#x3C; b";
+      const wordDiff = [unchanged("a "), removed("<"), added(">"), unchanged(" b")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe('a <span class="diff-word-removed">&#x3C;</span> b');
+    });
+
+    it("handles hex entity &#x26; (Shiki-style & encoding)", () => {
+      const html = "a &#x26; b";
+      const wordDiff = [unchanged("a "), removed("&"), added("|"), unchanged(" b")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe('a <span class="diff-word-removed">&#x26;</span> b');
+    });
+
+    it("handles decimal entity &#60; (decimal < encoding)", () => {
+      const html = "a &#60; b";
+      const wordDiff = [unchanged("a "), removed("<"), added(">"), unchanged(" b")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe('a <span class="diff-word-removed">&#60;</span> b');
+    });
+
+    it("handles mixed hex and named entities", () => {
+      const html = "&#x3C;div&#x3E; &amp; more";
+      const wordDiff = [removed("<div>"), added("<span>"), unchanged(" & more")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe(
+        '<span class="diff-word-removed">&#x3C;div&#x3E;</span> &amp; more',
+      );
+    });
+  });
+
+  describe("nested spans", () => {
+    it("handles shiki nested span structure", () => {
+      const html =
+        '<span style="color:var(--shiki-token-keyword)">const</span> <span style="color:var(--shiki-token-constant)">x</span> = 1';
+      const wordDiff = [unchanged("const "), removed("x"), added("y"), unchanged(" = 1")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toContain('<span class="diff-word-removed">x</span>');
+      expect(result).toContain(
+        '<span style="color:var(--shiki-token-keyword)">const</span>',
+      );
+    });
+
+    it("handles deeply nested spans", () => {
+      const html =
+        '<span class="outer"><span class="inner">text</span></span>';
+      const wordDiff = [removed("text"), added("new")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe(
+        '<span class="outer"><span class="inner"><span class="diff-word-removed">text</span></span></span>',
+      );
+    });
+  });
+
+  describe("mode old vs new", () => {
+    const wordDiff = [unchanged("a "), removed("old"), added("new"), unchanged(" b")];
+
+    it("applies diff-word-removed class in old mode", () => {
+      const html = "a old b";
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toContain('class="diff-word-removed"');
+      expect(result).not.toContain('class="diff-word-added"');
+    });
+
+    it("applies diff-word-added class in new mode", () => {
+      const html = "a new b";
+      const result = injectWordDiffMarkers(html, wordDiff, "new");
+      expect(result).toContain('class="diff-word-added"');
+      expect(result).not.toContain('class="diff-word-removed"');
+    });
+  });
+
+  describe("edge cases", () => {
+    it("handles whitespace-only changes", () => {
+      const html = "a  b";
+      const wordDiff = [unchanged("a"), removed("  "), added(" "), unchanged("b")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe('a<span class="diff-word-removed">  </span>b');
+    });
+
+    it("handles unicode content", () => {
+      const html = "hello 😀 world";
+      const wordDiff = [unchanged("hello "), removed("😀"), added("🎉"), unchanged(" world")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe(
+        'hello <span class="diff-word-removed">😀</span> world',
+      );
+    });
+
+    it("handles consecutive removed segments", () => {
+      const html = "abc";
+      const wordDiff = [removed("a"), removed("b"), removed("c")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe(
+        '<span class="diff-word-removed">a</span><span class="diff-word-removed">b</span><span class="diff-word-removed">c</span>',
+      );
+    });
+
+    it("handles text before any HTML tags", () => {
+      const html = 'prefix <span style="color:red">suffix</span>';
+      const wordDiff = [removed("prefix"), added("PREFIX"), unchanged(" suffix")];
+      const result = injectWordDiffMarkers(html, wordDiff, "old");
+      expect(result).toBe(
+        '<span class="diff-word-removed">prefix</span> <span style="color:red">suffix</span>',
+      );
+    });
   });
 });
