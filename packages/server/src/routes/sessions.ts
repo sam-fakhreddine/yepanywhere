@@ -423,6 +423,13 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
       const reader = deps.readerFactory(project);
       const agentSession = await reader.getAgentSession(agentId);
 
+      if (!agentSession) {
+        return c.json({ error: "Agent session not found" }, 404);
+      }
+
+      // Add server-rendered HTML to text blocks for markdown display
+      await augmentTextBlocks(agentSession.messages);
+
       return c.json(agentSession);
     },
   );

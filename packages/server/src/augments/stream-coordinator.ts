@@ -51,14 +51,13 @@ const DEFAULT_CONFIG: AugmentGeneratorConfig = {
     "rust",
     "diff",
   ],
-  theme: "github-dark",
 };
 
 /**
  * Creates a StreamCoordinator instance that manages the streaming markdown
  * rendering pipeline.
  *
- * @param config - Optional configuration for languages and theme
+ * @param config - Optional configuration for languages
  * @returns Promise that resolves to a StreamCoordinator
  */
 export async function createStreamCoordinator(
@@ -66,7 +65,6 @@ export async function createStreamCoordinator(
 ): Promise<StreamCoordinator> {
   const mergedConfig: AugmentGeneratorConfig = {
     languages: config?.languages ?? DEFAULT_CONFIG.languages,
-    theme: config?.theme ?? DEFAULT_CONFIG.theme,
   };
 
   const generator = await createAugmentGenerator(mergedConfig);

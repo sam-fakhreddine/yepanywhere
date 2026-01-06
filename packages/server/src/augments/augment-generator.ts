@@ -13,11 +13,19 @@ import {
   bundledLanguages,
   createHighlighter,
 } from "shiki";
+import { createCssVariablesTheme } from "shiki/core";
 import type {
   CompletedBlock,
   StreamingCodeBlock,
   StreamingList,
 } from "./block-detector.js";
+
+/** CSS variables theme - outputs `style="color: var(--shiki-...)"` */
+const cssVarsTheme = createCssVariablesTheme({
+  name: "css-variables",
+  variablePrefix: "--shiki-",
+  fontStyle: true,
+});
 
 export interface Augment {
   blockIndex: number;
@@ -27,7 +35,6 @@ export interface Augment {
 
 export interface AugmentGeneratorConfig {
   languages: string[]; // Languages to pre-load for sync highlighting
-  theme: string; // Shiki theme name, e.g. 'github-dark'
 }
 
 export interface AugmentGenerator {
@@ -49,16 +56,14 @@ export interface AugmentGenerator {
 export async function createAugmentGenerator(
   config: AugmentGeneratorConfig,
 ): Promise<AugmentGenerator> {
-  const theme = config.theme || "github-dark";
-
   // Filter languages to only include valid bundled languages
   const validLanguages = config.languages.filter(
     (lang) => lang in bundledLanguages,
   ) as BundledLanguage[];
 
-  // Create highlighter with pre-loaded languages
+  // Create highlighter with CSS variables theme for light/dark mode support
   const highlighter = await createHighlighter({
-    themes: [theme],
+    themes: [cssVarsTheme],
     langs:
       validLanguages.length > 0 ? validLanguages : ["javascript", "typescript"],
   });
@@ -72,12 +77,7 @@ export async function createAugmentGenerator(
       blockIndex: number,
     ): Promise<Augment> {
       if (block.type === "code") {
-        const html = await renderCodeBlock(
-          block,
-          highlighter,
-          loadedLanguages,
-          theme,
-        );
+        const html = await renderCodeBlock(block, highlighter, loadedLanguages);
         return { blockIndex, html, type: block.type };
       }
 
@@ -101,7 +101,6 @@ export async function createAugmentGenerator(
         lang,
         highlighter,
         loadedLanguages,
-        theme,
       );
       return { blockIndex, html, type: "code" };
     },
@@ -154,7 +153,6 @@ async function renderCodeWithHighlighter(
   lang: string,
   highlighter: Highlighter,
   loadedLanguages: Set<string>,
-  theme: string,
 ): Promise<string> {
   // Check if language is loaded and valid
   const isValidLang = lang && lang in bundledLanguages;
@@ -174,7 +172,7 @@ async function renderCodeWithHighlighter(
     try {
       const html = highlighter.codeToHtml(code, {
         lang: lang as BundledLanguage,
-        theme,
+        theme: "css-variables",
       });
       return html;
     } catch {
@@ -194,17 +192,10 @@ async function renderCodeBlock(
   block: CompletedBlock,
   highlighter: Highlighter,
   loadedLanguages: Set<string>,
-  theme: string,
 ): Promise<string> {
   const code = extractCodeContent(block.content);
   const lang = block.lang ?? "";
-  return renderCodeWithHighlighter(
-    code,
-    lang,
-    highlighter,
-    loadedLanguages,
-    theme,
-  );
+  return renderCodeWithHighlighter(code, lang, highlighter, loadedLanguages);
 }
 
 /**

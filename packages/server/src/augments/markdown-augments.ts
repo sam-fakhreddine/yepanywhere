@@ -35,7 +35,6 @@ const DEFAULT_CONFIG: AugmentGeneratorConfig = {
     "rust",
     "diff",
   ],
-  theme: "github-dark",
 };
 
 // Singleton generator instance (initialized lazily)
