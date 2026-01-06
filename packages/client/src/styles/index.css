@@ -5440,17 +5440,49 @@ a.sidebar-nav-item {
   border-color: var(--app-yep-green);
 }
 
-/* Session menu positioning */
+/* Session menu positioning - overlay on right side of text */
 .session-list-item__menu {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   flex-shrink: 0;
   opacity: 0;
   transition: opacity 0.15s ease;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  /* Gradient fade to blend with background */
+  padding-left: 1rem;
+  padding-right: var(--space-2);
+  background: linear-gradient(to right, transparent, var(--bg-secondary) 60%);
+}
+
+.session-list-item__menu .session-menu-trigger {
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  opacity: 1;
+  aspect-ratio: 1;
+}
+
+.session-list-item__menu .session-menu-trigger:hover {
+  background: rgba(0, 0, 0, 0.95);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: white;
 }
 
 .session-list-item:hover .session-list-item__menu,
 .session-list-item:focus-within .session-list-item__menu,
 .session-list-item__menu.is-open {
   opacity: 1;
+}
+
+/* Adjust gradient for hover state */
+.session-list-item:hover .session-list-item__menu {
+  background: linear-gradient(to right, transparent, var(--bg-hover) 60%);
 }
 
 /* Checkbox for multi-select */

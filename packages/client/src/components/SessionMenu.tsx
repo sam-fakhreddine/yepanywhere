@@ -61,6 +61,7 @@ export function SessionMenu({
       const clickedInDropdown = dropdownRef.current?.contains(target);
       if (!clickedInWrapper && !clickedInDropdown) {
         setIsOpen(false);
+        triggerRef.current?.blur();
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -71,6 +72,7 @@ export function SessionMenu({
     if (isOpen) {
       setIsOpen(false);
       setDropdownPosition(null);
+      triggerRef.current?.blur();
     } else {
       // Calculate position synchronously before opening to avoid flicker
       if (useFixedPositioning && triggerRef.current) {
@@ -98,6 +100,7 @@ export function SessionMenu({
   const handleAction = (action: () => void | Promise<void>) => {
     setIsOpen(false);
     setDropdownPosition(null);
+    triggerRef.current?.blur();
     action();
   };
 
@@ -106,6 +109,7 @@ export function SessionMenu({
     setIsCloning(true);
     setIsOpen(false);
     setDropdownPosition(null);
+    triggerRef.current?.blur();
     try {
       const result = await api.cloneSession(projectId, sessionId);
       onClone?.(result.sessionId);

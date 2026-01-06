@@ -22,6 +22,7 @@ import { ProjectScanner } from "./projects/scanner.js";
 import { PushNotifier, type PushService } from "./push/index.js";
 import { createPushRoutes } from "./push/routes.js";
 import { createActivityRoutes } from "./routes/activity.js";
+import { createDebugStreamingRoutes } from "./routes/debug-streaming.js";
 import { createDevRoutes } from "./routes/dev.js";
 import { createFilesRoutes } from "./routes/files.js";
 import { health } from "./routes/health.js";
@@ -299,6 +300,11 @@ export function createApp(options: AppOptions): AppResult {
       console.log("[Dev] Mounting dev routes at /api/dev");
       app.route("/api/dev", createDevRoutes({ eventBus: options.eventBus }));
     }
+  }
+
+  // Debug streaming routes (always mounted in dev, useful for debugging markdown rendering)
+  if (process.env.NODE_ENV !== "production") {
+    app.route("/api/debug", createDebugStreamingRoutes());
   }
 
   // Frontend proxy fallback: proxy all non-API requests to Vite dev server

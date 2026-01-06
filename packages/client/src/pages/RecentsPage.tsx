@@ -1,34 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
-import { ThinkingIndicator } from "../components/ThinkingIndicator";
+import { SessionListItem } from "../components/SessionListItem";
 import {
   type RecentSessionEntry,
   useRecentSessions,
 } from "../hooks/useRecentSessions";
+import { useSessionStatuses } from "../hooks/useSessionStatuses";
 import { useNavigationLayout } from "../layouts";
 import type { Project, SessionSummary } from "../types";
-import { getSessionDisplayTitle } from "../types";
-
-/**
- * Format relative time from a timestamp to now.
- */
-function formatRelativeTime(timestamp: string | number): string {
-  const now = Date.now();
-  const then =
-    typeof timestamp === "number" ? timestamp : new Date(timestamp).getTime();
-  const diffMs = now - then;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return new Date(then).toLocaleDateString();
-}
 
 interface RecentItemData {
   entry: RecentSessionEntry;
@@ -70,6 +50,15 @@ export function RecentsPage() {
     }
     return Array.from(ids);
   }, [recentSessions]);
+
+  // Get session IDs for status tracking
+  const sessionIds = useMemo(
+    () => recentSessions.map((e) => e.sessionId),
+    [recentSessions],
+  );
+
+  // Track real-time status updates for all recent sessions
+  const sessionStatuses = useSessionStatuses(sessionIds, sessions);
 
   // Fetch project data for all projects containing recent sessions
   useEffect(() => {
@@ -214,39 +203,33 @@ export function RecentsPage() {
             )}
 
             {!loading && !error && !isEmpty && (
-              <ul className="inbox-list recents-list">
+              <ul className="sessions-list recents-list">
                 {recentItems.map((item) => {
-                  const title = item.session
-                    ? getSessionDisplayTitle(item.session)
-                    : "Unknown session";
-                  const projectName = item.project?.name ?? "Unknown project";
-                  const isActive =
-                    item.session?.status.state === "owned" ||
-                    item.session?.processState === "running";
-                  const hasUnread = item.session?.hasUnread ?? false;
+                  if (!item.session) {
+                    // Session not found - show minimal placeholder
+                    return (
+                      <li
+                        key={item.entry.sessionId}
+                        className="session-list-item session-list-item--card"
+                      >
+                        <span className="session-list-item__title">
+                          Unknown session
+                        </span>
+                      </li>
+                    );
+                  }
+
+                  const status = sessionStatuses.get(item.entry.sessionId);
 
                   return (
-                    <li
+                    <SessionListItem
                       key={item.entry.sessionId}
-                      className={hasUnread ? "unread" : undefined}
-                    >
-                      <Link
-                        to={`/projects/${item.entry.projectId}/sessions/${item.entry.sessionId}`}
-                      >
-                        <div className="inbox-item-main">
-                          <span className="inbox-item-title">{title}</span>
-                          {isActive && <ThinkingIndicator />}
-                        </div>
-                        <div className="inbox-item-meta">
-                          <span className="inbox-item-project">
-                            {projectName}
-                          </span>
-                          <span className="inbox-item-time">
-                            {formatRelativeTime(item.entry.visitedAt)}
-                          </span>
-                        </div>
-                      </Link>
-                    </li>
+                      session={item.session}
+                      projectId={item.entry.projectId}
+                      mode="card"
+                      processState={status?.processState}
+                      onNavigate={() => {}}
+                    />
                   );
                 })}
               </ul>

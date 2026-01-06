@@ -175,9 +175,10 @@
     #streaming-pending {
       color: #888;
       font-style: italic;
+      white-space: pre-wrap;
     }
 
-    #streaming-pending::after {
+    #streaming-pending:not(:empty)::after {
       content: '|';
       animation: blink 1s step-end infinite;
     }
@@ -267,14 +268,34 @@
     @keyframes pulse {
       50% { opacity: 0.5; }
     }
+
+    /* Shiki syntax highlighting CSS variables */
+    pre.shiki {
+      background-color: #1e1e1e !important;
+    }
+
+    .shiki span {
+      color: var(--shiki-light, var(--shiki-default, inherit));
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .shiki span {
+        color: var(--shiki-dark, var(--shiki-default, inherit));
+      }
+    }
+
+    /* Force dark mode for this debug page */
+    .shiki span {
+      color: var(--shiki-dark, var(--shiki-default, inherit)) !important;
+    }
   </style>
 </head>
 <body>
-  <h1>Streaming Markdown Debug Harness</h1>
+  <h1>Streaming Markdown Debug (Server-Side StreamCoordinator)</h1>
 
   <div class="controls">
     <div class="control-group">
-      <label>Speed (ms/chunk)</label>
+      <label>Delay (ms/chunk)</label>
       <input type="range" id="speed" min="1" max="200" value="20">
       <span id="speed-value">20ms</span>
     </div>
@@ -295,6 +316,8 @@
     <span style="color: #666; font-size: 0.75rem; margin-right: 8px;">Presets:</span>
     <button class="preset-btn" data-preset="simple">Simple paragraph</button>
     <button class="preset-btn" data-preset="code">Code block (JS)</button>
+    <button class="preset-btn" data-preset="textThenCode">Text then code</button>
+    <button class="preset-btn" data-preset="textThenList">Text then list</button>
     <button class="preset-btn" data-preset="mixed">Mixed content</button>
     <button class="preset-btn" data-preset="rapid">Rapid small chunks</button>
     <button class="preset-btn" data-preset="long">Long document</button>
@@ -324,7 +347,10 @@ That's all folks!</textarea>
     <div class="panel">
       <h2>Streaming Output</h2>
       <div class="output-container">
-        <div id="streaming-output"><span id="streaming-pending" class="streaming-pending"></span></div>
+        <div id="streaming-output">
+          <div id="streaming-blocks"></div>
+          <span id="streaming-pending" class="streaming-pending"></span>
+        </div>
       </div>
       <div class="status-bar">
         <div class="status-item">
@@ -336,8 +362,8 @@ That's all folks!</textarea>
           <span class="value" id="status-blocks">0</span>
         </div>
         <div class="status-item">
-          <span class="label">Chars:</span>
-          <span class="value" id="status-chars">0</span>
+          <span class="label">Events:</span>
+          <span class="value" id="status-events">0</span>
         </div>
       </div>
     </div>
@@ -349,13 +375,11 @@ That's all folks!</textarea>
   </div>
 
   <script>
-    // Presets
+    // Presets - designed to test edge cases with streaming blocks
     const PRESETS = {
       simple: `This is a simple paragraph that will be streamed character by character.`,
 
-      code: `Here's some JavaScript code:
-
-\`\`\`javascript
+      code: `\`\`\`javascript
 function fibonacci(n) {
   if (n <= 1) return n;
   return fibonacci(n - 1) + fibonacci(n - 2);
@@ -365,9 +389,25 @@ function fibonacci(n) {
 for (let i = 0; i < 10; i++) {
   console.log(\`fib(\${i}) = \${fibonacci(i)}\`);
 }
+\`\`\``,
+
+      // This preset specifically tests the issue: text before code block
+      textThenCode: `Here is some text before the code block
+\`\`\`javascript
+const x = 1;
+const y = 2;
+console.log(x + y);
 \`\`\`
 
-Pretty neat, right?`,
+And some text after.`,
+
+      // This preset tests text before list items
+      textThenList: `Here is some text before the list
+- First item
+- Second item
+- Third item
+
+And some text after the list.`,
 
       mixed: `# Welcome to the Demo
 
@@ -448,13 +488,13 @@ Thanks for reading! Now go build something amazing.`
 
     // State
     let isStreaming = false;
-    let stopRequested = false;
+    let abortController = null;
     let currentBlocks = new Map();
     let maxBlockIndex = -1;
-    let totalChars = 0;
+    let totalEvents = 0;
 
     // DOM refs
-    const container = document.getElementById('streaming-output');
+    const blocksContainer = document.getElementById('streaming-blocks');
     const pendingEl = document.getElementById('streaming-pending');
     const consoleLog = document.getElementById('console-log');
     const markdownInput = document.getElementById('markdown-input');
@@ -468,7 +508,7 @@ Thanks for reading! Now go build something amazing.`
     const clearLogBtn = document.getElementById('clear-log-btn');
     const statusStreaming = document.getElementById('status-streaming');
     const statusBlocks = document.getElementById('status-blocks');
-    const statusChars = document.getElementById('status-chars');
+    const statusEvents = document.getElementById('status-events');
 
     // Update slider displays
     speedSlider.addEventListener('input', () => {
@@ -499,196 +539,53 @@ Thanks for reading! Now go build something amazing.`
       statusStreaming.textContent = isStreaming ? 'Streaming' : 'Idle';
       statusStreaming.className = `value ${isStreaming ? 'streaming' : ''}`;
       statusBlocks.textContent = currentBlocks.size;
-      statusChars.textContent = totalChars;
+      statusEvents.textContent = totalEvents;
     }
 
-    // Simple markdown parser (for demo purposes)
-    function parseMarkdownToBlocks(markdown) {
-      const blocks = [];
-      const lines = markdown.split('\n');
-      let currentBlock = null;
-      let inCodeBlock = false;
-      let codeLanguage = '';
-      let codeContent = '';
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-
-        // Code block start/end
-        if (line.startsWith('```')) {
-          if (inCodeBlock) {
-            // End code block
-            blocks.push({
-              type: 'code',
-              content: codeContent,
-              language: codeLanguage,
-              html: `<pre><code class="language-${codeLanguage}">${escapeHtml(codeContent)}</code></pre>`
-            });
-            inCodeBlock = false;
-            codeContent = '';
-            codeLanguage = '';
-          } else {
-            // Start code block
-            if (currentBlock) {
-              blocks.push(currentBlock);
-              currentBlock = null;
-            }
-            inCodeBlock = true;
-            codeLanguage = line.slice(3).trim() || 'text';
-          }
-          continue;
-        }
-
-        if (inCodeBlock) {
-          codeContent += (codeContent ? '\n' : '') + line;
-          continue;
-        }
-
-        // Heading
-        const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-        if (headingMatch) {
-          if (currentBlock) {
-            blocks.push(currentBlock);
-            currentBlock = null;
-          }
-          const level = headingMatch[1].length;
-          blocks.push({
-            type: 'heading',
-            level,
-            content: headingMatch[2],
-            html: `<h${level}>${formatInline(headingMatch[2])}</h${level}>`
-          });
-          continue;
-        }
-
-        // List item
-        const listMatch = line.match(/^(\s*)[-*]\s+(.+)$/);
-        const orderedListMatch = line.match(/^(\s*)\d+\.\s+(.+)$/);
-        if (listMatch || orderedListMatch) {
-          const match = listMatch || orderedListMatch;
-          const isOrdered = !!orderedListMatch;
-          if (!currentBlock || currentBlock.type !== 'list' || currentBlock.ordered !== isOrdered) {
-            if (currentBlock) blocks.push(currentBlock);
-            currentBlock = {
-              type: 'list',
-              ordered: isOrdered,
-              items: [],
-              content: ''
-            };
-          }
-          currentBlock.items.push(match[2]);
-          currentBlock.content += (currentBlock.content ? '\n' : '') + line;
-          continue;
-        }
-
-        // Blockquote
-        const quoteMatch = line.match(/^>\s*(.*)$/);
-        if (quoteMatch) {
-          if (!currentBlock || currentBlock.type !== 'blockquote') {
-            if (currentBlock) blocks.push(currentBlock);
-            currentBlock = {
-              type: 'blockquote',
-              content: ''
-            };
-          }
-          currentBlock.content += (currentBlock.content ? '\n' : '') + quoteMatch[1];
-          continue;
-        }
-
-        // Empty line - end current block
-        if (line.trim() === '') {
-          if (currentBlock) {
-            blocks.push(currentBlock);
-            currentBlock = null;
-          }
-          continue;
-        }
-
-        // Paragraph
-        if (!currentBlock || currentBlock.type !== 'paragraph') {
-          if (currentBlock) blocks.push(currentBlock);
-          currentBlock = {
-            type: 'paragraph',
-            content: ''
-          };
-        }
-        currentBlock.content += (currentBlock.content ? ' ' : '') + line;
-      }
-
-      // Don't forget last block
-      if (currentBlock) blocks.push(currentBlock);
-
-      // Generate HTML for each block
-      return blocks.map((block, index) => {
-        if (block.html) return { ...block, index };
-
-        let html;
-        switch (block.type) {
-          case 'paragraph':
-            html = `<p>${formatInline(block.content)}</p>`;
-            break;
-          case 'list':
-            const tag = block.ordered ? 'ol' : 'ul';
-            html = `<${tag}>${block.items.map(item => `<li>${formatInline(item)}</li>`).join('')}</${tag}>`;
-            break;
-          case 'blockquote':
-            html = `<blockquote><p>${formatInline(block.content)}</p></blockquote>`;
-            break;
-          default:
-            html = `<p>${formatInline(block.content)}</p>`;
-        }
-        return { ...block, html, index };
-      });
-    }
-
-    // Format inline markdown (bold, italic, code, links)
-    function formatInline(text) {
-      return escapeHtml(text)
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        .replace(/`(.+?)`/g, '<code>$1</code>');
-    }
-
-    // Simulate augment event
+    // Handle augment event (same logic as useStreamingMarkdown.ts)
     function onAugment(augment) {
       const { blockIndex, html, type } = augment;
+      totalEvents++;
 
-      log(`AUGMENT: blockIndex=${blockIndex}, type=${type}, html=${html.substring(0, 50)}...`, 'augment');
+      log(`AUGMENT: blockIndex=${blockIndex}, type=${type}, html=${html.substring(0, 80)}...`, 'augment');
 
-      // Check if block exists
+      // Check if block exists (dedupe/update)
       if (currentBlocks.has(blockIndex)) {
         const existingBlock = currentBlocks.get(blockIndex);
         existingBlock.innerHTML = html;
         log(`  -> Updated existing block ${blockIndex}`, 'augment');
+        updateStatus();
         return;
       }
 
-      // Create new block
+      // Create new block element
       const blockElement = document.createElement('div');
       blockElement.className = 'streaming-block';
       blockElement.dataset.blockIndex = String(blockIndex);
       blockElement.innerHTML = html;
 
-      // Insert in correct order (before pending span which should stay at end)
+      // Insert in correct order by blockIndex
       if (blockIndex > maxBlockIndex) {
-        container.insertBefore(blockElement, pendingEl);
+        // Newest block - append to end
+        blocksContainer.appendChild(blockElement);
         maxBlockIndex = blockIndex;
         log(`  -> Appended block ${blockIndex} to end`, 'augment');
       } else {
+        // Out-of-order block - find correct position
         let inserted = false;
-        for (let i = 0; i < container.children.length; i++) {
-          const child = container.children[i];
-          if (child === pendingEl) continue; // Skip pending span
+        const children = blocksContainer.children;
+        for (let i = 0; i < children.length; i++) {
+          const child = children[i];
           const childIndex = parseInt(child.dataset.blockIndex ?? '-1', 10);
           if (childIndex > blockIndex) {
-            container.insertBefore(blockElement, child);
+            blocksContainer.insertBefore(blockElement, child);
             inserted = true;
             log(`  -> Inserted block ${blockIndex} before block ${childIndex}`, 'augment');
             break;
           }
         }
         if (!inserted) {
-          container.insertBefore(blockElement, pendingEl);
+          blocksContainer.appendChild(blockElement);
           log(`  -> Appended block ${blockIndex} (fallback)`, 'augment');
         }
       }
@@ -697,39 +594,36 @@ Thanks for reading! Now go build something amazing.`
       updateStatus();
     }
 
-    // Simulate pending event
+    // Handle pending event
     function onPending(pending) {
       const { html } = pending;
+      totalEvents++;
       pendingEl.innerHTML = html;
       if (html) {
-        log(`PENDING: "${html.substring(0, 60)}${html.length > 60 ? '...' : ''}"`, 'pending');
+        log(`PENDING: "${html.substring(0, 80)}${html.length > 80 ? '...' : ''}"`, 'pending');
       }
+      updateStatus();
     }
 
     // Reset state
     function reset() {
       log('RESET: Clearing all state', 'event');
-      // Remove all block elements but keep pending span
-      Array.from(container.children).forEach(child => {
-        if (child !== pendingEl) {
-          container.removeChild(child);
-        }
-      });
+      blocksContainer.innerHTML = '';
       pendingEl.innerHTML = '';
       currentBlocks.clear();
       maxBlockIndex = -1;
-      totalChars = 0;
+      totalEvents = 0;
       isStreaming = false;
-      stopRequested = false;
+      abortController = null;
       updateStatus();
       streamBtn.disabled = false;
       stopBtn.disabled = true;
     }
 
-    // Stream markdown
+    // Stream markdown via server endpoint
     async function streamMarkdown() {
       const markdown = markdownInput.value;
-      const speed = parseInt(speedSlider.value);
+      const delayMs = parseInt(speedSlider.value);
       const chunkSize = parseInt(chunkSizeSlider.value);
 
       if (!markdown.trim()) {
@@ -739,70 +633,94 @@ Thanks for reading! Now go build something amazing.`
 
       reset();
       isStreaming = true;
-      stopRequested = false;
+      abortController = new AbortController();
       streamBtn.disabled = true;
       stopBtn.disabled = false;
       updateStatus();
 
-      log(`Starting stream: speed=${speed}ms, chunkSize=${chunkSize}`, 'event');
+      log(`Starting server-side stream: delayMs=${delayMs}, chunkSize=${chunkSize}`, 'event');
 
-      // Parse markdown into blocks
-      const blocks = parseMarkdownToBlocks(markdown);
-      log(`Parsed ${blocks.length} blocks`, 'event');
-
-      // Stream each block
-      for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
-        if (stopRequested) {
-          log('Stream stopped by user', 'event');
-          break;
-        }
-
-        const block = blocks[blockIdx];
-        const rawContent = block.content || '';
-        log(`Starting block ${blockIdx} (${block.type}): "${rawContent.substring(0, 30)}..."`, 'event');
-
-        // Stream the raw content as pending
-        let pendingText = '';
-        for (let i = 0; i < rawContent.length; i += chunkSize) {
-          if (stopRequested) break;
-
-          pendingText = rawContent.substring(0, Math.min(i + chunkSize, rawContent.length));
-          totalChars = pendingText.length;
-          onPending({ html: formatInline(pendingText) });
-          updateStatus();
-
-          await new Promise(resolve => setTimeout(resolve, speed));
-        }
-
-        if (stopRequested) break;
-
-        // Send augment when block is complete
-        onAugment({
-          blockIndex: blockIdx,
-          html: block.html,
-          type: block.type
+      try {
+        const response = await fetch('/api/debug/stream-markdown', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Yep-Anywhere': 'true',
+          },
+          body: JSON.stringify({ markdown, chunkSize, delayMs }),
+          signal: abortController.signal,
         });
 
-        // Clear pending
-        onPending({ html: '' });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
 
-        // Small delay between blocks
-        await new Promise(resolve => setTimeout(resolve, speed * 2));
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process complete SSE events
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+          let eventType = '';
+          let eventData = '';
+
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              eventType = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              eventData = line.slice(5).trim();
+            } else if (line === '' && eventType && eventData) {
+              // End of event
+              try {
+                const data = JSON.parse(eventData);
+
+                if (eventType === 'markdown-augment') {
+                  onAugment(data);
+                } else if (eventType === 'pending') {
+                  onPending(data);
+                } else if (eventType === 'done') {
+                  log(`DONE: Total events from server: ${data.totalEvents}`, 'event');
+                }
+              } catch (e) {
+                log(`ERROR parsing event: ${e.message}`, 'error');
+              }
+              eventType = '';
+              eventData = '';
+            }
+          }
+        }
+
+        log('Stream completed', 'event');
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          log('Stream aborted by user', 'event');
+        } else {
+          log(`ERROR: ${err.message}`, 'error');
+        }
+      } finally {
+        isStreaming = false;
+        abortController = null;
+        streamBtn.disabled = false;
+        stopBtn.disabled = true;
+        updateStatus();
       }
-
-      // Stream end
-      log('Stream ended', 'event');
-      isStreaming = false;
-      streamBtn.disabled = false;
-      stopBtn.disabled = true;
-      updateStatus();
     }
 
     // Event listeners
     streamBtn.addEventListener('click', streamMarkdown);
     stopBtn.addEventListener('click', () => {
-      stopRequested = true;
-      log('Stop requested...', 'event');
+      if (abortController) {
+        abortController.abort();
+        log('Stop requested...', 'event');
+      }
     });
     resetBtn.addEventListener('click', reset);
     clearLogBtn.addEventListener('click', () => {
@@ -822,7 +740,7 @@ Thanks for reading! Now go build something amazing.`
     });
 
     // Initial log
-    log('Debug harness ready. Enter markdown and click Stream.', 'event');
+    log('Debug harness ready (using server-side StreamCoordinator). Enter markdown and click Stream.', 'event');
   </script>
 </body>
 </html>
