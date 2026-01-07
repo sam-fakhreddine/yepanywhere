@@ -357,6 +357,7 @@ export class CodexSessionReader implements ISessionReader {
     fullTitle: string | null;
   } {
     const hasResponseItemUser = this.hasResponseItemUserMessages(entries);
+    let skipLeadingSystemPrompts = true;
 
     // Find first user message
     for (const entry of entries) {
@@ -366,6 +367,12 @@ export class CodexSessionReader implements ISessionReader {
         entry.payload.type === "user_message"
       ) {
         const fullTitle = entry.payload.message.trim();
+        if (
+          skipLeadingSystemPrompts &&
+          this.isSystemPromptUserMessage(fullTitle)
+        ) {
+          continue;
+        }
         const title =
           fullTitle.length <= SESSION_TITLE_MAX_LENGTH
             ? fullTitle
@@ -380,7 +387,10 @@ export class CodexSessionReader implements ISessionReader {
             .map((c) => ("text" in c ? c.text : ""))
             .join("\n")
             .trim();
-          if (text) {
+          if (
+            text &&
+            !(skipLeadingSystemPrompts && this.isSystemPromptUserMessage(text))
+          ) {
             const title =
               text.length <= SESSION_TITLE_MAX_LENGTH
                 ? text
@@ -392,6 +402,14 @@ export class CodexSessionReader implements ISessionReader {
     }
 
     return { title: null, fullTitle: null };
+  }
+
+  private isSystemPromptUserMessage(text: string): boolean {
+    const trimmed = text.trimStart();
+    return (
+      trimmed.startsWith("# AGENTS.md instructions") ||
+      trimmed.startsWith("<environment_context>")
+    );
   }
 
   /**
