@@ -79,6 +79,7 @@ export interface MergeJSONLResult {
 export function mergeJSONLMessages(
   existing: Message[],
   incoming: Message[],
+  options?: { skipDagOrdering?: boolean },
 ): MergeJSONLResult {
   // Create a map of existing messages for efficient lookup
   // Use getMessageId for canonical identifier (uuid preferred over id)
@@ -115,6 +116,9 @@ export function mergeJSONLMessages(
 
   // Reorder messages by parentUuid chain to fix race conditions
   // where SSE messages arrived before their parent (e.g., agent response before user message)
+  if (options?.skipDagOrdering) {
+    return { messages: result };
+  }
   return { messages: orderByParentChain(result) };
 }
 
