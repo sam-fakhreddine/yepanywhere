@@ -139,6 +139,17 @@ export const api = {
   },
 
   /**
+   * Get session metadata only (no messages).
+   * Lightweight endpoint for refreshing title, status, etc. without re-fetching all messages.
+   */
+  getSessionMetadata: (projectId: string, sessionId: string) =>
+    fetchJSON<{
+      session: Session;
+      status: SessionStatus;
+      pendingInputRequest?: InputRequest | null;
+    }>(`/projects/${projectId}/sessions/${sessionId}/metadata`),
+
+  /**
    * Get agent session content for lazy-loading completed Tasks.
    * Used to fetch subagent messages on demand when expanding a Task.
    */

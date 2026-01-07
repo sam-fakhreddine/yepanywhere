@@ -1,6 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+/**
+ * InboxContext - Single source of truth for inbox data.
+ *
+ * Consolidates inbox fetching to avoid multiple hooks making duplicate requests.
+ * Supports an `enabled` option to pause fetching when inbox UI is not visible.
+ */
+
+import {
+  type ReactNode,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { type InboxItem, type InboxResponse, api } from "../api/client";
-import { useFileActivity } from "./useFileActivity";
+import { useFileActivity } from "../hooks/useFileActivity";
 
 // Re-export types for consumers
 export type { InboxItem, InboxResponse } from "../api/client";
@@ -34,10 +49,6 @@ type TierOrder = Record<InboxTier, string[]>;
  * - New items are appended at the end of their tier
  * - Items that are no longer in a tier are removed
  * - Items CAN move between tiers (that's meaningful state change)
- *
- * @param newData - Fresh data from the API
- * @param currentOrder - Current order of session IDs per tier
- * @returns Merged inbox data with stable ordering
  */
 function mergeWithStableOrder(
   newData: InboxResponse,
@@ -107,38 +118,63 @@ function createEmptyTierOrder(): TierOrder {
   };
 }
 
-export interface UseInboxOptions {
-  /** Filter to a specific project (base64url-encoded project path) */
-  projectId?: string;
+const EMPTY_INBOX: InboxResponse = {
+  needsAttention: [],
+  active: [],
+  recentActivity: [],
+  unread8h: [],
+  unread24h: [],
+};
+
+interface InboxContextValue {
+  /** Sessions requiring immediate user input (tool approval or question) */
+  needsAttention: InboxItem[];
+  /** Sessions with running processes (no pending input) */
+  active: InboxItem[];
+  /** Sessions updated in the last 30 minutes */
+  recentActivity: InboxItem[];
+  /** Unread sessions from the last 8 hours */
+  unread8h: InboxItem[];
+  /** Unread sessions from the last 24 hours */
+  unread24h: InboxItem[];
+  /** Full inbox response (all tiers) */
+  inbox: InboxResponse;
+  /** True while loading initial data */
+  loading: boolean;
+  /** Error from the last fetch attempt, if any */
+  error: Error | null;
+  /** Force a full refresh with server sort order */
+  refresh: () => Promise<void>;
+  /** Refetch data (maintains stable ordering) */
+  refetch: (forceFullSort?: boolean) => Promise<void>;
+  /** Count of sessions needing attention */
+  totalNeedsAttention: number;
+  /** Count of active sessions */
+  totalActive: number;
+  /** Total count of all inbox items */
+  totalItems: number;
+  /** Whether fetching is enabled */
+  enabled: boolean;
+  /** Enable or disable fetching */
+  setEnabled: (enabled: boolean) => void;
 }
 
-/**
- * Hook to fetch and poll inbox data with UI-stable ordering.
- *
- * Features:
- * - Fetches inbox data on mount
- * - Polls every 30 seconds to stay fresh
- * - Maintains stable item order within tiers during polling
- * - Provides explicit refresh() to force full re-sort
- * - Optionally filters to a single project
- *
- * Stability guarantees:
- * - Items within a tier maintain their position during polls
- * - New items appear at the bottom of their tier
- * - Items can move between tiers (that's meaningful state change)
- * - Calling refresh() triggers a full sort by server order
- */
-export function useInbox(options: UseInboxOptions = {}) {
-  const { projectId } = options;
-  const [inbox, setInbox] = useState<InboxResponse>({
-    needsAttention: [],
-    active: [],
-    recentActivity: [],
-    unread8h: [],
-    unread24h: [],
-  });
+const InboxContext = createContext<InboxContextValue | null>(null);
+
+interface InboxProviderProps {
+  children: ReactNode;
+  /** Initial enabled state (default: true) */
+  initialEnabled?: boolean;
+}
+
+export function InboxProvider({
+  children,
+  initialEnabled = true,
+}: InboxProviderProps) {
+  const [inbox, setInbox] = useState<InboxResponse>(EMPTY_INBOX);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [enabled, setEnabled] = useState(initialEnabled);
 
   // Track the order of session IDs per tier for stable rendering
   const tierOrderRef = useRef<TierOrder>(createEmptyTierOrder());
@@ -146,42 +182,44 @@ export function useInbox(options: UseInboxOptions = {}) {
   const hasInitialLoadRef = useRef(false);
   // Debounce timer for SSE-triggered refetches
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track enabled state in ref for callbacks
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
 
   /**
    * Fetches inbox data and applies stable ordering.
    * @param forceFullSort - If true, uses server sort order instead of stable merge
    */
-  const fetchInbox = useCallback(
-    async (forceFullSort = false) => {
-      try {
-        const data = await api.getInbox(projectId);
+  const fetchInbox = useCallback(async (forceFullSort = false) => {
+    // Skip if disabled
+    if (!enabledRef.current) return;
 
-        if (!hasInitialLoadRef.current || forceFullSort) {
-          // Initial load or explicit refresh: use server's sort order
-          setInbox(data);
-          tierOrderRef.current = extractTierOrder(data);
-          hasInitialLoadRef.current = true;
-        } else {
-          // Subsequent fetches: merge with stable ordering
-          const mergedData = mergeWithStableOrder(data, tierOrderRef.current);
-          setInbox(mergedData);
-          // Update tier order to include any new items
-          tierOrderRef.current = extractTierOrder(mergedData);
-        }
+    try {
+      const data = await api.getInbox();
 
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err : new Error(String(err)));
-      } finally {
-        setLoading(false);
+      if (!hasInitialLoadRef.current || forceFullSort) {
+        // Initial load or explicit refresh: use server's sort order
+        setInbox(data);
+        tierOrderRef.current = extractTierOrder(data);
+        hasInitialLoadRef.current = true;
+      } else {
+        // Subsequent fetches: merge with stable ordering
+        const mergedData = mergeWithStableOrder(data, tierOrderRef.current);
+        setInbox(mergedData);
+        // Update tier order to include any new items
+        tierOrderRef.current = extractTierOrder(mergedData);
       }
-    },
-    [projectId],
-  );
+
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   /**
    * Force a full refresh with server-provided sort order.
-   * Use this when the user explicitly wants to refresh.
    */
   const refresh = useCallback(() => {
     return fetchInbox(true);
@@ -191,6 +229,8 @@ export function useInbox(options: UseInboxOptions = {}) {
    * Debounced refetch - prevents rapid refetches from multiple SSE events
    */
   const debouncedRefetch = useCallback(() => {
+    if (!enabledRef.current) return;
+
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
@@ -200,7 +240,6 @@ export function useInbox(options: UseInboxOptions = {}) {
   }, [fetchInbox]);
 
   // Subscribe to SSE events for real-time updates
-  // When filtering by projectId, only refetch for events from that project
   useFileActivity({
     onFileChange: (event) => {
       // Refetch on session file changes (new messages may change hasUnread status)
@@ -208,28 +247,18 @@ export function useInbox(options: UseInboxOptions = {}) {
         debouncedRefetch();
       }
     },
-    onProcessStateChange: (event) => {
-      if (!projectId || event.projectId === projectId) {
-        debouncedRefetch();
-      }
-    },
-    onSessionStatusChange: (event) => {
-      if (!projectId || event.projectId === projectId) {
-        debouncedRefetch();
-      }
-    },
+    onProcessStateChange: debouncedRefetch,
+    onSessionStatusChange: debouncedRefetch,
     onSessionSeen: debouncedRefetch,
-    onSessionCreated: (event) => {
-      if (!projectId || event.session.projectId === projectId) {
-        debouncedRefetch();
-      }
-    },
+    onSessionCreated: debouncedRefetch,
   });
 
-  // Initial fetch
+  // Initial fetch when enabled
   useEffect(() => {
-    fetchInbox();
-  }, [fetchInbox]);
+    if (enabled) {
+      fetchInbox();
+    }
+  }, [enabled, fetchInbox]);
 
   // Cleanup debounce timer
   useEffect(() => {
@@ -240,7 +269,7 @@ export function useInbox(options: UseInboxOptions = {}) {
     };
   }, []);
 
-  // Computed totals for convenience
+  // Computed totals
   const totalNeedsAttention = inbox.needsAttention.length;
   const totalActive = inbox.active.length;
   const totalItems =
@@ -250,34 +279,39 @@ export function useInbox(options: UseInboxOptions = {}) {
     inbox.unread8h.length +
     inbox.unread24h.length;
 
-  return {
-    /** Sessions requiring immediate user input (tool approval or question) */
-    needsAttention: inbox.needsAttention,
-    /** Sessions with running processes (no pending input) */
-    active: inbox.active,
-    /** Sessions updated in the last 30 minutes */
-    recentActivity: inbox.recentActivity,
-    /** Unread sessions from the last 8 hours */
-    unread8h: inbox.unread8h,
-    /** Unread sessions from the last 24 hours */
-    unread24h: inbox.unread24h,
-    /** Full inbox response (all tiers) */
-    inbox,
-    /** Project ID filter (if set) */
-    projectId,
-    /** True while loading initial data */
-    loading,
-    /** Error from the last fetch attempt, if any */
-    error,
-    /** Force a full refresh with server sort order */
-    refresh,
-    /** Refetch data (maintains stable ordering) */
-    refetch: fetchInbox,
-    /** Count of sessions needing attention */
-    totalNeedsAttention,
-    /** Count of active sessions */
-    totalActive,
-    /** Total count of all inbox items */
-    totalItems,
-  };
+  return (
+    <InboxContext.Provider
+      value={{
+        needsAttention: inbox.needsAttention,
+        active: inbox.active,
+        recentActivity: inbox.recentActivity,
+        unread8h: inbox.unread8h,
+        unread24h: inbox.unread24h,
+        inbox,
+        loading,
+        error,
+        refresh,
+        refetch: fetchInbox,
+        totalNeedsAttention,
+        totalActive,
+        totalItems,
+        enabled,
+        setEnabled,
+      }}
+    >
+      {children}
+    </InboxContext.Provider>
+  );
+}
+
+/**
+ * Hook to access inbox data from the global context.
+ * Must be used within an InboxProvider.
+ */
+export function useInboxContext() {
+  const context = useContext(InboxContext);
+  if (!context) {
+    throw new Error("useInboxContext must be used within an InboxProvider");
+  }
+  return context;
 }

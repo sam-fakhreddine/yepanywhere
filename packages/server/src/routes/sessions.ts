@@ -441,6 +441,89 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
     },
   );
 
+  // GET /api/projects/:projectId/sessions/:sessionId/metadata - Get session metadata only (no messages)
+  // Lightweight endpoint for refreshing title, status, etc. without re-fetching all messages
+  routes.get("/projects/:projectId/sessions/:sessionId/metadata", async (c) => {
+    const projectId = c.req.param("projectId");
+    const sessionId = c.req.param("sessionId");
+
+    // Validate projectId format at API boundary
+    if (!isUrlProjectId(projectId)) {
+      return c.json({ error: "Invalid project ID format" }, 400);
+    }
+
+    const project = await deps.scanner.getOrCreateProject(projectId);
+    if (!project) {
+      return c.json({ error: "Project not found" }, 404);
+    }
+
+    // Check if session is actively owned by a process
+    const process = deps.supervisor.getProcessForSession(sessionId);
+
+    // Check if session is being controlled by an external program
+    const isExternal = deps.externalTracker?.isExternal(sessionId) ?? false;
+
+    // Determine the session status
+    const status = process
+      ? {
+          state: "owned" as const,
+          processId: process.id,
+          permissionMode: process.permissionMode,
+          modeVersion: process.modeVersion,
+        }
+      : isExternal
+        ? { state: "external" as const }
+        : { state: "idle" as const };
+
+    // Get session metadata (custom title, archived, starred)
+    const metadata = deps.sessionMetadataService?.getMetadata(sessionId);
+
+    // Get notification data (lastSeenAt, hasUnread)
+    const lastSeenEntry = deps.notificationService?.getLastSeen(sessionId);
+    const lastSeenAt = lastSeenEntry?.timestamp;
+
+    // Get pending input request from active process
+    const pendingInputRequest =
+      process?.state.type === "waiting-input" ? process.state.request : null;
+
+    // Read minimal session info from disk (just for title/timestamps, no messages)
+    const reader = deps.readerFactory(project);
+    const sessionSummary = await reader.getSessionSummary(sessionId, projectId);
+
+    if (!sessionSummary && !process) {
+      return c.json({ error: "Session not found" }, 404);
+    }
+
+    // Calculate hasUnread if we have session summary
+    const hasUnread =
+      deps.notificationService && sessionSummary
+        ? deps.notificationService.hasUnread(
+            sessionId,
+            sessionSummary.updatedAt,
+          )
+        : undefined;
+
+    return c.json({
+      session: {
+        id: sessionId,
+        projectId,
+        title: sessionSummary?.title ?? null,
+        fullTitle: sessionSummary?.fullTitle ?? null,
+        createdAt: sessionSummary?.createdAt ?? new Date().toISOString(),
+        updatedAt: sessionSummary?.updatedAt ?? new Date().toISOString(),
+        messageCount: sessionSummary?.messageCount ?? 0,
+        model: sessionSummary?.model,
+        customTitle: metadata?.customTitle,
+        isArchived: metadata?.isArchived,
+        isStarred: metadata?.isStarred,
+        lastSeenAt,
+        hasUnread,
+      },
+      status,
+      pendingInputRequest,
+    });
+  });
+
   // GET /api/projects/:projectId/sessions/:sessionId - Get session detail
   // Optional query param: ?afterMessageId=<id> for incremental fetching
   routes.get("/projects/:projectId/sessions/:sessionId", async (c) => {

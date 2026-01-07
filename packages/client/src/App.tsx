@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { FloatingActionButton } from "./components/FloatingActionButton";
 import { ReloadBanner } from "./components/ReloadBanner";
 import { AuthProvider } from "./contexts/AuthContext";
+import { InboxProvider } from "./contexts/InboxContext";
 import { SchemaValidationProvider } from "./contexts/SchemaValidationContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { useNeedsAttentionBadge } from "./hooks/useNeedsAttentionBadge";
@@ -13,14 +14,13 @@ interface Props {
 }
 
 /**
- * App wrapper that provides global functionality like reload notifications, toasts,
- * and schema validation.
+ * Inner component that uses hooks requiring InboxContext.
  */
-export function App({ children }: Props) {
+function AppContent({ children }: Props) {
   // Sync notifyInApp setting to service worker on app startup and SW restarts
   useSyncNotifyInAppSetting();
 
-  // Update tab title with needs-attention badge count
+  // Update tab title with needs-attention badge count (uses InboxContext)
   useNeedsAttentionBadge();
 
   const {
@@ -34,28 +34,42 @@ export function App({ children }: Props) {
   } = useReloadNotifications();
 
   return (
+    <>
+      {isManualReloadMode && pendingReloads.backend && (
+        <ReloadBanner
+          target="backend"
+          onReload={reloadBackend}
+          onDismiss={() => dismiss("backend")}
+          unsafeToRestart={unsafeToRestart}
+          activeWorkers={workerActivity.activeWorkers}
+        />
+      )}
+      {isManualReloadMode && pendingReloads.frontend && (
+        <ReloadBanner
+          target="frontend"
+          onReload={reloadFrontend}
+          onDismiss={() => dismiss("frontend")}
+        />
+      )}
+      {children}
+      <FloatingActionButton />
+    </>
+  );
+}
+
+/**
+ * App wrapper that provides global functionality like reload notifications, toasts,
+ * and schema validation.
+ */
+export function App({ children }: Props) {
+  return (
     <ToastProvider>
       <AuthProvider>
-        <SchemaValidationProvider>
-          {isManualReloadMode && pendingReloads.backend && (
-            <ReloadBanner
-              target="backend"
-              onReload={reloadBackend}
-              onDismiss={() => dismiss("backend")}
-              unsafeToRestart={unsafeToRestart}
-              activeWorkers={workerActivity.activeWorkers}
-            />
-          )}
-          {isManualReloadMode && pendingReloads.frontend && (
-            <ReloadBanner
-              target="frontend"
-              onReload={reloadFrontend}
-              onDismiss={() => dismiss("frontend")}
-            />
-          )}
-          {children}
-          <FloatingActionButton />
-        </SchemaValidationProvider>
+        <InboxProvider>
+          <SchemaValidationProvider>
+            <AppContent>{children}</AppContent>
+          </SchemaValidationProvider>
+        </InboxProvider>
       </AuthProvider>
     </ToastProvider>
   );

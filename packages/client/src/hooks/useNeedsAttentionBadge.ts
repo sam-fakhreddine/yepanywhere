@@ -1,9 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../api/client";
-import { useFileActivity } from "./useFileActivity";
-
-// Debounce interval for refetch on SSE events
-const REFETCH_DEBOUNCE_MS = 500;
+import { useEffect } from "react";
+import { useInboxContext } from "../contexts/InboxContext";
 
 // Regex to match and strip existing badge prefix like "(3) "
 const BADGE_PREFIX_REGEX = /^\(\d+\)\s*/;
@@ -14,49 +10,11 @@ const BADGE_PREFIX_REGEX = /^\(\d+\)\s*/;
  *
  * This hook works independently of useDocumentTitle - it observes title changes
  * and prepends/updates the badge as needed.
+ *
+ * Uses InboxContext for data - no independent fetching.
  */
 export function useNeedsAttentionBadge() {
-  const [count, setCount] = useState(0);
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Fetch just the needs attention count
-  const fetchCount = useCallback(async () => {
-    try {
-      const data = await api.getInbox();
-      setCount(data.needsAttention.length);
-    } catch {
-      // Silently ignore errors - badge is non-critical
-    }
-  }, []);
-
-  // Debounced refetch for SSE events
-  const debouncedRefetch = useCallback(() => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-    debounceTimerRef.current = setTimeout(fetchCount, REFETCH_DEBOUNCE_MS);
-  }, [fetchCount]);
-
-  // Subscribe to SSE events for real-time updates
-  // onProcessStateChange fires when sessions enter/exit "waiting-input" state
-  useFileActivity({
-    onProcessStateChange: debouncedRefetch,
-    onReconnect: fetchCount, // Refetch immediately on reconnect
-  });
-
-  // Initial fetch
-  useEffect(() => {
-    fetchCount();
-  }, [fetchCount]);
-
-  // Cleanup debounce timer
-  useEffect(() => {
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-    };
-  }, []);
+  const { totalNeedsAttention: count } = useInboxContext();
 
   // Update document title when count changes
   useEffect(() => {

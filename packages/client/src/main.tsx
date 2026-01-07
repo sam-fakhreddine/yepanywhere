@@ -1,5 +1,9 @@
-import { StrictMode } from "react";
+import { Fragment, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+
+// Toggle to disable StrictMode for easier debugging (avoids double renders)
+const STRICT_MODE = false;
+const Wrapper = STRICT_MODE ? StrictMode : Fragment;
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { App } from "./App";
 import { initializeFontSize } from "./hooks/useFontSize";
@@ -36,7 +40,7 @@ if (!rootElement) {
 }
 
 createRoot(rootElement).render(
-  <StrictMode>
+  <Wrapper>
     <BrowserRouter basename={basename}>
       <App>
         <Routes>
@@ -63,5 +67,5 @@ createRoot(rootElement).render(
         </Routes>
       </App>
     </BrowserRouter>
-  </StrictMode>,
+  </Wrapper>,
 );

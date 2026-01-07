@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { Outlet, useOutletContext, useParams } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
+import { useInboxContext } from "../contexts/InboxContext";
 import { useDrafts, useNewSessionDraft } from "../hooks/useDrafts";
 import type { ProcessStateType } from "../hooks/useFileActivity";
-import { useInbox } from "../hooks/useInbox";
 import { useSessions } from "../hooks/useSessions";
 import { useSidebarPreference } from "../hooks/useSidebarPreference";
 import { useSidebarWidth } from "../hooks/useSidebarWidth";
@@ -68,9 +68,12 @@ export function ProjectLayout() {
   const sessionDrafts = useDrafts(sessionIds);
   const hasNewSessionDraft = useNewSessionDraft(projectId);
 
-  // Inbox counts - lifted here so it survives sidebar mount/unmount transitions
-  const { totalNeedsAttention } = useInbox({ projectId });
-  const inboxCount = totalNeedsAttention;
+  // Inbox counts from global context, filtered by project
+  const { needsAttention } = useInboxContext();
+  const inboxCount = useMemo(
+    () => needsAttention.filter((item) => item.projectId === projectId).length,
+    [needsAttention, projectId],
+  );
 
   // Guard against missing projectId
   if (!projectId) {

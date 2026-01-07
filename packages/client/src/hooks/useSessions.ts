@@ -15,6 +15,7 @@ import {
 } from "./useFileActivity";
 
 const REFETCH_DEBOUNCE_MS = 500;
+const SESSION_REFETCH_DEBOUNCE_MS = 200;
 
 export function useSessions(projectId: string | undefined) {
   const [project, setProject] = useState<Project | null>(null);
@@ -22,6 +23,10 @@ export function useSessions(projectId: string | undefined) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track pending session-specific refetch timers (sessionId -> timer)
+  const sessionRefetchTimersRef = useRef<
+    Map<string, ReturnType<typeof setTimeout>>
+  >(new Map());
   // Track whether we've done the initial load (to preserve sort order on refetches)
   const hasInitialLoadRef = useRef(false);
   // Track which project we loaded so we can reset on project change
@@ -110,6 +115,74 @@ export function useSessions(projectId: string | undefined) {
     }, REFETCH_DEBOUNCE_MS);
   }, [fetch]);
 
+  // Fetch a single session's metadata and update it in place (lightweight alternative to full refetch)
+  const refetchSessionMetadata = useCallback(
+    async (sessionId: string) => {
+      if (!projectId) return;
+
+      try {
+        const data = await api.getSessionMetadata(projectId, sessionId);
+
+        // Convert InputRequest.type to PendingInputType
+        // "tool-approval" stays as-is, "question" or "choice" becomes "user-question"
+        const pendingInputType = data.pendingInputRequest
+          ? data.pendingInputRequest.type === "tool-approval"
+            ? ("tool-approval" as const)
+            : ("user-question" as const)
+          : undefined;
+
+        setSessions((prev) =>
+          prev.map((session) => {
+            if (session.id !== sessionId) return session;
+            // Update the session with fresh metadata
+            return {
+              ...session,
+              title: data.session.title,
+              fullTitle: data.session.fullTitle,
+              customTitle: data.session.customTitle,
+              updatedAt: data.session.updatedAt,
+              status: data.status,
+              pendingInputType,
+              isArchived: data.session.isArchived,
+              isStarred: data.session.isStarred,
+              lastSeenAt: data.session.lastSeenAt,
+              hasUnread: data.session.hasUnread,
+            };
+          }),
+        );
+        // Update process state based on session status
+        if (data.status.state === "owned") {
+          // Session has a running process - we don't know exact state from metadata alone
+          // but we can clear it if status goes to idle
+        } else if (data.status.state === "idle") {
+          setProcessStates((prev) => {
+            const { [sessionId]: _, ...rest } = prev;
+            return rest;
+          });
+        }
+      } catch {
+        // Silently fail - session might have been deleted
+      }
+    },
+    [projectId],
+  );
+
+  // Debounced session-specific refetch
+  const debouncedRefetchSession = useCallback(
+    (sessionId: string) => {
+      const existing = sessionRefetchTimersRef.current.get(sessionId);
+      if (existing) {
+        clearTimeout(existing);
+      }
+      const timer = setTimeout(() => {
+        sessionRefetchTimersRef.current.delete(sessionId);
+        refetchSessionMetadata(sessionId);
+      }, SESSION_REFETCH_DEBOUNCE_MS);
+      sessionRefetchTimersRef.current.set(sessionId, timer);
+    },
+    [refetchSessionMetadata],
+  );
+
   // Handle file change events
   const handleFileChange = useCallback(
     (event: FileChangeEvent) => {
@@ -126,11 +199,11 @@ export function useSessions(projectId: string | undefined) {
       // This avoids calling side effects inside a state updater
       const sessionExists = sessionsRef.current.some((s) => s.id === sessionId);
       if (sessionExists) {
-        // Trigger refetch for updates to existing sessions
-        debouncedRefetch();
+        // Fetch only this session's metadata (lightweight, ~0.7kB vs ~654kB for full project)
+        debouncedRefetchSession(sessionId);
       }
     },
-    [debouncedRefetch],
+    [debouncedRefetchSession],
   );
 
   // Handle session status changes (real-time updates without refetch)
@@ -266,12 +339,16 @@ export function useSessions(projectId: string | undefined) {
     fetch();
   }, [fetch]);
 
-  // Cleanup debounce timer
+  // Cleanup debounce timers
   useEffect(() => {
     return () => {
       if (refetchTimerRef.current) {
         clearTimeout(refetchTimerRef.current);
       }
+      for (const timer of sessionRefetchTimersRef.current.values()) {
+        clearTimeout(timer);
+      }
+      sessionRefetchTimersRef.current.clear();
     };
   }, []);
 

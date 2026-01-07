@@ -424,9 +424,10 @@ export function useSession(
 
   // Fetch session metadata only (title, etc.) - used when we need metadata
   // updates but already have messages from SSE
+  // Uses lightweight metadata-only endpoint to avoid re-fetching all messages
   const fetchSessionMetadata = useCallback(async () => {
     try {
-      const data = await api.getSession(projectId, sessionId);
+      const data = await api.getSessionMetadata(projectId, sessionId);
       setSession((prev) =>
         prev ? { ...prev, ...data.session, messages: prev.messages } : prev,
       );
@@ -1013,9 +1014,10 @@ export function useSession(
 
   // Handle SSE errors by checking if process is still alive
   // If process died (idle timeout), transition to idle state
+  // Uses lightweight metadata endpoint to avoid re-fetching all messages
   const handleSSEError = useCallback(async () => {
     try {
-      const data = await api.getSession(projectId, sessionId);
+      const data = await api.getSessionMetadata(projectId, sessionId);
       if (data.status.state !== "owned") {
         setStatus({ state: "idle" });
         setProcessState("idle");

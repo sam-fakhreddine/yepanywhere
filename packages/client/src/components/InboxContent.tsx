@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { type InboxItem, useInbox } from "../hooks/useInbox";
+import { type InboxItem, useInboxContext } from "../contexts/InboxContext";
 import type { Project } from "../types";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 
@@ -141,8 +141,20 @@ export interface InboxContentProps {
 }
 
 /**
+ * Filter inbox items by project ID.
+ */
+function filterByProject(
+  items: InboxItem[],
+  projectId: string | undefined,
+): InboxItem[] {
+  if (!projectId) return items;
+  return items.filter((item) => item.projectId === projectId);
+}
+
+/**
  * Shared inbox content component.
- * Handles fetching, displaying tiers, refresh button, and empty/loading/error states.
+ * Displays inbox tiers, refresh button, and empty/loading/error states.
+ * Uses InboxContext for data - filtering is done client-side.
  */
 export function InboxContent({
   projectId,
@@ -150,16 +162,29 @@ export function InboxContent({
   onProjectChange,
 }: InboxContentProps) {
   const {
-    needsAttention,
-    active,
-    recentActivity,
-    unread8h,
-    unread24h,
+    needsAttention: allNeedsAttention,
+    active: allActive,
+    recentActivity: allRecentActivity,
+    unread8h: allUnread8h,
+    unread24h: allUnread24h,
     loading,
     error,
     refresh,
-    totalItems,
-  } = useInbox({ projectId });
+  } = useInboxContext();
+
+  // Filter by project if specified
+  const needsAttention = filterByProject(allNeedsAttention, projectId);
+  const active = filterByProject(allActive, projectId);
+  const recentActivity = filterByProject(allRecentActivity, projectId);
+  const unread8h = filterByProject(allUnread8h, projectId);
+  const unread24h = filterByProject(allUnread24h, projectId);
+
+  const totalItems =
+    needsAttention.length +
+    active.length +
+    recentActivity.length +
+    unread8h.length +
+    unread24h.length;
 
   const [refreshing, setRefreshing] = useState(false);
 
