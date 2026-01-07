@@ -1,19 +1,13 @@
 import type { MarkdownAugment } from "@yep-anywhere/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import {
-  getMessageId,
-  mergeJSONLMessages,
-  mergeSSEMessage,
-} from "../lib/mergeMessages";
+import { getMessageId } from "../lib/mergeMessages";
 import { findPendingTasks } from "../lib/pendingTasks";
 import { extractSessionIdFromFileEvent } from "../lib/sessionFile";
-import { getProvider } from "../providers/registry";
 import type {
   InputRequest,
   Message,
   PermissionMode,
-  Session,
   SessionStatus,
 } from "../types";
 import {
@@ -23,25 +17,19 @@ import {
 } from "./useFileActivity";
 import { useSSE } from "./useSSE";
 import {
+  type AgentContentMap,
+  type SessionLoadResult,
+  useSessionMessages,
+} from "./useSessionMessages";
+import {
   type StreamingMarkdownCallbacks,
   useStreamingContent,
 } from "./useStreamingContent";
 
 export type ProcessState = "idle" | "running" | "waiting-input" | "hold";
 
-/** Content from a subagent (Task tool) */
-export interface AgentContent {
-  messages: Message[];
-  status: "pending" | "running" | "completed" | "failed";
-  /** Real-time context usage from message_start events */
-  contextUsage?: {
-    inputTokens: number;
-    percentage: number;
-  };
-}
-
-/** Map of agentId → agent content */
-export type AgentContentMap = Record<string, AgentContent>;
+// Re-export types from useSessionMessages
+export type { AgentContent, AgentContentMap } from "./useSessionMessages";
 
 const THROTTLE_MS = 500;
 
@@ -61,8 +49,6 @@ export function useSession(
   initialStatus?: { state: "owned"; processId: string },
   streamingMarkdownCallbacks?: StreamingMarkdownCallbacks,
 ) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
   // Use initial status if provided (from navigation state) to connect SSE immediately
   const [status, setStatus] = useState<SessionStatus>(
     initialStatus ?? { state: "idle" },
@@ -73,23 +59,11 @@ export function useSession(
   );
   const [pendingInputRequest, setPendingInputRequest] =
     useState<InputRequest | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   // Actual session ID from server (may differ from URL sessionId during temp→real ID transition)
   // This happens when createSession returns before the SDK sends the real session ID
   const [actualSessionId, setActualSessionId] = useState<string>(sessionId);
-
-  // Subagent content: messages from Task tool agents, keyed by agentId (session_id)
-  // These are kept separate from main messages to maintain clean DAG structure
-  const [agentContent, setAgentContent] = useState<AgentContentMap>({});
-
-  // Mapping from Task tool_use_id → subagent session_id (agentId)
-  // Built during streaming when we receive system/init messages with parent_tool_use_id
-  // This allows TaskRenderer to access agentContent before the tool_result arrives
-  const [toolUseToAgent, setToolUseToAgent] = useState<Map<string, string>>(
-    () => new Map(),
-  );
 
   // Track last SSE activity timestamp for engagement tracking
   // This includes both main session and subagent messages, so we can properly
@@ -117,6 +91,72 @@ export function useSession(
   // Mode is pending when local differs from server-confirmed
   const isModePending = localMode !== serverMode;
 
+  // Apply server mode update only if version is >= our last known version
+  // This syncs both local and server mode to the confirmed value
+  const applyServerModeUpdate = useCallback(
+    (mode: PermissionMode, version: number) => {
+      if (version >= lastKnownModeVersionRef.current) {
+        lastKnownModeVersionRef.current = version;
+        setServerMode(mode);
+        setLocalMode(mode); // Sync local to server-confirmed mode
+        setModeVersion(version);
+      }
+    },
+    [],
+  );
+
+  // Handle initial load completion from useSessionMessages
+  const handleLoadComplete = useCallback(
+    (result: SessionLoadResult) => {
+      setStatus(result.status);
+      // Sync permission mode from server if owned
+      if (
+        result.status.state === "owned" &&
+        result.status.permissionMode &&
+        result.status.modeVersion !== undefined
+      ) {
+        applyServerModeUpdate(
+          result.status.permissionMode,
+          result.status.modeVersion,
+        );
+      }
+      // Set pending input request from API response immediately
+      // This fixes race condition where SSE connection is delayed but tool approval is pending
+      if (result.pendingInputRequest) {
+        setPendingInputRequest(result.pendingInputRequest as InputRequest);
+      }
+    },
+    [applyServerModeUpdate],
+  );
+
+  // Handle initial load error
+  const handleLoadError = useCallback((err: Error) => {
+    setError(err);
+  }, []);
+
+  // Use the session messages hook for message state and SSE buffering
+  const {
+    messages,
+    agentContent,
+    toolUseToAgent,
+    loading,
+    session,
+    handleStreamingUpdate,
+    handleSSEMessageEvent,
+    handleSSESubagentMessage,
+    registerToolUseAgent,
+    setAgentContent,
+    setToolUseToAgent,
+    setMessages,
+    fetchNewMessages,
+    fetchSessionMetadata,
+  } = useSessionMessages({
+    projectId,
+    sessionId,
+    onLoadComplete: handleLoadComplete,
+    onLoadError: handleLoadError,
+  });
+
   // Update local mode (UI selection) and sync to server if process is active
   const setPermissionMode = useCallback(
     async (mode: PermissionMode) => {
@@ -139,20 +179,6 @@ export function useSession(
       }
     },
     [sessionId, status.state],
-  );
-
-  // Apply server mode update only if version is >= our last known version
-  // This syncs both local and server mode to the confirmed value
-  const applyServerModeUpdate = useCallback(
-    (mode: PermissionMode, version: number) => {
-      if (version >= lastKnownModeVersionRef.current) {
-        lastKnownModeVersionRef.current = version;
-        setServerMode(mode);
-        setLocalMode(mode); // Sync local to server-confirmed mode
-        setModeVersion(version);
-      }
-    },
-    [],
   );
 
   // Set hold state (soft pause) for the session
@@ -186,9 +212,6 @@ export function useSession(
     pending: boolean;
   }>({ timer: null, pending: false });
 
-  // Track last message ID for incremental fetching
-  const lastMessageIdRef = useRef<string | undefined>(undefined);
-
   // Add a message to the pending queue
   // Generates a tempId that will be sent to the server and echoed back in SSE
   const addPendingMessage = useCallback((content: string): string => {
@@ -205,55 +228,8 @@ export function useSession(
     setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
   }, []);
 
-  // Update lastMessageIdRef when messages change
-  // Use getMessageId to prefer uuid over id
-  useEffect(() => {
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage) {
-      lastMessageIdRef.current = getMessageId(lastMessage);
-    }
-  }, [messages]);
-
   // Track if we've loaded pending agents for this session
   const pendingAgentsLoadedRef = useRef<string | null>(null);
-
-  // Load initial data
-  useEffect(() => {
-    setLoading(true);
-    // Reset agentContent when switching sessions
-    setAgentContent({});
-    pendingAgentsLoadedRef.current = null;
-    api
-      .getSession(projectId, sessionId)
-      .then((data) => {
-        setSession(data.session);
-        // Tag messages from JSONL as authoritative
-        const taggedMessages = data.messages.map((m) => ({
-          ...m,
-          _source: "jsonl" as const,
-        }));
-        setMessages(taggedMessages);
-        setStatus(data.status);
-        // Sync permission mode from server if owned
-        if (
-          data.status.state === "owned" &&
-          data.status.permissionMode &&
-          data.status.modeVersion !== undefined
-        ) {
-          applyServerModeUpdate(
-            data.status.permissionMode,
-            data.status.modeVersion,
-          );
-        }
-        // Set pending input request from API response immediately
-        // This fixes race condition where SSE connection is delayed but tool approval is pending
-        if (data.pendingInputRequest) {
-          setPendingInputRequest(data.pendingInputRequest);
-        }
-      })
-      .catch(setError)
-      .finally(() => setLoading(false));
-  }, [projectId, sessionId, applyServerModeUpdate]);
 
   // Load pending agent content on session load
   // This handles page reload while Tasks are running: loads agent content-so-far
@@ -337,34 +313,14 @@ export function useSession(
     };
 
     loadPendingAgents();
-  }, [loading, messages, projectId, sessionId]);
-
-  // Fetch only new messages (incremental update)
-  const fetchNewMessages = useCallback(async () => {
-    try {
-      const data = await api.getSession(
-        projectId,
-        sessionId,
-        lastMessageIdRef.current,
-      );
-      if (data.messages.length > 0) {
-        setMessages((prev) => {
-          const result = mergeJSONLMessages(prev, data.messages, {
-            skipDagOrdering: !getProvider(data.session.provider).capabilities
-              .supportsDag,
-          });
-          return result.messages;
-        });
-      }
-      // Update session metadata (including title) which may have changed
-      setSession((prev) =>
-        prev ? { ...prev, ...data.session, messages: prev.messages } : prev,
-      );
-      setStatus(data.status);
-    } catch {
-      // Silent fail for incremental updates
-    }
-  }, [projectId, sessionId]);
+  }, [
+    loading,
+    messages,
+    projectId,
+    sessionId,
+    setAgentContent,
+    setToolUseToAgent,
+  ]);
 
   // Leading + trailing edge throttle:
   // - Leading: fires immediately on first call
@@ -388,20 +344,6 @@ export function useSession(
       ref.pending = true;
     }
   }, [fetchNewMessages]);
-
-  // Fetch session metadata only (title, etc.) - used when we need metadata
-  // updates but already have messages from SSE
-  // Uses lightweight metadata-only endpoint to avoid re-fetching all messages
-  const fetchSessionMetadata = useCallback(async () => {
-    try {
-      const data = await api.getSessionMetadata(projectId, sessionId);
-      setSession((prev) =>
-        prev ? { ...prev, ...data.session, messages: prev.messages } : prev,
-      );
-    } catch {
-      // Silent fail for metadata updates
-    }
-  }, [projectId, sessionId]);
 
   // Handle file changes - triggers metadata refetch for all sessions
   const handleFileChange = useCallback(
@@ -455,68 +397,6 @@ export function useSession(
     };
   }, []);
 
-  // Callback for streaming content updates - routes to main messages or agentContent
-  const handleStreamingUpdate = useCallback(
-    (streamingMessage: Message, agentId?: string) => {
-      const messageId = getMessageId(streamingMessage);
-      if (!messageId) return;
-
-      if (agentId) {
-        // Route to agentContent
-        setAgentContent((prev) => {
-          const existing = prev[agentId] ?? {
-            messages: [],
-            status: "running" as const,
-          };
-          const existingIdx = existing.messages.findIndex(
-            (m) => getMessageId(m) === messageId,
-          );
-
-          if (existingIdx >= 0) {
-            const updated = [...existing.messages];
-            updated[existingIdx] = streamingMessage;
-            return { ...prev, [agentId]: { ...existing, messages: updated } };
-          }
-          return {
-            ...prev,
-            [agentId]: {
-              ...existing,
-              messages: [...existing.messages, streamingMessage],
-            },
-          };
-        });
-        return;
-      }
-
-      // Route to main messages
-      setMessages((prev) => {
-        const existingIdx = prev.findIndex(
-          (m) => getMessageId(m) === messageId,
-        );
-        if (existingIdx >= 0) {
-          const updated = [...prev];
-          updated[existingIdx] = streamingMessage;
-          return updated;
-        }
-        return [...prev, streamingMessage];
-      });
-    },
-    [],
-  );
-
-  // Callback for toolUse→agent mapping
-  const handleToolUseMapping = useCallback(
-    (toolUseId: string, agentId: string) => {
-      setToolUseToAgent((prev) => {
-        if (prev.has(toolUseId)) return prev;
-        const next = new Map(prev);
-        next.set(toolUseId, agentId);
-        return next;
-      });
-    },
-    [],
-  );
-
   // Callback for agent context usage updates
   const handleAgentContextUsage = useCallback(
     (agentId: string, usage: { inputTokens: number; percentage: number }) => {
@@ -531,7 +411,7 @@ export function useSession(
         };
       });
     },
-    [],
+    [setAgentContent],
   );
 
   // Use streaming content hook for handling stream_event SSE messages
@@ -541,7 +421,7 @@ export function useSession(
     cleanup: cleanupStreaming,
   } = useStreamingContent({
     onUpdateMessage: handleStreamingUpdate,
-    onToolUseMapping: handleToolUseMapping,
+    onToolUseMapping: registerToolUseAgent,
     onAgentContextUsage: handleAgentContextUsage,
     streamingMarkdownCallbacks,
   });
@@ -656,39 +536,13 @@ export function useSession(
           // Capture toolUseId → agentId mapping on first subagent message
           // This allows TaskRenderer to access agentContent immediately
           // Note: Since agentId === parentToolUseId === toolUseId, the mapping is identity
-          setToolUseToAgent((prev) => {
-            if (prev.has(agentId)) return prev;
-            const next = new Map(prev);
-            next.set(agentId, agentId);
-            return next;
-          });
+          registerToolUseAgent(agentId, agentId);
 
-          setAgentContent((prev) => {
-            const existing = prev[agentId] ?? {
-              messages: [],
-              status: "running" as const,
-            };
-            // Dedupe by message ID using getMessageId
-            const incomingId = getMessageId(incoming);
-            if (existing.messages.some((m) => getMessageId(m) === incomingId)) {
-              return prev;
-            }
-            return {
-              ...prev,
-              [agentId]: {
-                ...existing,
-                messages: [...existing.messages, incoming],
-                status: "running", // Mark as running while receiving messages
-              },
-            };
-          });
+          handleSSESubagentMessage(incoming, agentId);
           return; // Don't add to main messages
         }
 
-        setMessages((prev) => {
-          const result = mergeSSEMessage(prev, incoming);
-          return result.messages;
-        });
+        handleSSEMessageEvent(incoming);
       } else if (data.eventType === "status") {
         const statusData = data as {
           eventType: string;
@@ -830,6 +684,11 @@ export function useSession(
       clearStreaming,
       removePendingMessage,
       streamingMarkdownCallbacks,
+      handleSSEMessageEvent,
+      handleSSESubagentMessage,
+      registerToolUseAgent,
+      setAgentContent,
+      setMessages,
     ],
   );
 
