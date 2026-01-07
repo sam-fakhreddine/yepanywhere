@@ -481,10 +481,27 @@ export class Process {
     // any duplicates when JSONL is later fetched. This is especially important
     // for the two-phase flow (createSession + queueMessage) where the client
     // may connect before the JSONL is written.
-    this.messageHistory.push(sdkMessage);
+    if (shouldEmitMessage(sdkMessage)) {
+      // Check for duplicates in history before adding
+      // This prevents duplicates if the provider echoes the message back with the same UUID
+      const isDuplicate = this.messageHistory.some(
+        (m) => m.uuid && m.uuid === sdkMessage.uuid,
+      );
+      if (!isDuplicate) {
+        this.messageHistory.push(sdkMessage);
+      }
+    }
 
     // Emit to current SSE subscribers so other clients see it immediately
-    this.emit({ type: "message", message: sdkMessage });
+    // Include the session ID so client can associate it correctly
+    // The provider will echo this message back, but if we ensure UUIDs match,
+    // the client will merge them.
+    if (shouldEmitMessage(sdkMessage)) {
+      this.emit({
+        type: "message",
+        message: { ...sdkMessage, session_id: this._sessionId },
+      });
+    }
 
     if (this.messageQueue) {
       // Transition to running if we were idle
@@ -809,7 +826,17 @@ export class Process {
         // Store message in history (for mock SDK that doesn't persist to disk)
         // See shouldEmitMessage() for why we never filter messages
         if (shouldEmitMessage(message)) {
-          this.messageHistory.push(message);
+          // Check for duplicates before adding to history
+          // This handles the case where queueMessage added the optimistic message
+          // and now the provider is echoing it back with the same UUID
+          const isDuplicate =
+            message.type === "user" &&
+            message.uuid &&
+            this.messageHistory.some((m) => m.uuid === message.uuid);
+
+          if (!isDuplicate) {
+            this.messageHistory.push(message);
+          }
         }
 
         // Extract session ID from init message

@@ -380,6 +380,7 @@ export class GeminiProvider implements AgentProvider {
           const sdkMessage = this.convertEventToSDKMessage(
             event,
             currentSessionId,
+            message.uuid,
           );
           if (sdkMessage) {
             yield sdkMessage;
@@ -399,9 +400,9 @@ export class GeminiProvider implements AgentProvider {
           exitCode,
           usage: lastStats
             ? {
-                input_tokens: lastStats.input_tokens,
-                output_tokens: lastStats.output_tokens,
-              }
+              input_tokens: lastStats.input_tokens,
+              output_tokens: lastStats.output_tokens,
+            }
             : undefined,
         } as SDKMessage;
       } finally {
@@ -425,6 +426,7 @@ export class GeminiProvider implements AgentProvider {
   private convertEventToSDKMessage(
     event: GeminiEvent,
     sessionId: string,
+    uuid?: string,
   ): SDKMessage | null {
     switch (event.type) {
       case "init": {
@@ -442,6 +444,7 @@ export class GeminiProvider implements AgentProvider {
         if (msg.role === "user") {
           return {
             type: "user",
+            uuid, // Use the UUID from the request if available
             session_id: sessionId,
             timestamp: msg.timestamp,
             message: {
