@@ -32,8 +32,8 @@ const GEMINI_MODELS: ModelInfo[] = [
 
 /** Preview models (require previewFeatures enabled in ~/.gemini/settings.json) */
 const GEMINI_PREVIEW_MODELS: ModelInfo[] = [
-  { id: "gemini-3-pro", name: "Gemini 3 Pro (Preview)" },
-  { id: "gemini-3-flash", name: "Gemini 3 Flash (Preview)" },
+  { id: "gemini-3-pro-preview", name: "Gemini 3 Pro (Preview)" },
+  { id: "gemini-3-flash-preview", name: "Gemini 3 Flash (Preview)" },
 ];
 import { parseGeminiEvent } from "@yep-anywhere/shared";
 import { MessageQueue } from "../messageQueue.js";
