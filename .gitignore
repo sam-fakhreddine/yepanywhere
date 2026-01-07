@@ -42,6 +42,9 @@ docs/tasks/schema-report.json
 # Yep Anywhere local data
 .yep-anywhere/
 
+# Codex sample sessions (local dev data)
+codex-sample-sessions/
+
 # Text files in repo root
 /*.txt
 
