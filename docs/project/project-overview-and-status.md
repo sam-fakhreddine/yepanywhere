@@ -1,12 +1,13 @@
 # Yep Anywhere: Project Overview & Status
 
-A mobile-first supervisor for Claude Code agents. Run agents on your dev machine, approve from your phone.
+A polished web interface for managing Claude and Codex agents. Works great on mobile and desktop.
 
 > For original vision documents and detailed design rationale, see `docs/archive/`.
 
 ## What It Is
 
 Like the VS Code Claude extension, but:
+- **Multi-provider** — Claude, Codex (including local models), Gemini
 - **Mobile-first** — Touch-friendly UI, push notifications, works on phones
 - **Multi-session** — See all projects at a glance, no window cycling
 - **Server-owned** — Disconnect and reconnect without losing state
@@ -40,6 +41,14 @@ Like the VS Code Claude extension, but:
 - Model selection and extended thinking support
 - File uploads via WebSocket
 - Plan mode with approval workflow
+- Voice input via browser speech API
+- Session search and filtering
+
+**Multi-Provider Support**
+- Claude Code: Full support (primary provider, full tool transparency)
+- Codex: Functional but limited transparency (edits are opaque, no granular tool events)
+- Codex-OSS: Local models via shell commands (more transparent than cloud Codex)
+- Gemini: Read-only mode (no editing tools, good for exploration/planning)
 
 ### Architecture
 
@@ -70,7 +79,6 @@ Like the VS Code Claude extension, but:
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Subagent message reload | Partial | SSE works; jsonl reload doesn't include subagent files yet |
 | Multi-device push | Basic | Works, may need stale subscription cleanup |
 | Process recovery | By design | Server restart halts processes; resume on next message |
 
@@ -110,7 +118,4 @@ packages/
 
 ## Future Directions
 
-- Native installer (bundle Node.js, auto-generate VAPID keys)
-- OAuth pairing flow for new devices
-- Tailscale ACL integration
-- Session search and filtering
+See dated docs in this folder (e.g., `2026-01-05-*.md`) for planned features.

@@ -43,6 +43,35 @@ export interface InboxResponse {
   unread24h: InboxItem[];
 }
 
+/**
+ * An item in the global sessions list.
+ */
+export interface GlobalSessionItem {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  provider: ProviderName;
+  projectId: string;
+  projectName: string;
+  status: SessionStatus;
+  pendingInputType?: PendingInputType;
+  processState?: ProcessStateType;
+  hasUnread?: boolean;
+  customTitle?: string;
+  isArchived?: boolean;
+  isStarred?: boolean;
+}
+
+/**
+ * Response from the global sessions API.
+ */
+export interface GlobalSessionsResponse {
+  sessions: GlobalSessionItem[];
+  hasMore: boolean;
+}
+
 export interface SessionOptions {
   mode?: PermissionMode;
   /** Model ID (e.g., "sonnet", "opus", "qwen2.5-coder:0.5b") */
@@ -382,6 +411,24 @@ export const api = {
         ? `/inbox?projectId=${encodeURIComponent(projectId)}`
         : "/inbox",
     ),
+
+  // Global Sessions API
+  getGlobalSessions: (params?: {
+    project?: string;
+    q?: string;
+    after?: string;
+    limit?: number;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.project) searchParams.set("project", params.project);
+    if (params?.q) searchParams.set("q", params.q);
+    if (params?.after) searchParams.set("after", params.after);
+    if (params?.limit) searchParams.set("limit", String(params.limit));
+    const query = searchParams.toString();
+    return fetchJSON<GlobalSessionsResponse>(
+      query ? `/sessions?${query}` : "/sessions",
+    );
+  },
 
   // Auth API
   getAuthStatus: () => fetchJSON<AuthStatus>("/auth/status"),

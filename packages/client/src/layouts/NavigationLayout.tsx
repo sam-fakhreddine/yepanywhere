@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, useOutletContext } from "react-router-dom";
-import { NavigationSidebar } from "../components/NavigationSidebar";
+import { Sidebar } from "../components/Sidebar";
 import { useSidebarPreference } from "../hooks/useSidebarPreference";
 import { useSidebarWidth } from "../hooks/useSidebarWidth";
 import { useViewportWidth } from "../hooks/useViewportWidth";
@@ -61,9 +61,10 @@ export function NavigationLayout() {
           className={`sidebar-desktop ${effectivelyCollapsed ? "sidebar-collapsed" : ""} ${isResizing ? "resizing" : ""}`}
           style={{ width: effectivelyCollapsed ? undefined : sidebarWidth }}
         >
-          <NavigationSidebar
+          <Sidebar
             isOpen={true}
             onClose={() => {}}
+            onNavigate={() => {}}
             isDesktop={true}
             isCollapsed={effectivelyCollapsed}
             onToggleExpanded={toggleExpanded}
@@ -77,9 +78,10 @@ export function NavigationLayout() {
 
       {/* Mobile sidebar - modal overlay */}
       {!isWideScreen && (
-        <NavigationSidebar
+        <Sidebar
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
+          onNavigate={() => setSidebarOpen(false)}
         />
       )}
 

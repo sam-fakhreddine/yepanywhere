@@ -13,6 +13,7 @@ import { activityBus } from "./lib/activityBus";
 import { ActivityPage } from "./pages/ActivityPage";
 import { AgentsPage } from "./pages/AgentsPage";
 import { FilePage } from "./pages/FilePage";
+import { GlobalSessionsPage } from "./pages/GlobalSessionsPage";
 import { InboxPage } from "./pages/InboxPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NewSessionPage } from "./pages/NewSessionPage";
@@ -50,6 +51,7 @@ createRoot(rootElement).render(
           {/* Top-level navigation pages share NavigationLayout */}
           <Route element={<NavigationLayout />}>
             <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/sessions" element={<GlobalSessionsPage />} />
             <Route path="/agents" element={<AgentsPage />} />
             <Route path="/inbox" element={<InboxPage />} />
             <Route path="/recents" element={<RecentsPage />} />

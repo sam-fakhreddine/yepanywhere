@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import type { GlobalSessionItem } from "../api/client";
 import type { ProcessStateType } from "../hooks/useFileActivity";
+import { useNeedsAttentionBadge } from "../hooks/useNeedsAttentionBadge";
+import { useRecentProjects } from "../hooks/useRecentProjects";
 import type { SessionSummary } from "../types";
 import { AgentsNavItem } from "./AgentsNavItem";
 import { SessionListItem } from "./SessionListItem";
@@ -9,6 +12,7 @@ import {
   SidebarNavItem,
   SidebarNavSection,
 } from "./SidebarNavItem";
+import { ThinkingIndicator } from "./ThinkingIndicator";
 import { YepAnywhereLogo } from "./YepAnywhereLogo";
 
 const SWIPE_THRESHOLD = 50; // Minimum distance to trigger close
@@ -40,21 +44,30 @@ function stableSort(a: SessionSummary, b: SessionSummary): number {
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  projectId: string;
-  currentSessionId?: string;
-  sessions: SessionSummary[];
-  processStates: Record<string, ProcessStateType>;
   onNavigate: () => void;
+
+  /** Project mode: when set, shows project-specific sessions */
+  projectId?: string;
+  currentSessionId?: string;
+  sessions?: SessionSummary[];
+  processStates?: Record<string, ProcessStateType>;
+  /** Set of session IDs that have unsent draft messages */
+  sessionDrafts?: Set<string>;
+  /** Inbox badge count (passed from parent to survive mount/unmount) */
+  inboxCount?: number;
+  /** Whether the new session form has an unsent draft */
+  hasNewSessionDraft?: boolean;
+
+  /** Global mode: when projectId is undefined, shows global sessions */
+  globalSessions?: GlobalSessionItem[];
+  globalLoading?: boolean;
+
   /** Desktop mode: sidebar is always visible, no overlay */
   isDesktop?: boolean;
   /** Desktop mode: sidebar is collapsed (icons only) */
   isCollapsed?: boolean;
   /** Desktop mode: callback to toggle expanded/collapsed state */
   onToggleExpanded?: () => void;
-  /** Set of session IDs that have unsent draft messages */
-  sessionDrafts?: Set<string>;
-  /** Inbox badge count (passed from parent to survive mount/unmount) */
-  inboxCount?: number;
   /** Desktop mode: current sidebar width in pixels */
   sidebarWidth?: number;
   /** Desktop mode: called when resize starts */
@@ -63,29 +76,46 @@ interface SidebarProps {
   onResize?: (width: number) => void;
   /** Desktop mode: called when resize ends */
   onResizeEnd?: () => void;
-  /** Whether the new session form has an unsent draft */
-  hasNewSessionDraft?: boolean;
 }
 
 export function Sidebar({
   isOpen,
   onClose,
+  onNavigate,
+  // Project mode props
   projectId,
   currentSessionId,
-  sessions,
-  processStates,
-  onNavigate,
+  sessions = [],
+  processStates = {},
+  sessionDrafts,
+  inboxCount,
+  hasNewSessionDraft,
+  // Global mode props
+  globalSessions = [],
+  globalLoading = false,
+  // Desktop mode props
   isDesktop = false,
   isCollapsed = false,
   onToggleExpanded,
-  sessionDrafts,
-  inboxCount = 0,
   sidebarWidth,
   onResizeStart,
   onResize,
   onResizeEnd,
-  hasNewSessionDraft,
 }: SidebarProps) {
+  // Determine mode: project mode if projectId is set, global mode otherwise
+  const isGlobalMode = !projectId;
+
+  // For project mode, we need a non-null projectId for rendering
+  const safeProjectId = projectId ?? "";
+
+  // Hooks for global mode (only used when in global mode)
+  const globalInboxCount = useNeedsAttentionBadge();
+  const { recentProjects } = useRecentProjects();
+
+  // Effective inbox count: use passed-in value for project mode, or global hook for global mode
+  const effectiveInboxCount = isGlobalMode
+    ? globalInboxCount
+    : (inboxCount ?? 0);
   const sidebarRef = useRef<HTMLElement>(null);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
@@ -323,37 +353,28 @@ export function Sidebar({
         </div>
 
         <div className="sidebar-actions">
-          <SidebarNavItem
-            to={`/projects/${projectId}/new-session`}
-            icon={SidebarIcons.newSession}
-            label="New Session"
-            onClick={onNavigate}
-            hasDraft={hasNewSessionDraft}
-          />
-
-          {/* Project-specific navigation */}
-          <SidebarNavSection>
-            <SidebarNavItem
-              to={`/inbox?project=${projectId}`}
-              icon={SidebarIcons.inbox}
-              label="Inbox"
-              badge={inboxCount}
-              onClick={onNavigate}
-            />
-            <SidebarNavItem
-              to={`/projects/${projectId}`}
-              icon={SidebarIcons.allSessions}
-              label="All Sessions"
-              onClick={onNavigate}
-            />
-          </SidebarNavSection>
-        </div>
-
-        <div className="sidebar-sessions">
-          {/* Global navigation (scrolls with content) */}
-          <div className="sidebar-global-nav">
-            <div className="sidebar-nav-divider" />
+          {isGlobalMode ? (
+            /* Global mode navigation */
             <SidebarNavSection>
+              <SidebarNavItem
+                to="/inbox"
+                icon={SidebarIcons.inbox}
+                label="Inbox"
+                badge={effectiveInboxCount}
+                onClick={onNavigate}
+              />
+              <SidebarNavItem
+                to="/sessions"
+                icon={SidebarIcons.allSessions}
+                label="All Sessions"
+                onClick={onNavigate}
+              />
+              <SidebarNavItem
+                to="/recents"
+                icon={SidebarIcons.recents}
+                label="Recents"
+                onClick={onNavigate}
+              />
               <SidebarNavItem
                 to="/projects"
                 icon={SidebarIcons.projects}
@@ -368,131 +389,219 @@ export function Sidebar({
                 onClick={onNavigate}
               />
             </SidebarNavSection>
-          </div>
+          ) : (
+            /* Project mode navigation */
+            <>
+              <SidebarNavItem
+                to={`/projects/${projectId}/new-session`}
+                icon={SidebarIcons.newSession}
+                label="New Session"
+                onClick={onNavigate}
+                hasDraft={hasNewSessionDraft}
+              />
 
-          {starredSessions.length > 0 && (
-            <div className="sidebar-section">
-              <h3 className="sidebar-section-title">Starred</h3>
-              <ul className="sidebar-session-list">
-                {starredSessions
-                  .slice(0, starredSessionsLimit)
-                  .map((session) => (
-                    <SessionListItem
-                      key={session.id}
-                      session={session}
-                      projectId={projectId}
-                      mode="compact"
-                      isCurrent={session.id === currentSessionId}
-                      processState={processStates[session.id]}
-                      onNavigate={onNavigate}
-                      hasDraft={sessionDrafts?.has(session.id)}
-                    />
+              <SidebarNavSection>
+                <SidebarNavItem
+                  to={`/inbox?project=${projectId}`}
+                  icon={SidebarIcons.inbox}
+                  label="Inbox"
+                  badge={effectiveInboxCount}
+                  onClick={onNavigate}
+                />
+                <SidebarNavItem
+                  to={`/projects/${projectId}`}
+                  icon={SidebarIcons.allSessions}
+                  label="All Sessions"
+                  onClick={onNavigate}
+                />
+              </SidebarNavSection>
+            </>
+          )}
+        </div>
+
+        <div className="sidebar-sessions">
+          {!isGlobalMode && (
+            /* Global navigation (scrolls with content) - project mode only */
+            <div className="sidebar-global-nav">
+              <div className="sidebar-nav-divider" />
+              <SidebarNavSection>
+                <SidebarNavItem
+                  to="/projects"
+                  icon={SidebarIcons.projects}
+                  label="Projects"
+                  onClick={onNavigate}
+                />
+                <AgentsNavItem onClick={onNavigate} />
+                <SidebarNavItem
+                  to="/settings"
+                  icon={SidebarIcons.settings}
+                  label="Settings"
+                  onClick={onNavigate}
+                />
+              </SidebarNavSection>
+            </div>
+          )}
+
+          {isGlobalMode ? (
+            /* Global mode: show recent projects */
+            recentProjects.length > 0 ? (
+              <div className="sidebar-section">
+                <h3 className="sidebar-section-title">Recent Projects</h3>
+                <ul className="sidebar-session-list">
+                  {recentProjects.map((project) => (
+                    <li key={project.id}>
+                      <Link
+                        to={`/projects/${project.id}`}
+                        onClick={onNavigate}
+                        title={project.path}
+                      >
+                        <span className="sidebar-session-title">
+                          <span className="sidebar-session-title-text">
+                            {project.name}
+                          </span>
+                        </span>
+                        {(project.activeOwnedCount > 0 ||
+                          project.activeExternalCount > 0) && (
+                          <ThinkingIndicator />
+                        )}
+                      </Link>
+                    </li>
                   ))}
-              </ul>
-              {starredSessions.length > starredSessionsLimit && (
-                <button
-                  type="button"
-                  className="sidebar-show-more"
-                  onClick={() =>
-                    setStarredSessionsLimit(
-                      (prev) => prev + RECENT_SESSIONS_INCREMENT,
-                    )
-                  }
-                >
-                  Show{" "}
-                  {Math.min(
-                    RECENT_SESSIONS_INCREMENT,
-                    starredSessions.length - starredSessionsLimit,
-                  )}{" "}
-                  more
-                </button>
+                </ul>
+              </div>
+            ) : (
+              <p className="sidebar-empty">Select a project to view sessions</p>
+            )
+          ) : (
+            /* Project mode: show project sessions */
+            <>
+              {starredSessions.length > 0 && (
+                <div className="sidebar-section">
+                  <h3 className="sidebar-section-title">Starred</h3>
+                  <ul className="sidebar-session-list">
+                    {starredSessions
+                      .slice(0, starredSessionsLimit)
+                      .map((session) => (
+                        <SessionListItem
+                          key={session.id}
+                          session={session}
+                          projectId={safeProjectId}
+                          mode="compact"
+                          isCurrent={session.id === currentSessionId}
+                          processState={processStates[session.id]}
+                          onNavigate={onNavigate}
+                          hasDraft={sessionDrafts?.has(session.id)}
+                        />
+                      ))}
+                  </ul>
+                  {starredSessions.length > starredSessionsLimit && (
+                    <button
+                      type="button"
+                      className="sidebar-show-more"
+                      onClick={() =>
+                        setStarredSessionsLimit(
+                          (prev) => prev + RECENT_SESSIONS_INCREMENT,
+                        )
+                      }
+                    >
+                      Show{" "}
+                      {Math.min(
+                        RECENT_SESSIONS_INCREMENT,
+                        starredSessions.length - starredSessionsLimit,
+                      )}{" "}
+                      more
+                    </button>
+                  )}
+                </div>
               )}
-            </div>
-          )}
 
-          {recentDaySessions.length > 0 && (
-            <div className="sidebar-section">
-              <h3 className="sidebar-section-title">Last 24 Hours</h3>
-              <ul className="sidebar-session-list">
-                {recentDaySessions
-                  .slice(0, recentSessionsLimit)
-                  .map((session) => (
-                    <SessionListItem
-                      key={session.id}
-                      session={session}
-                      projectId={projectId}
-                      mode="compact"
-                      isCurrent={session.id === currentSessionId}
-                      processState={processStates[session.id]}
-                      onNavigate={onNavigate}
-                      hasDraft={sessionDrafts?.has(session.id)}
-                    />
-                  ))}
-              </ul>
-              {recentDaySessions.length > recentSessionsLimit && (
-                <button
-                  type="button"
-                  className="sidebar-show-more"
-                  onClick={() =>
-                    setRecentSessionsLimit(
-                      (prev) => prev + RECENT_SESSIONS_INCREMENT,
-                    )
-                  }
-                >
-                  Show{" "}
-                  {Math.min(
-                    RECENT_SESSIONS_INCREMENT,
-                    recentDaySessions.length - recentSessionsLimit,
-                  )}{" "}
-                  more
-                </button>
+              {recentDaySessions.length > 0 && (
+                <div className="sidebar-section">
+                  <h3 className="sidebar-section-title">Last 24 Hours</h3>
+                  <ul className="sidebar-session-list">
+                    {recentDaySessions
+                      .slice(0, recentSessionsLimit)
+                      .map((session) => (
+                        <SessionListItem
+                          key={session.id}
+                          session={session}
+                          projectId={safeProjectId}
+                          mode="compact"
+                          isCurrent={session.id === currentSessionId}
+                          processState={processStates[session.id]}
+                          onNavigate={onNavigate}
+                          hasDraft={sessionDrafts?.has(session.id)}
+                        />
+                      ))}
+                  </ul>
+                  {recentDaySessions.length > recentSessionsLimit && (
+                    <button
+                      type="button"
+                      className="sidebar-show-more"
+                      onClick={() =>
+                        setRecentSessionsLimit(
+                          (prev) => prev + RECENT_SESSIONS_INCREMENT,
+                        )
+                      }
+                    >
+                      Show{" "}
+                      {Math.min(
+                        RECENT_SESSIONS_INCREMENT,
+                        recentDaySessions.length - recentSessionsLimit,
+                      )}{" "}
+                      more
+                    </button>
+                  )}
+                </div>
               )}
-            </div>
-          )}
 
-          {olderSessions.length > 0 && (
-            <div className="sidebar-section">
-              <h3 className="sidebar-section-title">Older</h3>
-              <ul className="sidebar-session-list">
-                {olderSessions.slice(0, olderSessionsLimit).map((session) => (
-                  <SessionListItem
-                    key={session.id}
-                    session={session}
-                    projectId={projectId}
-                    mode="compact"
-                    isCurrent={session.id === currentSessionId}
-                    processState={processStates[session.id]}
-                    onNavigate={onNavigate}
-                    hasDraft={sessionDrafts?.has(session.id)}
-                  />
-                ))}
-              </ul>
-              {olderSessions.length > olderSessionsLimit && (
-                <button
-                  type="button"
-                  className="sidebar-show-more"
-                  onClick={() =>
-                    setOlderSessionsLimit(
-                      (prev) => prev + RECENT_SESSIONS_INCREMENT,
-                    )
-                  }
-                >
-                  Show{" "}
-                  {Math.min(
-                    RECENT_SESSIONS_INCREMENT,
-                    olderSessions.length - olderSessionsLimit,
-                  )}{" "}
-                  more
-                </button>
+              {olderSessions.length > 0 && (
+                <div className="sidebar-section">
+                  <h3 className="sidebar-section-title">Older</h3>
+                  <ul className="sidebar-session-list">
+                    {olderSessions
+                      .slice(0, olderSessionsLimit)
+                      .map((session) => (
+                        <SessionListItem
+                          key={session.id}
+                          session={session}
+                          projectId={safeProjectId}
+                          mode="compact"
+                          isCurrent={session.id === currentSessionId}
+                          processState={processStates[session.id]}
+                          onNavigate={onNavigate}
+                          hasDraft={sessionDrafts?.has(session.id)}
+                        />
+                      ))}
+                  </ul>
+                  {olderSessions.length > olderSessionsLimit && (
+                    <button
+                      type="button"
+                      className="sidebar-show-more"
+                      onClick={() =>
+                        setOlderSessionsLimit(
+                          (prev) => prev + RECENT_SESSIONS_INCREMENT,
+                        )
+                      }
+                    >
+                      Show{" "}
+                      {Math.min(
+                        RECENT_SESSIONS_INCREMENT,
+                        olderSessions.length - olderSessionsLimit,
+                      )}{" "}
+                      more
+                    </button>
+                  )}
+                </div>
               )}
-            </div>
-          )}
 
-          {starredSessions.length === 0 &&
-            recentDaySessions.length === 0 &&
-            olderSessions.length === 0 && (
-              <p className="sidebar-empty">No sessions yet</p>
-            )}
+              {starredSessions.length === 0 &&
+                recentDaySessions.length === 0 &&
+                olderSessions.length === 0 && (
+                  <p className="sidebar-empty">No sessions yet</p>
+                )}
+            </>
+          )}
         </div>
 
         {/* Resize handle - desktop only, when expanded */}

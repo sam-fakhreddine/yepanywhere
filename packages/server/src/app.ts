@@ -25,6 +25,7 @@ import { createActivityRoutes } from "./routes/activity.js";
 import { createDebugStreamingRoutes } from "./routes/debug-streaming.js";
 import { createDevRoutes } from "./routes/dev.js";
 import { createFilesRoutes } from "./routes/files.js";
+import { createGlobalSessionsRoutes } from "./routes/global-sessions.js";
 import { health } from "./routes/health.js";
 import { createInboxRoutes } from "./routes/inbox.js";
 import { createProcessesRoutes } from "./routes/processes.js";
@@ -245,6 +246,20 @@ export function createApp(options: AppOptions): AppResult {
       scanner,
       readerFactory,
       supervisor,
+      notificationService: options.notificationService,
+      sessionIndexService: options.sessionIndexService,
+      sessionMetadataService: options.sessionMetadataService,
+    }),
+  );
+
+  // Global sessions route (flat list of all sessions for navigation)
+  app.route(
+    "/api/sessions",
+    createGlobalSessionsRoutes({
+      scanner,
+      readerFactory,
+      supervisor,
+      externalTracker,
       notificationService: options.notificationService,
       sessionIndexService: options.sessionIndexService,
       sessionMetadataService: options.sessionMetadataService,

@@ -5151,6 +5151,113 @@ a.sidebar-nav-item {
 }
 
 /* ==========================================================================
+   Global Sessions Page
+   ========================================================================== */
+
+.global-sessions-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.global-sessions-search {
+  display: flex;
+  flex: 1;
+  min-width: 200px;
+  max-width: 400px;
+}
+
+.global-sessions-search-input {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-right: none;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.global-sessions-search-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+}
+
+.global-sessions-search-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.global-sessions-search-button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.global-sessions-filter {
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.global-sessions-filter:focus {
+  outline: none;
+  border-color: var(--accent-color);
+}
+
+.global-sessions-clear {
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.global-sessions-clear:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.global-sessions-load-more {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.global-sessions-load-more-button {
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.global-sessions-load-more-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.global-sessions-load-more-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
    Login Page
    ========================================================================== */
 
@@ -5365,6 +5472,20 @@ a.sidebar-nav-item {
   margin-top: var(--space-1);
 }
 
+/* Project name in card mode meta line */
+.session-list-item__project {
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.session-list-item__project::after {
+  content: "\00B7"; /* middle dot separator */
+  margin-left: var(--space-2);
+}
+
 /* Compact mode: sidebar style, single line */
 .session-list-item--compact {
   padding: 0;
@@ -5401,6 +5522,17 @@ a.sidebar-nav-item {
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: var(--font-size-sm);
+}
+
+/* Project name in compact mode */
+.session-list-item__project-compact {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+  flex-shrink: 0;
 }
 
 .session-list-item--compact.current .session-list-item__link {

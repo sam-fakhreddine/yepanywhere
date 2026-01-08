@@ -19,6 +19,10 @@ interface SessionListItemProps {
   processState?: ProcessStateType;
   hasDraft?: boolean;
 
+  // Project context (for global session lists)
+  showProjectName?: boolean;
+  projectName?: string;
+
   // Callbacks
   onNavigate: () => void;
   onSelect?: (sessionId: string, selected: boolean) => void;
@@ -45,6 +49,8 @@ export function SessionListItem({
   isSelected = false,
   processState,
   hasDraft = false,
+  showProjectName = false,
+  projectName,
   onNavigate,
   onSelect,
   isSelectionMode = false,
@@ -300,6 +306,11 @@ export function SessionListItem({
                 )}
               </strong>
               <span className="session-list-item__meta">
+                {showProjectName && projectName && (
+                  <span className="session-list-item__project">
+                    {projectName}
+                  </span>
+                )}
                 {formatRelativeTime(session.updatedAt)}
                 <ContextUsageIndicator usage={session.contextUsage} size={14} />
                 <SessionStatusBadge
@@ -322,6 +333,11 @@ export function SessionListItem({
                   <span className="session-draft-badge">(draft)</span>
                 )}
               </span>
+              {showProjectName && projectName && (
+                <span className="session-list-item__project-compact">
+                  {projectName}
+                </span>
+              )}
               {getCompactActivityIndicator()}
             </>
           )}
