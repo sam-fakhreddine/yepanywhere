@@ -88,17 +88,28 @@ export function SessionMenu({
       if (useFixedPositioning && triggerRef.current) {
         const rect = triggerRef.current.getBoundingClientRect();
         const dropdownWidth = 140; // Approximate width of dropdown
+        const dropdownHeight = 180; // Approximate height of dropdown (varies by options)
         const rightPosition = window.innerWidth - rect.right;
+        const margin = 8;
+
+        // Check if dropdown would overflow bottom of viewport
+        const wouldOverflowBottom =
+          rect.bottom + margin + dropdownHeight > window.innerHeight;
+
+        // Calculate vertical position - show above trigger if it would overflow bottom
+        const top = wouldOverflowBottom
+          ? rect.top - dropdownHeight - margin
+          : rect.bottom + margin;
 
         // If right-aligned would overflow left edge, use left-aligned instead
-        if (rect.right - dropdownWidth < 8) {
+        if (rect.right - dropdownWidth < margin) {
           setDropdownPosition({
-            top: rect.bottom + 4,
+            top,
             left: rect.left,
           });
         } else {
           setDropdownPosition({
-            top: rect.bottom + 4,
+            top,
             right: rightPosition,
           });
         }

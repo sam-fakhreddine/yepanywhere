@@ -1,4 +1,4 @@
-import type { UploadedFile } from "@yep-anywhere/shared";
+import type { ProviderName, UploadedFile } from "@yep-anywhere/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, uploadFile } from "../api/client";
@@ -30,7 +30,6 @@ import {
 } from "../hooks/useSession";
 import { useNavigationLayout } from "../layouts";
 import { preprocessMessages } from "../lib/preprocessMessages";
-import { truncateText } from "../lib/text";
 import { getSessionDisplayTitle } from "../types";
 
 export function SessionPage() {
@@ -71,12 +70,17 @@ function SessionPageContent({
   const location = useLocation();
   // Get initial status and title from navigation state (passed by NewSessionPage)
   // This allows SSE to connect immediately and show optimistic title without waiting for getSession
+  // Also get model/provider so ProviderBadge can render immediately
   const navState = location.state as {
     initialStatus?: { state: "owned"; processId: string };
     initialTitle?: string;
+    initialModel?: string;
+    initialProvider?: ProviderName;
   } | null;
   const initialStatus = navState?.initialStatus;
   const initialTitle = navState?.initialTitle;
+  const initialModel = navState?.initialModel;
+  const initialProvider = navState?.initialProvider;
 
   // Get streaming markdown context for server-rendered markdown streaming
   const streamingMarkdownContext = useStreamingMarkdownContext();
@@ -126,6 +130,11 @@ function SessionPageContent({
     initialStatus,
     streamingMarkdownCallbacks,
   );
+
+  // Effective provider/model for immediate display before session data loads
+  const effectiveProvider = session?.provider ?? initialProvider;
+  const effectiveModel = session?.model ?? initialModel;
+
   const [scrollTrigger, setScrollTrigger] = useState(0);
   const draftControlsRef = useRef<DraftControls | null>(null);
   const handleDraftControlsReady = useCallback((controls: DraftControls) => {
@@ -690,7 +699,7 @@ function SessionPageContent({
                       onClick={() => setShowRecentSessions(!showRecentSessions)}
                       title={session?.fullTitle ?? displayTitle}
                     >
-                      {truncateText(displayTitle)}
+                      <span className="session-title-text">{displayTitle}</span>
                       <svg
                         className="session-title-chevron"
                         width="12"
@@ -742,7 +751,7 @@ function SessionPageContent({
               </div>
             </div>
             <div className="session-header-right">
-              {!loading && session?.provider && (
+              {!loading && effectiveProvider && (
                 <button
                   type="button"
                   className="provider-badge-button"
@@ -750,8 +759,8 @@ function SessionPageContent({
                   title="View session info"
                 >
                   <ProviderBadge
-                    provider={session.provider}
-                    model={session.model}
+                    provider={effectiveProvider}
+                    model={effectiveModel}
                     isThinking={processState === "running"}
                   />
                 </button>

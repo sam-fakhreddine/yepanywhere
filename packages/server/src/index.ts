@@ -60,19 +60,15 @@ console.log(
   `[Config] Log file: ${getLogFilePath({ logDir: config.logDir, logFile: config.logFile })}`,
 );
 
-// Check for Claude CLI
+// Check for Claude CLI (optional - warn if not found)
 const cliInfo = detectClaudeCli();
-if (!cliInfo.found) {
-  console.error("Error: Claude CLI not found!");
-  console.error("");
-  console.error("The real SDK requires Claude CLI to be installed.");
-  console.error("Install: curl -fsSL https://claude.ai/install.sh | bash");
-  console.error("");
-  console.error("Alternatively, run with mock SDK: USE_MOCK_SDK=true pnpm dev");
-  process.exit(1);
+if (cliInfo.found) {
+  console.log(`Claude CLI found: ${cliInfo.path} (${cliInfo.version})`);
+} else {
+  console.warn("Warning: Claude CLI not found.");
+  console.warn("Claude Code sessions will not be available.");
+  console.warn("Install: curl -fsSL https://claude.ai/install.sh | bash");
 }
-
-console.log(`Claude CLI found: ${cliInfo.path} (${cliInfo.version})`);
 
 // Create the real SDK
 const realSdk = new RealClaudeSDK();

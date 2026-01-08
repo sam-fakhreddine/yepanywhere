@@ -201,17 +201,6 @@ async function validateFile(
     }
 
     if (!toolName) {
-      // String results are typically error messages or simple responses
-      // These are valid SDK output, just not structured
-      if (typeof toolUseResult === "string") {
-        stats.validResults++;
-        if (!stats.byTool["<string>"]) {
-          stats.byTool["<string>"] = { valid: 0, invalid: 0, unknown: 0 };
-        }
-        stats.byTool["<string>"].valid++;
-        continue;
-      }
-
       stats.unknownTools++;
       if (!stats.byTool["<unknown>"]) {
         stats.byTool["<unknown>"] = { valid: 0, invalid: 0, unknown: 0 };

@@ -1401,6 +1401,13 @@ a.sidebar-nav-item {
   gap: 0.25rem;
 }
 
+.session-title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
 .session-title-chevron {
   opacity: 0.6;
   flex-shrink: 0;

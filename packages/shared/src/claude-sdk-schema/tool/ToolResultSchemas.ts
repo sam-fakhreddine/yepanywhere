@@ -1,6 +1,20 @@
 import { z } from "zod";
 
 /**
+ * Helper to create a tool result schema that accepts either the structured
+ * object format OR a string error message.
+ *
+ * The SDK writes toolUseResult as a string for errors/interrupts, e.g.:
+ * - "Error: Exit code 1\n..."
+ * - "Error: [Request interrupted by user for tool use]"
+ *
+ * This is the actual format persisted in session JSONL files.
+ */
+function withStringError<T extends z.ZodTypeAny>(schema: T) {
+  return z.union([schema, z.string()]);
+}
+
+/**
  * ContentBlock schema for Task result content
  * Matches the ContentBlock interface in client/src/components/renderers/types.ts
  */
@@ -18,11 +32,9 @@ const ContentBlockSchema = z.object({
 });
 
 /**
- * Task tool result schema
- * Matches the TaskResult interface in client/src/components/renderers/tools/types.ts
- * Uses .optional() liberally as the SDK may not always provide all fields
+ * Task tool structured result (success case)
  */
-export const TaskResultSchema = z.object({
+const TaskResultObjectSchema = z.object({
   status: z.enum(["completed", "failed", "timeout"]).optional(),
   prompt: z.string().optional(),
   agentId: z.string().optional(),
@@ -32,19 +44,30 @@ export const TaskResultSchema = z.object({
   totalToolUseCount: z.number().optional(),
 });
 
+/**
+ * Task tool result schema
+ * Accepts either structured object OR string error message from SDK
+ */
+export const TaskResultSchema = withStringError(TaskResultObjectSchema);
+
 export type TaskResultValidated = z.infer<typeof TaskResultSchema>;
 
 /**
- * Bash tool result schema
- * Matches the BashResult interface in client/src/components/renderers/tools/types.ts
+ * Bash tool structured result (success case)
  */
-export const BashResultSchema = z.object({
+const BashResultObjectSchema = z.object({
   stdout: z.string().optional(),
   stderr: z.string().optional(),
   interrupted: z.boolean().optional(),
   isImage: z.boolean().optional(),
   backgroundTaskId: z.string().optional(),
 });
+
+/**
+ * Bash tool result schema
+ * Accepts either structured object OR string error message from SDK
+ */
+export const BashResultSchema = withStringError(BashResultObjectSchema);
 
 export type BashResultValidated = z.infer<typeof BashResultSchema>;
 
@@ -74,10 +97,16 @@ const ImageFileSchema = z.object({
   dimensions: ImageFileDimensionsSchema.optional(),
 });
 
-export const ReadResultSchema = z.object({
+const ReadResultObjectSchema = z.object({
   type: z.enum(["text", "image"]).optional(),
   file: z.union([TextFileSchema, ImageFileSchema]).optional(),
 });
+
+/**
+ * Read tool result schema
+ * Accepts either structured object OR string error message from SDK
+ */
+export const ReadResultSchema = withStringError(ReadResultObjectSchema);
 
 export type ReadResultValidated = z.infer<typeof ReadResultSchema>;
 
@@ -96,7 +125,7 @@ const PatchHunkSchema = z.object({
   lines: z.array(z.string()).optional(),
 });
 
-export const EditResultSchema = z.object({
+const EditResultObjectSchema = z.object({
   type: z.enum(["create", "edit", "update"]).optional(),
   filePath: z.string().optional(),
   oldString: z.string().optional(),
@@ -107,13 +136,15 @@ export const EditResultSchema = z.object({
   structuredPatch: z.array(PatchHunkSchema).optional(),
 });
 
+/**
+ * Edit tool result schema
+ * Accepts either structured object OR string error message from SDK
+ */
+export const EditResultSchema = withStringError(EditResultObjectSchema);
+
 export type EditResultValidated = z.infer<typeof EditResultSchema>;
 
-/**
- * Write tool result schema
- * Matches the WriteResult interface
- */
-export const WriteResultSchema = z.object({
+const WriteResultObjectSchema = z.object({
   type: z.literal("text").optional(),
   file: z
     .object({
@@ -126,26 +157,30 @@ export const WriteResultSchema = z.object({
     .optional(),
 });
 
+/**
+ * Write tool result schema
+ * Accepts either structured object OR string error message from SDK
+ */
+export const WriteResultSchema = withStringError(WriteResultObjectSchema);
+
 export type WriteResultValidated = z.infer<typeof WriteResultSchema>;
 
-/**
- * Glob tool result schema
- * Matches the GlobResult interface
- */
-export const GlobResultSchema = z.object({
+const GlobResultObjectSchema = z.object({
   filenames: z.array(z.string()).optional(),
   durationMs: z.number().optional(),
   numFiles: z.number().optional(),
   truncated: z.boolean().optional(),
 });
 
+/**
+ * Glob tool result schema
+ * Accepts either structured object OR string error message from SDK
+ */
+export const GlobResultSchema = withStringError(GlobResultObjectSchema);
+
 export type GlobResultValidated = z.infer<typeof GlobResultSchema>;
 
-/**
- * Grep tool result schema
- * Matches the GrepResult interface
- */
-export const GrepResultSchema = z.object({
+const GrepResultObjectSchema = z.object({
   mode: z.enum(["files_with_matches", "content", "count"]).optional(),
   filenames: z.array(z.string()).optional(),
   numFiles: z.number().optional(),
@@ -154,31 +189,37 @@ export const GrepResultSchema = z.object({
   appliedLimit: z.number().optional(),
 });
 
+/**
+ * Grep tool result schema
+ * Accepts either structured object OR string error message from SDK
+ */
+export const GrepResultSchema = withStringError(GrepResultObjectSchema);
+
 export type GrepResultValidated = z.infer<typeof GrepResultSchema>;
 
-/**
- * TodoWrite tool result schema
- * Matches the TodoWriteResult and Todo interfaces
- */
 const TodoSchema = z.object({
   content: z.string().optional(),
   status: z.enum(["pending", "in_progress", "completed"]).optional(),
   activeForm: z.string().optional(),
 });
 
-export const TodoWriteResultSchema = z.object({
+const TodoWriteResultObjectSchema = z.object({
   oldTodos: z.array(TodoSchema).optional(),
   newTodos: z.array(TodoSchema).optional(),
 });
 
+/**
+ * TodoWrite tool result schema
+ * Accepts either structured object OR string error message from SDK
+ */
+export const TodoWriteResultSchema = withStringError(
+  TodoWriteResultObjectSchema,
+);
+
 export type TodoWriteResultValidated = z.infer<typeof TodoWriteResultSchema>;
 
 /**
- * WebSearch tool result schema
- *
- * The SDK returns results as an array containing:
- * - Objects with { tool_use_id, content: [{ title, url }, ...] }
- * - Plain strings (summary text extracted from search)
+ * WebSearch result item - can be an object with search results or a string summary
  */
 const WebSearchResultItemSchema = z.object({
   tool_use_id: z.string().optional(),
@@ -192,19 +233,23 @@ const WebSearchResultItemSchema = z.object({
     .optional(),
 });
 
-export const WebSearchResultSchema = z.object({
+const WebSearchResultObjectSchema = z.object({
   query: z.string().optional(),
   results: z.array(z.union([WebSearchResultItemSchema, z.string()])).optional(),
   durationSeconds: z.number().optional(),
 });
 
+/**
+ * WebSearch tool result schema
+ * Accepts either structured object OR string error message from SDK
+ */
+export const WebSearchResultSchema = withStringError(
+  WebSearchResultObjectSchema,
+);
+
 export type WebSearchResultValidated = z.infer<typeof WebSearchResultSchema>;
 
-/**
- * WebFetch tool result schema
- * Matches the WebFetchResult interface
- */
-export const WebFetchResultSchema = z.object({
+const WebFetchResultObjectSchema = z.object({
   bytes: z.number().optional(),
   code: z.number().optional(),
   codeText: z.string().optional(),
@@ -213,12 +258,14 @@ export const WebFetchResultSchema = z.object({
   url: z.string().optional(),
 });
 
+/**
+ * WebFetch tool result schema
+ * Accepts either structured object OR string error message from SDK
+ */
+export const WebFetchResultSchema = withStringError(WebFetchResultObjectSchema);
+
 export type WebFetchResultValidated = z.infer<typeof WebFetchResultSchema>;
 
-/**
- * AskUserQuestion tool result schema
- * Matches the AskUserQuestionResult and Question interfaces
- */
 const QuestionOptionSchema = z.object({
   label: z.string().optional(),
   description: z.string().optional(),
@@ -231,20 +278,24 @@ const QuestionSchema = z.object({
   multiSelect: z.boolean().optional(),
 });
 
-export const AskUserQuestionResultSchema = z.object({
+const AskUserQuestionResultObjectSchema = z.object({
   questions: z.array(QuestionSchema).optional(),
   answers: z.record(z.string(), z.string()).optional(),
 });
+
+/**
+ * AskUserQuestion tool result schema
+ * Accepts either structured object OR string error message from SDK
+ */
+export const AskUserQuestionResultSchema = withStringError(
+  AskUserQuestionResultObjectSchema,
+);
 
 export type AskUserQuestionResultValidated = z.infer<
   typeof AskUserQuestionResultSchema
 >;
 
-/**
- * BashOutput tool result schema
- * Matches the BashOutputResult interface
- */
-export const BashOutputResultSchema = z.object({
+const BashOutputResultObjectSchema = z.object({
   shellId: z.string().optional(),
   command: z.string().optional(),
   status: z.enum(["running", "completed", "failed"]).optional(),
@@ -256,13 +307,17 @@ export const BashOutputResultSchema = z.object({
   timestamp: z.string().optional(),
 });
 
+/**
+ * BashOutput tool result schema
+ * Accepts either structured object OR string error message from SDK
+ */
+export const BashOutputResultSchema = withStringError(
+  BashOutputResultObjectSchema,
+);
+
 export type BashOutputResultValidated = z.infer<typeof BashOutputResultSchema>;
 
-/**
- * TaskOutput tool result schema
- * Matches the TaskOutputResult interface
- */
-export const TaskOutputResultSchema = z.object({
+const TaskOutputResultObjectSchema = z.object({
   retrieval_status: z.enum(["completed", "timeout", "running"]).optional(),
   task: z
     .object({
@@ -276,38 +331,59 @@ export const TaskOutputResultSchema = z.object({
     .optional(),
 });
 
+/**
+ * TaskOutput tool result schema
+ * Accepts either structured object OR string error message from SDK
+ */
+export const TaskOutputResultSchema = withStringError(
+  TaskOutputResultObjectSchema,
+);
+
 export type TaskOutputResultValidated = z.infer<typeof TaskOutputResultSchema>;
 
-/**
- * KillShell tool result schema
- * Matches the KillShellResult interface
- */
-export const KillShellResultSchema = z.object({
+const KillShellResultObjectSchema = z.object({
   message: z.string().optional(),
   shell_id: z.string().optional(),
 });
 
+/**
+ * KillShell tool result schema
+ * Accepts either structured object OR string error message from SDK
+ */
+export const KillShellResultSchema = withStringError(
+  KillShellResultObjectSchema,
+);
+
 export type KillShellResultValidated = z.infer<typeof KillShellResultSchema>;
+
+const EnterPlanModeResultObjectSchema = z.object({
+  message: z.string().optional(),
+});
 
 /**
  * EnterPlanMode tool result schema
+ * Accepts either structured object OR string error message from SDK
  */
-export const EnterPlanModeResultSchema = z.object({
-  message: z.string().optional(),
-});
+export const EnterPlanModeResultSchema = withStringError(
+  EnterPlanModeResultObjectSchema,
+);
 
 export type EnterPlanModeResultValidated = z.infer<
   typeof EnterPlanModeResultSchema
 >;
 
-/**
- * ExitPlanMode tool result schema
- * Contains the plan content when exiting plan mode
- */
-export const ExitPlanModeResultSchema = z.object({
+const ExitPlanModeResultObjectSchema = z.object({
   message: z.string().optional(),
   plan: z.string().optional(),
 });
+
+/**
+ * ExitPlanMode tool result schema
+ * Accepts either structured object OR string error message from SDK
+ */
+export const ExitPlanModeResultSchema = withStringError(
+  ExitPlanModeResultObjectSchema,
+);
 
 export type ExitPlanModeResultValidated = z.infer<
   typeof ExitPlanModeResultSchema

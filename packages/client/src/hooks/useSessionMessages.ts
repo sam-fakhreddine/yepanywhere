@@ -305,9 +305,12 @@ export function useSessionMessages(
           return result.messages;
         });
       }
-      // Update session metadata (including title) which may have changed
+      // Update session metadata (including title, model, contextUsage) which may have changed
+      // For new sessions, prev may be null if JSONL didn't exist on initial load
       setSession((prev) =>
-        prev ? { ...prev, ...data.session, messages: prev.messages } : prev,
+        prev
+          ? { ...prev, ...data.session, messages: prev.messages }
+          : data.session,
       );
     } catch {
       // Silent fail for incremental updates
@@ -318,8 +321,11 @@ export function useSessionMessages(
   const fetchSessionMetadata = useCallback(async () => {
     try {
       const data = await api.getSessionMetadata(projectId, sessionId);
+      // For new sessions, prev may be null if JSONL didn't exist on initial load
       setSession((prev) =>
-        prev ? { ...prev, ...data.session, messages: prev.messages } : prev,
+        prev
+          ? { ...prev, ...data.session, messages: prev.messages }
+          : { ...data.session, messages: [] },
       );
     } catch {
       // Silent fail for metadata updates

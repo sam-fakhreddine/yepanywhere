@@ -281,8 +281,8 @@ export function useGlobalSessions(options: UseGlobalSessionsOptions = {}) {
   // Handle session metadata changes
   const handleSessionMetadataChange = useCallback(
     (event: SessionMetadataChangedEvent) => {
-      setSessions((prev) =>
-        prev.map((session) => {
+      setSessions((prev) => {
+        const updated = prev.map((session) => {
           if (session.id !== event.sessionId) return session;
 
           return {
@@ -291,10 +291,17 @@ export function useGlobalSessions(options: UseGlobalSessionsOptions = {}) {
             ...(event.archived !== undefined && { isArchived: event.archived }),
             ...(event.starred !== undefined && { isStarred: event.starred }),
           };
-        }),
-      );
+        });
+
+        // If this hook has a starred filter, remove sessions that are no longer starred
+        if (starred && event.starred === false) {
+          return updated.filter((s) => s.id !== event.sessionId);
+        }
+
+        return updated;
+      });
     },
-    [],
+    [starred],
   );
 
   // Handle session seen events

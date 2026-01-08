@@ -17,12 +17,52 @@
  *   ... (see CLAUDE.md for full list)
  */
 
+import { execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const MINIMUM_NODE_VERSION = 20;
+
+/**
+ * Check if Node.js version meets minimum requirements.
+ * Exits with error if version is too low.
+ */
+function checkNodeVersion(): void {
+  const currentVersion = process.versions.node;
+  const majorVersion = Number.parseInt(currentVersion.split(".")[0] ?? "0", 10);
+
+  if (majorVersion < MINIMUM_NODE_VERSION) {
+    console.error(`Error: Node.js ${MINIMUM_NODE_VERSION}+ is required.`);
+    console.error(`Current version: ${currentVersion}`);
+    console.error("");
+    console.error("Please upgrade Node.js: https://nodejs.org/");
+    process.exit(1);
+  }
+}
+
+/**
+ * Check if Claude CLI is installed and warn if not found.
+ * Does not exit - Claude is optional but recommended.
+ */
+function checkClaudeCli(): void {
+  try {
+    execSync("which claude", {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch {
+    console.warn("Warning: Claude CLI not found.");
+    console.warn(
+      "Claude Code is the primary supported agent. Install it to use Claude sessions:",
+    );
+    console.warn("  curl -fsSL https://claude.ai/install.sh | bash");
+    console.warn("");
+  }
+}
 
 function showHelp(): void {
   console.log(`
@@ -104,6 +144,10 @@ if (args.length > 0) {
   console.error("Run 'yepanywhere --help' for usage information.");
   process.exit(1);
 }
+
+// Run prerequisite checks before starting
+checkNodeVersion();
+checkClaudeCli();
 
 // Set NODE_ENV to production if not already set (CLI users expect production mode)
 if (!process.env.NODE_ENV) {
