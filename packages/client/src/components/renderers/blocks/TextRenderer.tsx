@@ -1,10 +1,4 @@
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import type { ContentBlock, ContentRenderer, RenderContext } from "../types";
-
-/** Client-side markdown disabled by default. Set VITE_DISABLE_CLIENT_MARKDOWN=false to enable */
-const DISABLE_CLIENT_MARKDOWN =
-  import.meta.env.VITE_DISABLE_CLIENT_MARKDOWN !== "false";
 
 interface TextBlock extends ContentBlock {
   type: "text";
@@ -28,20 +22,12 @@ function TextRendererComponent({ block }: { block: TextBlock }) {
     );
   }
 
-  // Fallback to client-side markdown (can be disabled for testing)
-  if (DISABLE_CLIENT_MARKDOWN) {
-    return (
-      <div className="text-block">
-        <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
-          {block.text}
-        </pre>
-      </div>
-    );
-  }
-
+  // Fallback to plain text when server-rendered HTML is not available
   return (
     <div className="text-block">
-      <Markdown remarkPlugins={[remarkGfm]}>{block.text}</Markdown>
+      <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
+        {block.text}
+      </pre>
     </div>
   );
 }

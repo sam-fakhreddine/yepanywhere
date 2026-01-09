@@ -1,12 +1,6 @@
 import type { FileContentResponse } from "@yep-anywhere/shared";
 import { memo, useCallback, useEffect, useState } from "react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { api } from "../api/client";
-
-/** Client-side markdown disabled by default. Set VITE_DISABLE_CLIENT_MARKDOWN=false to enable */
-const DISABLE_CLIENT_MARKDOWN =
-  import.meta.env.VITE_DISABLE_CLIENT_MARKDOWN !== "false";
 
 interface FileViewerProps {
   projectId: string;
@@ -71,14 +65,6 @@ function getLanguageFromPath(filePath: string): string {
 }
 
 /**
- * Check if file should render as markdown.
- */
-function isMarkdownFile(filePath: string): boolean {
-  const ext = filePath.split(".").pop()?.toLowerCase() || "";
-  return ext === "md" || ext === "markdown";
-}
-
-/**
  * Check if file is an image.
  */
 function isImageFile(mimeType: string): boolean {
@@ -107,7 +93,6 @@ export const FileViewer = memo(function FileViewer({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [renderMarkdown, setRenderMarkdown] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
   const [highlightedLineRef, setHighlightedLineRef] =
     useState<HTMLElement | null>(null);
@@ -186,7 +171,6 @@ export const FileViewer = memo(function FileViewer({
 
   const fileName = getFileName(filePath);
   const language = getLanguageFromPath(filePath);
-  const isMarkdown = isMarkdownFile(filePath);
 
   // Render loading state
   if (loading) {
@@ -222,15 +206,6 @@ export const FileViewer = memo(function FileViewer({
 
     // Text files
     if (content !== undefined) {
-      // Markdown rendering (toggleable, but disabled if DISABLE_CLIENT_MARKDOWN)
-      if (isMarkdown && renderMarkdown && !DISABLE_CLIENT_MARKDOWN) {
-        return (
-          <div className="file-viewer-markdown">
-            <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
-          </div>
-        );
-      }
-
       // Server-rendered syntax highlighting (preferred)
       if (fileData.highlightedHtml) {
         return (
@@ -339,16 +314,6 @@ export const FileViewer = memo(function FileViewer({
         </span>
       </div>
       <div className="file-viewer-actions">
-        {isMarkdown && content && (
-          <button
-            type="button"
-            className="file-viewer-action"
-            onClick={() => setRenderMarkdown(!renderMarkdown)}
-            title={renderMarkdown ? "View raw" : "Render markdown"}
-          >
-            {renderMarkdown ? <CodeIcon /> : <MarkdownIcon />}
-          </button>
-        )}
         {content && (
           <button
             type="button"
@@ -503,43 +468,6 @@ function CloseIcon() {
       aria-hidden="true"
     >
       <path d="M4 4l8 8M12 4l-8 8" />
-    </svg>
-  );
-}
-
-function CodeIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M5 4L1 8l4 4M11 4l4 4-4 4" />
-    </svg>
-  );
-}
-
-function MarkdownIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="1" y="3" width="14" height="10" rx="1" />
-      <path d="M4 6v4l2-2 2 2V6M10 10V6l2 3 2-3v4" />
     </svg>
   );
 }

@@ -1,14 +1,8 @@
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import type {
   ExitPlanModeInput,
   ExitPlanModeResult,
   ToolRenderer,
 } from "./types";
-
-/** Client-side markdown disabled by default. Set VITE_DISABLE_CLIENT_MARKDOWN=false to enable */
-const DISABLE_CLIENT_MARKDOWN =
-  import.meta.env.VITE_DISABLE_CLIENT_MARKDOWN !== "false";
 
 /** Extended input type with server-rendered HTML */
 interface ExitPlanModeInputWithHtml extends ExitPlanModeInput {
@@ -31,17 +25,10 @@ function PlanContent({
     return <div dangerouslySetInnerHTML={{ __html: renderedHtml }} />;
   }
 
-  if (DISABLE_CLIENT_MARKDOWN) {
-    // Plain text fallback when client markdown is disabled
-    return (
-      <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
-        {plan}
-      </pre>
-    );
-  }
-
-  // Fallback to client-side markdown rendering
-  return <Markdown remarkPlugins={[remarkGfm]}>{plan}</Markdown>;
+  // Fallback to plain text when server-rendered HTML is not available
+  return (
+    <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit" }}>{plan}</pre>
+  );
 }
 
 export const exitPlanModeRenderer: ToolRenderer<
