@@ -1,18 +1,54 @@
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { hostname, tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, test } from "./fixtures.js";
 
+// Create a test project for draft persistence tests
+// This is similar to how codex-oss tests create their own project
+const mockProjectPath = join(tmpdir(), "claude-e2e-draft");
+const claudeProjectsDir = join(
+  process.env.HOME || "",
+  ".claude",
+  "projects",
+  hostname(),
+);
+const encodedPath = mockProjectPath.replace(/\//g, "-");
+const sessionDir = join(claudeProjectsDir, encodedPath);
+
+// Helper to encode project path to base64url (same as server's encodeProjectId)
+function encodeProjectId(path: string): string {
+  return Buffer.from(path).toString("base64url");
+}
+
 test.describe("Draft Persistence", () => {
+  // Set up mock project before all tests
+  test.beforeAll(async () => {
+    // Create project directory
+    if (!existsSync(mockProjectPath)) {
+      mkdirSync(mockProjectPath, { recursive: true });
+    }
+
+    // Create session directory under ~/.claude/projects
+    mkdirSync(sessionDir, { recursive: true });
+
+    // Create a mock session file with cwd field
+    const sessionFile = join(sessionDir, "draft-test-session.jsonl");
+    if (!existsSync(sessionFile)) {
+      const sessionData = {
+        type: "user",
+        cwd: mockProjectPath,
+        message: { role: "user", content: "Test message" },
+        timestamp: new Date().toISOString(),
+        uuid: "draft-test-1",
+      };
+      writeFileSync(sessionFile, `${JSON.stringify(sessionData)}\n`);
+    }
+  });
+
   test.describe("New Session Input", () => {
     test("persists draft to localStorage while typing", async ({ page }) => {
-      // First get a project ID
-      await page.goto("/projects");
-      await page.waitForSelector(".project-list a");
-      const href = await page
-        .locator(".project-list a")
-        .first()
-        .getAttribute("href");
-      const projectId = new URLSearchParams(href?.split("?")[1] ?? "").get(
-        "project",
-      );
+      // Use our pre-created project ID
+      const projectId = encodeProjectId(mockProjectPath);
       expect(projectId).toBeTruthy();
 
       // Navigate to new session page
@@ -34,16 +70,8 @@ test.describe("Draft Persistence", () => {
     });
 
     test("restores draft after page reload", async ({ page }) => {
-      // First get a project ID
-      await page.goto("/projects");
-      await page.waitForSelector(".project-list a");
-      const href = await page
-        .locator(".project-list a")
-        .first()
-        .getAttribute("href");
-      const projectId = new URLSearchParams(href?.split("?")[1] ?? "").get(
-        "project",
-      );
+      // Use our pre-created project ID
+      const projectId = encodeProjectId(mockProjectPath);
       expect(projectId).toBeTruthy();
 
       // Navigate to new session page
@@ -70,16 +98,8 @@ test.describe("Draft Persistence", () => {
     });
 
     test("clears draft after successful session start", async ({ page }) => {
-      // First get a project ID
-      await page.goto("/projects");
-      await page.waitForSelector(".project-list a");
-      const href = await page
-        .locator(".project-list a")
-        .first()
-        .getAttribute("href");
-      const projectId = new URLSearchParams(href?.split("?")[1] ?? "").get(
-        "project",
-      );
+      // Use our pre-created project ID
+      const projectId = encodeProjectId(mockProjectPath);
       expect(projectId).toBeTruthy();
 
       // Navigate to new session page

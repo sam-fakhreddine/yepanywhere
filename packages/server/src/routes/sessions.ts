@@ -1,4 +1,5 @@
 import {
+  type ContextUsage,
   type ModelOption,
   type ProviderName,
   type ThinkingOption,
@@ -141,6 +142,65 @@ function sdkMessagesToClientMessages(sdkMessages: SDKMessage[]): Message[] {
     }
   }
   return messages;
+}
+
+// Claude model context window size (200K tokens)
+const CONTEXT_WINDOW_SIZE = 200_000;
+
+/**
+ * Extract context usage from SDK messages.
+ * Finds the last assistant message with usage data.
+ */
+function extractContextUsageFromSDKMessages(
+  sdkMessages: SDKMessage[],
+): ContextUsage | undefined {
+  // Find the last assistant message with usage data (iterate backwards)
+  for (let i = sdkMessages.length - 1; i >= 0; i--) {
+    const msg = sdkMessages[i];
+    if (msg && msg.type === "assistant" && msg.usage) {
+      const usage = msg.usage as {
+        input_tokens?: number;
+        output_tokens?: number;
+        cache_read_input_tokens?: number;
+        cache_creation_input_tokens?: number;
+      };
+
+      // Total input = fresh tokens + cached tokens + new cache creation
+      const inputTokens =
+        (usage.input_tokens ?? 0) +
+        (usage.cache_read_input_tokens ?? 0) +
+        (usage.cache_creation_input_tokens ?? 0);
+
+      // Skip messages with zero input tokens (incomplete streaming messages)
+      if (inputTokens === 0) {
+        continue;
+      }
+
+      const percentage = Math.round((inputTokens / CONTEXT_WINDOW_SIZE) * 100);
+
+      const result: ContextUsage = { inputTokens, percentage };
+
+      // Add optional fields if available
+      if (usage.output_tokens !== undefined && usage.output_tokens > 0) {
+        result.outputTokens = usage.output_tokens;
+      }
+      if (
+        usage.cache_read_input_tokens !== undefined &&
+        usage.cache_read_input_tokens > 0
+      ) {
+        result.cacheReadTokens = usage.cache_read_input_tokens;
+      }
+      if (
+        usage.cache_creation_input_tokens !== undefined &&
+        usage.cache_creation_input_tokens > 0
+      ) {
+        result.cacheCreationTokens = usage.cache_creation_input_tokens;
+      }
+
+      return result;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -643,10 +703,12 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
     if (!session) {
       // Session file doesn't exist yet - only valid if we own the process
       if (process) {
-        // Get messages from process memory (for mock SDK that doesn't persist to disk)
-        const processMessages = sdkMessagesToClientMessages(
-          process.getMessageHistory(),
-        );
+        // Get raw messages from process memory
+        const sdkMessages = process.getMessageHistory();
+        // Convert to client format
+        const processMessages = sdkMessagesToClientMessages(sdkMessages);
+        // Extract context usage from raw SDK messages (has usage field)
+        const contextUsage = extractContextUsageFromSDKMessages(sdkMessages);
         // Get metadata even for new sessions (in case it was set before file was written)
         const metadata = deps.sessionMetadataService?.getMetadata(sessionId);
         // Get notification data for new sessions too
@@ -671,6 +733,7 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
             lastSeenAt: lastSeenEntry?.timestamp,
             hasUnread,
             provider: process.provider,
+            contextUsage,
             // Model is unknown for new sessions until first message is written to disk
           },
           messages: processMessages,

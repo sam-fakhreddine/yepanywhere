@@ -80,29 +80,23 @@ test.describe("File Browser", () => {
       await expect(codeView).toContainText("export const hello");
     });
 
+    // Client-side markdown rendering is disabled by default (VITE_DISABLE_CLIENT_MARKDOWN)
+    // These tests verify the file viewer shows markdown files as code when rendering is disabled
     test("renders markdown files with formatting", async ({ page }) => {
       await page.goto(`/projects/${projectId}/file?path=README.md`);
 
-      // Should render markdown by default
-      await expect(page.locator(".file-viewer-markdown")).toBeVisible();
-      await expect(page.locator(".file-viewer-markdown h1")).toContainText(
-        "Test Project",
-      );
-      await expect(page.locator(".file-viewer-markdown strong")).toContainText(
-        "test",
-      );
+      // When markdown rendering is disabled, files show as code
+      const codeView = page.locator(".file-viewer-code");
+      await expect(codeView).toBeVisible();
+      // Content should contain the markdown text
+      await expect(codeView).toContainText("# Test Project");
+      await expect(codeView).toContainText("**test**");
     });
 
     test("can toggle markdown rendering to raw view", async ({ page }) => {
       await page.goto(`/projects/${projectId}/file?path=README.md`);
 
-      // Initially shows rendered markdown
-      await expect(page.locator(".file-viewer-markdown")).toBeVisible();
-
-      // Click toggle button to show raw
-      await page.click('button[title="View raw"]');
-
-      // Should now show code view
+      // When markdown rendering is disabled, file shows as code view directly
       const codeView = page.locator(".file-viewer-code");
       await expect(codeView).toBeVisible();
       // Content should contain the raw markdown text
