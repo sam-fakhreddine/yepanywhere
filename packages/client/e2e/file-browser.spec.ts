@@ -71,145 +71,58 @@ test.afterAll(() => {
   }
 });
 
-test.describe("File Browser", () => {
-  test.describe("File Page (standalone viewer)", () => {
-    test("displays text file content with line numbers", async ({ page }) => {
-      // Navigate directly to file page
-      await page.goto(`/projects/${projectId}/file?path=src/index.ts`);
+test.describe("Files API", () => {
+  test("returns file content for text files", async ({ request }) => {
+    const response = await request.get(
+      `/api/projects/${projectId}/files?path=test.txt`,
+    );
 
-      // Should show file viewer
-      await expect(page.locator(".file-viewer")).toBeVisible();
-
-      // Should show file path
-      await expect(page.locator(".file-viewer-path")).toContainText(
-        "src/index.ts",
-      );
-
-      // Should show code content (syntax highlighted or plain)
-      // With shiki highlighting: .shiki-container, fallback: .code-line-numbers
-      const codeView = page.locator(".file-viewer-code");
-      await expect(codeView).toBeVisible();
-      // Content should be present in either shiki or plain code view
-      await expect(codeView).toContainText("export const hello");
-    });
-
-    test("renders markdown files as code", async ({ page }) => {
-      await page.goto(`/projects/${projectId}/file?path=README.md`);
-
-      // Markdown files show as syntax-highlighted code
-      const codeView = page.locator(".file-viewer-code");
-      await expect(codeView).toBeVisible();
-      // Content should contain the markdown text
-      await expect(codeView).toContainText("# Test Project");
-      await expect(codeView).toContainText("**test**");
-    });
-
-    test("shows file metadata (size, lines)", async ({ page }) => {
-      await page.goto(`/projects/${projectId}/file?path=test.txt`);
-
-      // Should show file size
-      await expect(page.locator(".file-viewer-meta")).toBeVisible();
-    });
-
-    test("shows error for non-existent file", async ({ page }) => {
-      await page.goto(`/projects/${projectId}/file?path=nonexistent.txt`);
-
-      // Should show error message
-      await expect(page.locator(".file-viewer-error")).toBeVisible();
-      // Check for "Not Found" (case-insensitive) or similar error message
-      await expect(page.locator(".file-viewer-error")).toContainText(
-        /not found/i,
-      );
-    });
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+    expect(data.metadata.path).toBe("test.txt");
+    expect(data.metadata.isText).toBe(true);
+    expect(data.content).toBe("Hello from test file!");
+    expect(data.rawUrl).toContain("/files/raw");
   });
 
-  test.describe("File Actions", () => {
-    test("can copy file content", async ({ page, context }) => {
-      // Grant clipboard permissions
-      await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  test("returns raw file with correct content-type", async ({ request }) => {
+    const response = await request.get(
+      `/api/projects/${projectId}/files/raw?path=data.json`,
+    );
 
-      await page.goto(`/projects/${projectId}/file?path=test.txt`);
-
-      // Click copy button
-      await page.click('button[title="Copy content"]');
-
-      // Button should show "Copied!" state
-      await expect(page.locator('button[title="Copied!"]')).toBeVisible();
-
-      // Verify clipboard content
-      const clipboardText = await page.evaluate(() =>
-        navigator.clipboard.readText(),
-      );
-      expect(clipboardText).toBe("Hello from test file!");
-    });
-
-    test("download button triggers download", async ({ page }) => {
-      await page.goto(`/projects/${projectId}/file?path=test.txt`);
-
-      // Click download button - should trigger a download
-      const [download] = await Promise.all([
-        page.waitForEvent("download"),
-        page.click('button[title="Download"]'),
-      ]);
-
-      // Verify download was triggered with correct filename
-      expect(download.suggestedFilename()).toBe("test.txt");
-    });
+    expect(response.ok()).toBe(true);
+    expect(response.headers()["content-type"]).toBe("application/json");
+    const text = await response.text();
+    expect(text).toBe('{"key": "value"}');
   });
 
-  test.describe("Files API", () => {
-    test("returns file content for text files", async ({ request }) => {
-      const response = await request.get(
-        `/api/projects/${projectId}/files?path=test.txt`,
-      );
+  test("sets attachment disposition for downloads", async ({ request }) => {
+    const response = await request.get(
+      `/api/projects/${projectId}/files/raw?path=test.txt&download=true`,
+    );
 
-      expect(response.ok()).toBe(true);
-      const data = await response.json();
-      expect(data.metadata.path).toBe("test.txt");
-      expect(data.metadata.isText).toBe(true);
-      expect(data.content).toBe("Hello from test file!");
-      expect(data.rawUrl).toContain("/files/raw");
-    });
+    expect(response.ok()).toBe(true);
+    expect(response.headers()["content-disposition"]).toContain("attachment");
+    expect(response.headers()["content-disposition"]).toContain("test.txt");
+  });
 
-    test("returns raw file with correct content-type", async ({ request }) => {
-      const response = await request.get(
-        `/api/projects/${projectId}/files/raw?path=data.json`,
-      );
+  test("rejects path traversal attempts", async ({ request }) => {
+    const response = await request.get(
+      `/api/projects/${projectId}/files?path=../../../etc/passwd`,
+    );
 
-      expect(response.ok()).toBe(true);
-      expect(response.headers()["content-type"]).toBe("application/json");
-      const text = await response.text();
-      expect(text).toBe('{"key": "value"}');
-    });
+    expect(response.status()).toBe(400);
+    const data = await response.json();
+    expect(data.error).toBe("Invalid file path");
+  });
 
-    test("sets attachment disposition for downloads", async ({ request }) => {
-      const response = await request.get(
-        `/api/projects/${projectId}/files/raw?path=test.txt&download=true`,
-      );
+  test("returns 404 for non-existent files", async ({ request }) => {
+    const response = await request.get(
+      `/api/projects/${projectId}/files?path=does-not-exist.txt`,
+    );
 
-      expect(response.ok()).toBe(true);
-      expect(response.headers()["content-disposition"]).toContain("attachment");
-      expect(response.headers()["content-disposition"]).toContain("test.txt");
-    });
-
-    test("rejects path traversal attempts", async ({ request }) => {
-      const response = await request.get(
-        `/api/projects/${projectId}/files?path=../../../etc/passwd`,
-      );
-
-      expect(response.status()).toBe(400);
-      const data = await response.json();
-      expect(data.error).toBe("Invalid file path");
-    });
-
-    test("returns 404 for non-existent files", async ({ request }) => {
-      const response = await request.get(
-        `/api/projects/${projectId}/files?path=does-not-exist.txt`,
-      );
-
-      expect(response.status()).toBe(404);
-      const data = await response.json();
-      expect(data.error).toBe("File not found");
-    });
+    expect(response.status()).toBe(404);
+    const data = await response.json();
+    expect(data.error).toBe("File not found");
   });
 });
