@@ -66,13 +66,8 @@
     .logo-icon {
       width: 40px;
       height: 40px;
-      background: var(--accent);
       border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 20px;
+      flex-shrink: 0;
     }
 
     .logo-text {
@@ -402,7 +397,17 @@
   <header>
     <div class="container header-content">
       <a href="/" class="logo">
-        <div class="logo-icon">Y</div>
+        <svg class="logo-icon" viewBox="0 0 120 120">
+          <defs>
+            <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#22c55e" />
+              <stop offset="100%" stop-color="#16a34a" />
+            </linearGradient>
+          </defs>
+          <rect x="0" y="0" width="120" height="120" rx="26" fill="url(#logoGrad)" />
+          <path d="M 28 35 L 50 62 L 92 20" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M 50 62 L 50 95" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" />
+        </svg>
         <div class="logo-text"><span>yep</span>anywhere</div>
       </a>
       <nav>
