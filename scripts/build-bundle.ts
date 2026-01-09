@@ -72,12 +72,7 @@ function step(name: string, fn: () => void): void {
 step("Clean previous builds", () => {
   log("Removing old dist directories...");
 
-  const dirsToClean = [
-    SHARED_DIST,
-    CLIENT_DIST,
-    SERVER_DIST,
-    STAGING_DIR,
-  ];
+  const dirsToClean = [SHARED_DIST, CLIENT_DIST, SERVER_DIST, STAGING_DIR];
 
   for (const dir of dirsToClean) {
     if (fs.existsSync(dir)) {
@@ -133,7 +128,9 @@ step("Build server", () => {
 
 // Create staging directory structure
 step("Create staging directory", () => {
-  log(`Creating staging directory at ${path.relative(ROOT_DIR, STAGING_DIR)}...`);
+  log(
+    `Creating staging directory at ${path.relative(ROOT_DIR, STAGING_DIR)}...`,
+  );
   fs.mkdirSync(STAGING_DIR, { recursive: true });
 });
 
@@ -148,10 +145,15 @@ step("Copy server dist to staging", () => {
 // Copy shared dist into staging (for @yep-anywhere/shared imports)
 // We put it in 'bundled/' instead of 'node_modules/' because npm ignores node_modules
 step("Bundle shared into staging", () => {
-  const bundledSharedPath = path.join(STAGING_DIR, "bundled/@yep-anywhere/shared");
+  const bundledSharedPath = path.join(
+    STAGING_DIR,
+    "bundled/@yep-anywhere/shared",
+  );
   const bundledSharedDist = path.join(bundledSharedPath, "dist");
 
-  log(`Copying shared dist to ${path.relative(ROOT_DIR, bundledSharedDist)}...`);
+  log(
+    `Copying shared dist to ${path.relative(ROOT_DIR, bundledSharedDist)}...`,
+  );
 
   // Create directory structure
   fs.mkdirSync(bundledSharedDist, { recursive: true });
@@ -178,7 +180,9 @@ step("Bundle shared into staging", () => {
 // Copy client dist into staging
 step("Bundle client into staging", () => {
   const stagingClientDist = path.join(STAGING_DIR, "client-dist");
-  log(`Copying client dist to ${path.relative(ROOT_DIR, stagingClientDist)}...`);
+  log(
+    `Copying client dist to ${path.relative(ROOT_DIR, stagingClientDist)}...`,
+  );
 
   // Create staging client-dist directory
   fs.mkdirSync(stagingClientDist, { recursive: true });
@@ -201,7 +205,9 @@ step("Copy postinstall script to staging", () => {
   const destScriptsDir = path.join(STAGING_DIR, "scripts");
   const destScript = path.join(destScriptsDir, "postinstall.js");
 
-  log(`Copying postinstall script to ${path.relative(ROOT_DIR, destScript)}...`);
+  log(
+    `Copying postinstall script to ${path.relative(ROOT_DIR, destScript)}...`,
+  );
 
   fs.mkdirSync(destScriptsDir, { recursive: true });
   fs.copyFileSync(srcScript, destScript);
@@ -214,7 +220,9 @@ step("Generate package.json for npm", () => {
   log("Generating package.json for npm publishing...");
 
   const sourcePackageJsonPath = path.join(SERVER_PACKAGE, "package.json");
-  const sourcePackageJson = JSON.parse(fs.readFileSync(sourcePackageJsonPath, "utf-8"));
+  const sourcePackageJson = JSON.parse(
+    fs.readFileSync(sourcePackageJsonPath, "utf-8"),
+  );
 
   // Create a new package.json for publishing
   const npmPackageJson: Record<string, unknown> = {

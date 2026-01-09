@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ProjectMetadataService } from "../../src/metadata/ProjectMetadataService.js";
 
 describe("ProjectMetadataService", () => {

@@ -38,7 +38,10 @@ function parseSSEEvent(data: string): OpenCodeSSEEvent | null {
   }
 }
 
-async function waitForServer(baseUrl: string, timeoutMs = 10000): Promise<boolean> {
+async function waitForServer(
+  baseUrl: string,
+  timeoutMs = 10000,
+): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
@@ -63,7 +66,9 @@ describe("OpenCode Permissions E2E", () => {
 
   beforeAll(async () => {
     if (process.env.OPENCODE_PERMISSION_TESTS !== "true") {
-      console.log("Skipping OpenCode permission tests - set OPENCODE_PERMISSION_TESTS=true to enable");
+      console.log(
+        "Skipping OpenCode permission tests - set OPENCODE_PERMISSION_TESTS=true to enable",
+      );
       return;
     }
 
@@ -76,14 +81,17 @@ describe("OpenCode Permissions E2E", () => {
     const opencodeConfig = {
       permission: {
         "*": "ask",
-        "read": "ask",
-        "edit": "ask",
-        "bash": "ask",
-        "glob": "ask",
-        "grep": "ask",
+        read: "ask",
+        edit: "ask",
+        bash: "ask",
+        glob: "ask",
+        grep: "ask",
       },
     };
-    writeFileSync(join(testDir, "opencode.json"), JSON.stringify(opencodeConfig, null, 2));
+    writeFileSync(
+      join(testDir, "opencode.json"),
+      JSON.stringify(opencodeConfig, null, 2),
+    );
 
     log("Test directory:", testDir);
     log("OpenCode config:", opencodeConfig);
@@ -92,10 +100,14 @@ describe("OpenCode Permissions E2E", () => {
     baseUrl = `http://127.0.0.1:${port}`;
     log("Starting OpenCode server on port", port);
 
-    serverProcess = spawn("opencode", ["serve", "--port", String(port), "--print-logs"], {
-      cwd: testDir,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    serverProcess = spawn(
+      "opencode",
+      ["serve", "--port", String(port), "--print-logs"],
+      {
+        cwd: testDir,
+        stdio: ["pipe", "pipe", "pipe"],
+      },
+    );
 
     // Log server output
     serverProcess.stdout?.on("data", (data) => {
@@ -209,7 +221,12 @@ describe("OpenCode Permissions E2E", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        parts: [{ type: "text", text: "Read the contents of test.txt and tell me what it says. Use the read tool." }],
+        parts: [
+          {
+            type: "text",
+            text: "Read the contents of test.txt and tell me what it says. Use the read tool.",
+          },
+        ],
       }),
     });
     log("Message request initiated (not awaiting)");
@@ -221,7 +238,9 @@ describe("OpenCode Permissions E2E", () => {
     while (Date.now() - start < timeout) {
       // Log current state periodically
       if ((Date.now() - start) % 5000 < 200) {
-        log(`Waiting... events=${events.length}, permissionRequests=${permissionRequests.length}`);
+        log(
+          `Waiting... events=${events.length}, permissionRequests=${permissionRequests.length}`,
+        );
       }
 
       // Check if we got a permission request
@@ -240,7 +259,9 @@ describe("OpenCode Permissions E2E", () => {
       await new Promise((r) => setTimeout(r, 200));
     }
 
-    log(`Found ${permissionRequests.length} permission requests after ${Date.now() - start}ms`);
+    log(
+      `Found ${permissionRequests.length} permission requests after ${Date.now() - start}ms`,
+    );
 
     // Stop SSE first (before checking message result, which might hang)
     sseController.abort();
