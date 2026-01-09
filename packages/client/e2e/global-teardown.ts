@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, unlinkSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, rmSync, unlinkSync } from "node:fs";
+import { homedir, hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 
 const PORT_FILE = join(tmpdir(), "claude-e2e-port");
@@ -25,5 +25,29 @@ export default async function globalTeardown() {
   // Clean up port file
   if (existsSync(PORT_FILE)) {
     unlinkSync(PORT_FILE);
+  }
+
+  // Clean up mock project data created by dev-mock.ts setupMockProjects()
+  // This mirrors cleanupMockProjects() from server/src/testing/mockProjectData.ts
+  const mockProjectPath = join(tmpdir(), "mockproject");
+  const encodedPath = mockProjectPath.replace(/\//g, "-");
+  const mockProjectDir = join(
+    homedir(),
+    ".claude",
+    "projects",
+    hostname(),
+    encodedPath,
+  );
+
+  try {
+    rmSync(mockProjectPath, { recursive: true, force: true });
+  } catch {
+    // Ignore cleanup errors
+  }
+
+  try {
+    rmSync(mockProjectDir, { recursive: true, force: true });
+  } catch {
+    // Ignore cleanup errors
   }
 }

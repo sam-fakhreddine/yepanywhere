@@ -15,6 +15,9 @@ import { expect, test } from "./fixtures.js";
 const mockProjectPath = join(tmpdir(), "claude-e2e-codexoss");
 const projectId = Buffer.from(mockProjectPath).toString("base64url");
 
+// Track created session file for cleanup
+let codexSessionFile: string | null = null;
+
 // Create test project before tests
 test.beforeAll(() => {
   // Clean up any previous test artifacts
@@ -46,7 +49,7 @@ test.beforeAll(() => {
   mkdirSync(codexSessionDir, { recursive: true });
 
   const sessionId = `e2e-codexoss-${Date.now()}`;
-  const sessionFile = join(
+  codexSessionFile = join(
     codexSessionDir,
     `rollout-${year}-${month}-${day}T00-00-00-${sessionId}.jsonl`,
   );
@@ -76,17 +79,27 @@ test.beforeAll(() => {
   };
 
   writeFileSync(
-    sessionFile,
+    codexSessionFile,
     `${JSON.stringify(sessionMeta)}\n${JSON.stringify(userMessage)}\n`,
   );
 });
 
 // Clean up after tests
 test.afterAll(() => {
+  // Clean up mock project directory
   try {
     rmSync(mockProjectPath, { recursive: true, force: true });
   } catch {
     // Ignore cleanup errors
+  }
+
+  // Clean up Codex session file (don't leave test sessions in ~/.codex/)
+  if (codexSessionFile) {
+    try {
+      rmSync(codexSessionFile, { force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
   }
 });
 

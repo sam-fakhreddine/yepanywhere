@@ -37,3 +37,29 @@ export function setupMockProjects() {
 
   return { projectDir: mockProjectDir, sessionFile, mockProjectPath };
 }
+
+/**
+ * Clean up mock project data created by setupMockProjects().
+ * Call this in test teardown to avoid leaving test sessions in ~/.claude/.
+ */
+export function cleanupMockProjects() {
+  const claudeDir = path.join(os.homedir(), ".claude", "projects");
+  const hostname = os.hostname();
+  const mockProjectPath = path.join(os.tmpdir(), "mockproject");
+  const encodedPath = mockProjectPath.replace(/\//g, "-");
+  const mockProjectDir = path.join(claudeDir, hostname, encodedPath);
+
+  // Clean up mock project directory
+  try {
+    fs.rmSync(mockProjectPath, { recursive: true, force: true });
+  } catch {
+    // Ignore cleanup errors
+  }
+
+  // Clean up Claude session directory
+  try {
+    fs.rmSync(mockProjectDir, { recursive: true, force: true });
+  } catch {
+    // Ignore cleanup errors
+  }
+}

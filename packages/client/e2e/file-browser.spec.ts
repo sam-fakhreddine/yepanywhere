@@ -10,6 +10,9 @@ const projectId = Buffer.from(mockProjectPath).toString("base64url");
 // Session dir name uses the path with slashes replaced by dashes
 const sessionDirName = mockProjectPath.replace(/\//g, "-");
 
+// Track Claude session directory for cleanup
+let claudeSessionDir: string | null = null;
+
 // Create test files before tests run
 test.beforeAll(() => {
   // Clean up any previous test artifacts
@@ -37,10 +40,10 @@ test.beforeAll(() => {
 
   // Create a session file so the project is discoverable
   const claudeDir = join(homedir(), ".claude", "projects");
-  const hostDir = join(claudeDir, hostname(), sessionDirName);
-  mkdirSync(hostDir, { recursive: true });
+  claudeSessionDir = join(claudeDir, hostname(), sessionDirName);
+  mkdirSync(claudeSessionDir, { recursive: true });
   writeFileSync(
-    join(hostDir, "e2e-file-test.jsonl"),
+    join(claudeSessionDir, "e2e-file-test.jsonl"),
     JSON.stringify({
       type: "user",
       cwd: mockProjectPath,
@@ -51,10 +54,20 @@ test.beforeAll(() => {
 
 // Clean up after tests
 test.afterAll(() => {
+  // Clean up mock project directory
   try {
     rmSync(mockProjectPath, { recursive: true, force: true });
   } catch {
     // Ignore cleanup errors
+  }
+
+  // Clean up Claude session directory (don't leave test sessions in ~/.claude/)
+  if (claudeSessionDir) {
+    try {
+      rmSync(claudeSessionDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
   }
 });
 

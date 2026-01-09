@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "./fixtures.js";
@@ -42,6 +42,23 @@ test.describe("Draft Persistence", () => {
         uuid: "draft-test-1",
       };
       writeFileSync(sessionFile, `${JSON.stringify(sessionData)}\n`);
+    }
+  });
+
+  // Clean up after all tests
+  test.afterAll(() => {
+    // Clean up mock project directory
+    try {
+      rmSync(mockProjectPath, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
+
+    // Clean up Claude session directory (don't leave test sessions in ~/.claude/)
+    try {
+      rmSync(sessionDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
     }
   });
 
