@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Yep Anywhere - Mobile supervision for Claude Code agents</title>
   <meta name="description" content="A polished web interface for managing Claude Code agents. Works great on mobile and desktop.">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -58,25 +61,12 @@
     .logo {
       display: flex;
       align-items: center;
-      gap: 12px;
       text-decoration: none;
-      color: var(--text-primary);
     }
 
-    .logo-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
-      flex-shrink: 0;
-    }
-
-    .logo-text {
-      font-size: 20px;
-      font-weight: 600;
-    }
-
-    .logo-text span {
-      color: var(--accent);
+    .logo img {
+      height: 36px;
+      width: auto;
     }
 
     nav {
@@ -397,18 +387,7 @@
   <header>
     <div class="container header-content">
       <a href="/" class="logo">
-        <svg class="logo-icon" viewBox="0 0 120 120">
-          <defs>
-            <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#22c55e" />
-              <stop offset="100%" stop-color="#16a34a" />
-            </linearGradient>
-          </defs>
-          <rect x="0" y="0" width="120" height="120" rx="26" fill="url(#logoGrad)" />
-          <path d="M 28 35 L 50 62 L 92 20" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M 50 62 L 50 95" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" />
-        </svg>
-        <div class="logo-text"><span>yep</span>anywhere</div>
+        <img src="branding/lockup-dark.svg" alt="yepanywhere">
       </a>
       <nav>
         <a href="#screenshots">Screenshots</a>
