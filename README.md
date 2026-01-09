@@ -1,6 +1,14 @@
-# Yep Anywhere
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="site/branding/lockup-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="site/branding/lockup-light.svg">
+    <img src="site/branding/lockup-light.svg" alt="Yep Anywhere" height="60">
+  </picture>
+</p>
 
-Yep, you can keep working anywhere.
+<p align="center">
+  <em>Yep, you can keep working anywhere.</em>
+</p>
 
 A polished web interface for managing Claude and Codex agents. Works great on mobile and desktop — walk away from your desk, watch your kids, and keep your agents productive from your phone.
 
