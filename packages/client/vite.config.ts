@@ -10,6 +10,9 @@ const vitePort = process.env.VITE_PORT
   ? Number.parseInt(process.env.VITE_PORT, 10)
   : 3402;
 
+// VITE_HOST: Set to "true" to bind to all interfaces (needed in Docker containers)
+const viteHost = process.env.VITE_HOST === "true" ? true : undefined;
+
 export default defineConfig({
   clearScreen: false,
   plugins: [
@@ -22,6 +25,7 @@ export default defineConfig({
   },
   server: {
     port: vitePort,
+    host: viteHost,
     allowedHosts: true,
     // HMR configuration for reverse proxy setup
     // When accessed through backend proxy (port 3400) or Tailscale, HMR needs to
