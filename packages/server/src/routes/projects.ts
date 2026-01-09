@@ -1,7 +1,10 @@
 import { isUrlProjectId, toUrlProjectId } from "@yep-anywhere/shared";
 import { Hono } from "hono";
 import type { SessionIndexService } from "../indexes/index.js";
-import type { SessionMetadataService } from "../metadata/index.js";
+import type {
+  ProjectMetadataService,
+  SessionMetadataService,
+} from "../metadata/index.js";
 import type { NotificationService } from "../notifications/index.js";
 import type { CodexSessionScanner } from "../projects/codex-scanner.js";
 import type { GeminiSessionScanner } from "../projects/gemini-scanner.js";
@@ -25,6 +28,8 @@ export interface ProjectsDeps {
   externalTracker?: ExternalSessionTracker;
   notificationService?: NotificationService;
   sessionMetadataService?: SessionMetadataService;
+  /** ProjectMetadataService for persisting added projects */
+  projectMetadataService?: ProjectMetadataService;
   sessionIndexService?: SessionIndexService;
   /** Codex scanner for checking if a project has Codex sessions */
   codexScanner?: CodexSessionScanner;
@@ -355,6 +360,11 @@ export function createProjectsRoutes(deps: ProjectsDeps): Hono {
         { error: "Path does not exist or is not a directory" },
         404,
       );
+    }
+
+    // Persist the project so it appears in future listings
+    if (deps.projectMetadataService) {
+      await deps.projectMetadataService.addProject(projectId, normalizedPath);
     }
 
     return c.json({ project });

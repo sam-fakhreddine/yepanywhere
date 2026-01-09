@@ -5,7 +5,10 @@ import type { AuthService } from "./auth/AuthService.js";
 import { createAuthRoutes } from "./auth/routes.js";
 import type { FrontendProxy } from "./frontend/index.js";
 import type { SessionIndexService } from "./indexes/index.js";
-import type { SessionMetadataService } from "./metadata/index.js";
+import type {
+  ProjectMetadataService,
+  SessionMetadataService,
+} from "./metadata/index.js";
 import { createAuthMiddleware } from "./middleware/auth.js";
 import { corsMiddleware, requireCustomHeader } from "./middleware/security.js";
 import type { NotificationService } from "./notifications/index.js";
@@ -67,6 +70,8 @@ export interface AppOptions {
   notificationService?: NotificationService;
   /** SessionMetadataService for custom titles and archive status */
   sessionMetadataService?: SessionMetadataService;
+  /** ProjectMetadataService for persisting added projects */
+  projectMetadataService?: ProjectMetadataService;
   /** SessionIndexService for caching session summaries */
   sessionIndexService?: SessionIndexService;
   /** Maximum concurrent workers. 0 = unlimited (default) */
@@ -130,7 +135,10 @@ export function createApp(options: AppOptions): AppResult {
   }
 
   // Create dependencies
-  const scanner = new ProjectScanner({ projectsDir: options.projectsDir });
+  const scanner = new ProjectScanner({
+    projectsDir: options.projectsDir,
+    projectMetadataService: options.projectMetadataService,
+  });
   const codexScanner = new CodexSessionScanner();
   const geminiScanner = new GeminiSessionScanner();
   const supervisor = new Supervisor({
@@ -211,6 +219,7 @@ export function createApp(options: AppOptions): AppResult {
       externalTracker,
       notificationService: options.notificationService,
       sessionMetadataService: options.sessionMetadataService,
+      projectMetadataService: options.projectMetadataService,
       sessionIndexService: options.sessionIndexService,
       codexScanner,
       codexSessionsDir: CODEX_SESSIONS_DIR,

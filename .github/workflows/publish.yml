@@ -39,18 +39,24 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
       - name: Build bundle for npm
         run: pnpm build:bundle
+        env:
+          NPM_VERSION: ${{ steps.version.outputs.VERSION }}
 
       - name: Verify package contents
         run: |
-          cd packages/server
+          cd dist/npm-package
           npm pack --dry-run
           echo "Package contents verified"
 
       - name: Publish to npm
         run: |
-          cd packages/server
+          cd dist/npm-package
           npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

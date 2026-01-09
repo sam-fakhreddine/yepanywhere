@@ -21,7 +21,10 @@ import {
   setDebugContext,
   startMaintenanceServer,
 } from "./maintenance/index.js";
-import { SessionMetadataService } from "./metadata/index.js";
+import {
+  ProjectMetadataService,
+  SessionMetadataService,
+} from "./metadata/index.js";
 import { NotificationService } from "./notifications/index.js";
 import { ProjectScanner } from "./projects/scanner.js";
 import { PushService, loadVapidKeys } from "./push/index.js";
@@ -117,6 +120,9 @@ const notificationService = new NotificationService({
 const sessionMetadataService = new SessionMetadataService({
   dataDir: config.dataDir,
 });
+const projectMetadataService = new ProjectMetadataService({
+  dataDir: config.dataDir,
+});
 const sessionIndexService = new SessionIndexService({
   projectsDir: config.claudeProjectsDir,
   dataDir: path.join(config.dataDir, "indexes"),
@@ -133,6 +139,7 @@ async function startServer() {
   // Initialize services (loads state from disk)
   await notificationService.initialize();
   await sessionMetadataService.initialize();
+  await projectMetadataService.initialize();
   await sessionIndexService.initialize();
   await pushService.initialize();
   await recentsService.initialize();
@@ -188,6 +195,7 @@ async function startServer() {
     // Note: uploadeWebSocket not passed yet - will be added below
     notificationService,
     sessionMetadataService,
+    projectMetadataService,
     sessionIndexService,
     maxWorkers: config.maxWorkers,
     idlePreemptThresholdMs: config.idlePreemptThresholdMs,

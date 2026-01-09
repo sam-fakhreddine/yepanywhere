@@ -5,6 +5,7 @@ import {
   type ProviderName,
   type UrlProjectId,
 } from "@yep-anywhere/shared";
+import type { ProjectMetadataService } from "../metadata/index.js";
 import type { Project } from "../supervisor/types.js";
 import { CODEX_SESSIONS_DIR, CodexSessionScanner } from "./codex-scanner.js";
 import { GEMINI_TMP_DIR, GeminiSessionScanner } from "./gemini-scanner.js";
@@ -21,6 +22,7 @@ export interface ScannerOptions {
   geminiSessionsDir?: string; // override for testing
   enableCodex?: boolean; // whether to include Codex projects (default: true)
   enableGemini?: boolean; // whether to include Gemini projects (default: true)
+  projectMetadataService?: ProjectMetadataService; // for persisting added projects
 }
 
 export class ProjectScanner {
@@ -29,6 +31,7 @@ export class ProjectScanner {
   private geminiScanner: GeminiSessionScanner | null;
   private enableCodex: boolean;
   private enableGemini: boolean;
+  private projectMetadataService: ProjectMetadataService | null;
 
   constructor(options: ScannerOptions = {}) {
     this.projectsDir = options.projectsDir ?? CLAUDE_PROJECTS_DIR;
@@ -44,6 +47,14 @@ export class ProjectScanner {
           sessionsDir: options.geminiSessionsDir ?? GEMINI_TMP_DIR,
         })
       : null;
+    this.projectMetadataService = options.projectMetadataService ?? null;
+  }
+
+  /**
+   * Set the project metadata service (for late initialization).
+   */
+  setProjectMetadataService(service: ProjectMetadataService): void {
+    this.projectMetadataService = service;
   }
 
   async listProjects(): Promise<Project[]> {
@@ -153,6 +164,38 @@ export class ProjectScanner {
         if (seenPaths.has(geminiProject.path)) continue;
         seenPaths.add(geminiProject.path);
         projects.push(geminiProject);
+      }
+    }
+
+    // Merge manually added projects (from ProjectMetadataService)
+    if (this.projectMetadataService) {
+      const addedProjects = this.projectMetadataService.getAllProjects();
+      for (const [projectId, metadata] of Object.entries(addedProjects)) {
+        // Skip if we've already seen this path from another source
+        if (seenPaths.has(metadata.path)) continue;
+
+        // Verify the directory still exists
+        try {
+          const stats = await stat(metadata.path);
+          if (!stats.isDirectory()) continue;
+        } catch {
+          // Directory no longer exists, skip it
+          continue;
+        }
+
+        seenPaths.add(metadata.path);
+        const encodedPath = metadata.path.replace(/\//g, "-");
+        projects.push({
+          id: projectId as UrlProjectId,
+          path: metadata.path,
+          name: basename(metadata.path),
+          sessionCount: 0,
+          sessionDir: join(this.projectsDir, encodedPath),
+          activeOwnedCount: 0,
+          activeExternalCount: 0,
+          lastActivity: metadata.addedAt,
+          provider: "claude",
+        });
       }
     }
 
