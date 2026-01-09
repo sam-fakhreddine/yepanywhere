@@ -19,7 +19,11 @@ import * as path from "node:path";
 const ROOT_DIR = path.resolve(import.meta.dirname, "..");
 const CLIENT_DIST = path.join(ROOT_DIR, "packages/client/dist");
 const SERVER_PACKAGE = path.join(ROOT_DIR, "packages/server");
-const SERVER_CLIENT_DIST = path.join(SERVER_PACKAGE, "client-dist");
+const SERVER_DIST = path.join(SERVER_PACKAGE, "dist");
+const SHARED_DIST = path.join(ROOT_DIR, "packages/shared/dist");
+
+// Staging directory for npm publishing (keeps workspace package.json intact)
+const STAGING_DIR = path.join(ROOT_DIR, "dist/npm-package");
 
 interface StepResult {
   step: string;
@@ -66,10 +70,10 @@ step("Clean previous builds", () => {
   log("Removing old dist directories...");
 
   const dirsToClean = [
-    path.join(ROOT_DIR, "packages/shared/dist"),
-    path.join(ROOT_DIR, "packages/client/dist"),
-    path.join(ROOT_DIR, "packages/server/dist"),
-    SERVER_CLIENT_DIST,
+    SHARED_DIST,
+    CLIENT_DIST,
+    SERVER_DIST,
+    STAGING_DIR,
   ];
 
   for (const dir of dirsToClean) {
@@ -77,13 +81,6 @@ step("Clean previous builds", () => {
       fs.rmSync(dir, { recursive: true, force: true });
       log(`  Removed: ${path.relative(ROOT_DIR, dir)}`);
     }
-  }
-
-  // Clean bundled directory
-  const bundledDir = path.join(SERVER_PACKAGE, "bundled");
-  if (fs.existsSync(bundledDir)) {
-    fs.rmSync(bundledDir, { recursive: true, force: true });
-    log(`  Removed: ${path.relative(ROOT_DIR, bundledDir)}`);
   }
 });
 
@@ -131,30 +128,33 @@ step("Build server", () => {
   log(`  Server built successfully: ${path.relative(ROOT_DIR, serverDist)}`);
 });
 
-// Copy shared dist into server package (for @yep-anywhere/shared imports)
+// Create staging directory structure
+step("Create staging directory", () => {
+  log(`Creating staging directory at ${path.relative(ROOT_DIR, STAGING_DIR)}...`);
+  fs.mkdirSync(STAGING_DIR, { recursive: true });
+});
+
+// Copy server dist to staging
+step("Copy server dist to staging", () => {
+  const stagingDist = path.join(STAGING_DIR, "dist");
+  log(`Copying server dist to ${path.relative(ROOT_DIR, stagingDist)}...`);
+  copyRecursive(SERVER_DIST, stagingDist);
+  log("  Server dist copied to staging");
+});
+
+// Copy shared dist into staging (for @yep-anywhere/shared imports)
 // We put it in 'bundled/' instead of 'node_modules/' because npm ignores node_modules
-step("Bundle shared into server package", () => {
-  const SHARED_DIST = path.join(ROOT_DIR, "packages/shared/dist");
-  const BUNDLED_SHARED_PATH = path.join(
-    SERVER_PACKAGE,
-    "bundled/@yep-anywhere/shared",
-  );
-  const BUNDLED_SHARED_DIST = path.join(BUNDLED_SHARED_PATH, "dist");
+step("Bundle shared into staging", () => {
+  const bundledSharedPath = path.join(STAGING_DIR, "bundled/@yep-anywhere/shared");
+  const bundledSharedDist = path.join(bundledSharedPath, "dist");
 
-  log(
-    `Copying shared dist to ${path.relative(ROOT_DIR, BUNDLED_SHARED_DIST)}...`,
-  );
-
-  // Remove existing directory
-  if (fs.existsSync(BUNDLED_SHARED_PATH)) {
-    fs.rmSync(BUNDLED_SHARED_PATH, { recursive: true, force: true });
-  }
+  log(`Copying shared dist to ${path.relative(ROOT_DIR, bundledSharedDist)}...`);
 
   // Create directory structure
-  fs.mkdirSync(BUNDLED_SHARED_DIST, { recursive: true });
+  fs.mkdirSync(bundledSharedDist, { recursive: true });
 
   // Copy shared dist files
-  copyRecursive(SHARED_DIST, BUNDLED_SHARED_DIST);
+  copyRecursive(SHARED_DIST, bundledSharedDist);
 
   // Create a minimal package.json for the shared package
   const sharedPackageJson = {
@@ -165,92 +165,147 @@ step("Bundle shared into server package", () => {
     types: "dist/index.d.ts",
   };
   fs.writeFileSync(
-    path.join(BUNDLED_SHARED_PATH, "package.json"),
+    path.join(bundledSharedPath, "package.json"),
     JSON.stringify(sharedPackageJson, null, 2),
   );
 
-  log("  Shared types and runtime bundled into server package");
+  log("  Shared types and runtime bundled into staging");
 });
 
-// Copy client dist into server package
-step("Bundle client into server package", () => {
-  log(
-    `Copying client dist to ${path.relative(ROOT_DIR, SERVER_CLIENT_DIST)}...`,
-  );
+// Copy client dist into staging
+step("Bundle client into staging", () => {
+  const stagingClientDist = path.join(STAGING_DIR, "client-dist");
+  log(`Copying client dist to ${path.relative(ROOT_DIR, stagingClientDist)}...`);
 
-  // Create server client-dist directory
-  fs.mkdirSync(SERVER_CLIENT_DIST, { recursive: true });
+  // Create staging client-dist directory
+  fs.mkdirSync(stagingClientDist, { recursive: true });
 
   // Copy all client dist files
-  copyRecursive(CLIENT_DIST, SERVER_CLIENT_DIST);
+  copyRecursive(CLIENT_DIST, stagingClientDist);
 
   // Verify critical files were copied
-  const copiedIndexHtml = path.join(SERVER_CLIENT_DIST, "index.html");
+  const copiedIndexHtml = path.join(stagingClientDist, "index.html");
   if (!fs.existsSync(copiedIndexHtml)) {
     throw new Error("Failed to copy client dist: index.html not found");
   }
 
-  log("  Client assets bundled into server package");
-  log(`  Location: ${path.relative(ROOT_DIR, SERVER_CLIENT_DIST)}`);
+  log("  Client assets bundled into staging");
 });
 
-// Prepare package.json for publishing
-step("Prepare package.json for npm", () => {
-  log("Updating package.json for npm publishing...");
+// Copy postinstall script to staging
+step("Copy postinstall script to staging", () => {
+  const srcScript = path.join(SERVER_PACKAGE, "scripts/postinstall.js");
+  const destScriptsDir = path.join(STAGING_DIR, "scripts");
+  const destScript = path.join(destScriptsDir, "postinstall.js");
 
-  const packageJsonPath = path.join(SERVER_PACKAGE, "package.json");
-  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+  log(`Copying postinstall script to ${path.relative(ROOT_DIR, destScript)}...`);
 
-  // Update fields for publishing
-  packageJson.name = "yepanywhere";
-  packageJson.version = "0.1.0";
-  packageJson.description = "A mobile-first supervisor for Claude Code agents";
-  packageJson.private = undefined;
-  packageJson.devDependencies = undefined; // Not needed in published package
+  fs.mkdirSync(destScriptsDir, { recursive: true });
+  fs.copyFileSync(srcScript, destScript);
 
-  // Add CLI binary entry point
-  packageJson.bin = {
-    yepanywhere: "./dist/cli.js",
+  log("  Postinstall script copied to staging");
+});
+
+// Generate package.json for publishing (in staging, not modifying original)
+step("Generate package.json for npm", () => {
+  log("Generating package.json for npm publishing...");
+
+  const sourcePackageJsonPath = path.join(SERVER_PACKAGE, "package.json");
+  const sourcePackageJson = JSON.parse(fs.readFileSync(sourcePackageJsonPath, "utf-8"));
+
+  // Create a new package.json for publishing
+  const npmPackageJson: Record<string, unknown> = {
+    name: "yepanywhere",
+    version: "0.1.0",
+    description: "A mobile-first supervisor for Claude Code agents",
+    type: "module",
+    bin: {
+      yepanywhere: "./dist/cli.js",
+    },
+    main: "./dist/index.js",
+    exports: {
+      ".": "./dist/index.js",
+    },
+    files: ["dist", "client-dist", "bundled", "scripts", "README.md"],
+    scripts: {
+      postinstall: "node scripts/postinstall.js",
+    },
+    // Copy dependencies from source, excluding workspace deps
+    dependencies: Object.fromEntries(
+      Object.entries(sourcePackageJson.dependencies || {}).filter(
+        ([name]) => !name.startsWith("@yep-anywhere/"),
+      ),
+    ),
+    repository: {
+      type: "git",
+      url: "git+https://github.com/kgraehl/yepanywhere.git",
+    },
+    homepage: "https://github.com/kgraehl/yepanywhere#readme",
+    bugs: {
+      url: "https://github.com/kgraehl/yepanywhere/issues",
+    },
+    keywords: ["claude", "ai", "agent", "supervisor", "mobile"],
+    license: "MIT",
+    engines: {
+      node: ">=20",
+    },
   };
 
-  // Add module exports
-  packageJson.main = "./dist/index.js";
-  packageJson.exports = {
-    ".": "./dist/index.js",
-  };
-
-  // Specify files to include in npm package
-  packageJson.files = ["dist", "client-dist", "bundled", "scripts"];
-
-  // Add postinstall script to link bundled shared package
-  packageJson.scripts = {
-    postinstall: "node scripts/postinstall.js",
-  };
-
-  // Remove the workspace dependency - it's bundled and linked by postinstall
-  packageJson.dependencies["@yep-anywhere/shared"] = undefined;
-
-  // Add repository and other metadata
-  packageJson.repository = {
-    type: "git",
-    url: "https://github.com/kgraehl/yepanywhere.git",
-  };
-  packageJson.keywords = ["claude", "ai", "agent", "supervisor", "mobile"];
-  packageJson.license = "MIT";
-  packageJson.engines = {
-    node: ">=20",
-  };
-
-  // Write back
+  // Write to staging directory
+  const stagingPackageJsonPath = path.join(STAGING_DIR, "package.json");
   fs.writeFileSync(
-    packageJsonPath,
-    `${JSON.stringify(packageJson, null, 2)}\n`,
+    stagingPackageJsonPath,
+    `${JSON.stringify(npmPackageJson, null, 2)}\n`,
   );
 
   log("  Package name: yepanywhere");
   log("  Version: 0.1.0");
-  log("  Removed: private flag, devDependencies, workspace dependency");
-  log("  Added: bin, main, exports, files (with bundled shared), metadata");
+  log("  Written to: dist/npm-package/package.json");
+  log("  (Original packages/server/package.json unchanged)");
+});
+
+// Copy README to staging
+step("Copy README to staging", () => {
+  const readmeSrc = path.join(ROOT_DIR, "README.md");
+  const readmeDest = path.join(STAGING_DIR, "README.md");
+
+  if (fs.existsSync(readmeSrc)) {
+    fs.copyFileSync(readmeSrc, readmeDest);
+    log("  Copied README.md from repo root");
+  } else {
+    // Create a basic README if none exists
+    const basicReadme = `# yepanywhere
+
+A mobile-first supervisor for Claude Code agents.
+
+## Installation
+
+\`\`\`bash
+npm install -g yepanywhere
+\`\`\`
+
+## Usage
+
+\`\`\`bash
+yepanywhere
+\`\`\`
+
+Then open http://localhost:3400 in your browser.
+
+## Features
+
+- **Server-owned processes** — Claude runs on your dev machine; client disconnects don't interrupt work
+- **Multi-session dashboard** — See all projects at a glance, no window cycling
+- **Mobile supervision** — Push notifications for approvals, respond from your lock screen
+- **Zero external dependencies** — No Firebase, no accounts, just Tailscale for network access
+
+## License
+
+MIT
+`;
+    fs.writeFileSync(readmeDest, basicReadme);
+    log("  Created basic README.md (no repo README found)");
+  }
 });
 
 // Helper: Recursive copy
@@ -283,12 +338,13 @@ for (const result of results) {
 const allSuccess = results.every((r) => r.success);
 if (allSuccess) {
   log("\n✓ All build steps completed successfully!");
-  log("\nThe server package is ready for publishing:");
-  log(`  Location: ${path.relative(ROOT_DIR, SERVER_PACKAGE)}`);
-  log(`  Client assets: ${path.relative(ROOT_DIR, SERVER_CLIENT_DIST)}`);
+  log("\nThe npm package is ready for publishing:");
+  log(`  Location: ${path.relative(ROOT_DIR, STAGING_DIR)}`);
   log("\nNext steps:");
-  log("  1. Test: npm pack (from packages/server)");
-  log("  2. Publish: npm publish (from packages/server)");
+  log("  1. cd dist/npm-package");
+  log("  2. Test: npm pack");
+  log("  3. Publish: npm publish");
+  log("\nNote: packages/server/package.json is unchanged (workspace intact)");
 } else {
   error("\n✗ Build failed. See errors above.");
   process.exit(1);
