@@ -1,6 +1,5 @@
-import { Link } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
-import { ProviderBadge } from "../components/ProviderBadge";
+import { SessionListItem } from "../components/SessionListItem";
 import { useRecentSessions } from "../hooks/useRecentSessions";
 import { useNavigationLayout } from "../layouts";
 
@@ -94,27 +93,20 @@ export function RecentsPage() {
             )}
 
             {!isLoading && !error && !isEmpty && (
-              <ul className="sessions-list recents-list">
+              <ul className="sessions-list">
                 {recentSessions.map((entry) => (
-                  <li
+                  <SessionListItem
                     key={entry.sessionId}
-                    className="session-list-item session-list-item--card"
-                  >
-                    <Link
-                      to={`/projects/${entry.projectId}/sessions/${entry.sessionId}`}
-                      className="session-list-item__link"
-                    >
-                      <div className="session-list-item__content">
-                        <span className="session-list-item__title">
-                          {entry.title ?? "Untitled session"}
-                        </span>
-                        <span className="session-list-item__project">
-                          {entry.projectName}
-                        </span>
-                      </div>
-                      <ProviderBadge provider={entry.provider} compact />
-                    </Link>
-                  </li>
+                    sessionId={entry.sessionId}
+                    projectId={entry.projectId}
+                    title={entry.title}
+                    projectName={entry.projectName}
+                    mode="card"
+                    showProjectName
+                    showTimestamp={false}
+                    showContextUsage={false}
+                    showStatusBadge={false}
+                  />
                 ))}
               </ul>
             )}

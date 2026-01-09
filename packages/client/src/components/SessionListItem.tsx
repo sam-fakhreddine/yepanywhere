@@ -2,62 +2,118 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { ProcessStateType } from "../hooks/useFileActivity";
-import { type SessionSummary, getSessionDisplayTitle } from "../types";
+import type {
+  AppSessionStatus,
+  ContextUsage,
+  PendingInputType,
+  ProviderName,
+} from "../types";
 import { ContextUsageIndicator } from "./ContextUsageIndicator";
 import { SessionMenu } from "./SessionMenu";
 import { SessionStatusBadge } from "./StatusBadge";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 
 interface SessionListItemProps {
-  session: SessionSummary;
+  // Core (required)
+  sessionId: string;
   projectId: string;
-  mode: "card" | "compact";
+  title: string | null;
 
-  // State
+  // Optional display data
+  fullTitle?: string | null;
+  projectName?: string;
+  updatedAt?: string;
+  hasUnread?: boolean;
+  processState?: ProcessStateType;
+  pendingInputType?: PendingInputType;
+  contextUsage?: ContextUsage;
+  status?: AppSessionStatus;
+  provider?: ProviderName;
+
+  // Feature toggles
+  mode: "card" | "compact";
+  showProjectName?: boolean;
+  showTimestamp?: boolean;
+  showContextUsage?: boolean;
+  showStatusBadge?: boolean;
+
+  // Custom badge (for Inbox)
+  customBadge?: { label: string; className: string } | null;
+
+  // Actions (menu hidden when all undefined)
+  isStarred?: boolean;
+  isArchived?: boolean;
+  onToggleStar?: () => void;
+  onToggleArchive?: () => void;
+  onToggleRead?: () => void;
+  onRename?: () => void;
+
+  // Selection (for All Sessions page)
   isCurrent?: boolean;
   isSelected?: boolean;
-  processState?: ProcessStateType;
-  hasDraft?: boolean;
-
-  // Project context (for global session lists)
-  showProjectName?: boolean;
-  projectName?: string;
-
-  // Callbacks
-  onNavigate: () => void;
-  onSelect?: (sessionId: string, selected: boolean) => void;
-  /** When true, taps toggle selection instead of navigating */
   isSelectionMode?: boolean;
+  onSelect?: (sessionId: string, selected: boolean) => void;
+  onNavigate?: () => void;
+
+  // For sidebar compact mode
+  hasDraft?: boolean;
 }
 
 /**
- * Shared session list item component used by both Sidebar (compact) and SessionsPage (card).
+ * Shared session list item component used by Sidebar (compact), SessionsPage (card),
+ * RecentsPage, and InboxContent.
  *
  * Features:
  * - Star indicator, title, draft badge
- * - SessionMenu (star, archive, rename actions)
+ * - SessionMenu (star, archive, rename actions) - hidden when no action handlers
  * - Inline rename editing with optimistic updates
  * - Card mode: context usage indicator, full status badge, time display
  * - Compact mode: abbreviated badges (Appr/Q/Running)
  * - Optional checkbox for selection mode
+ * - Custom badge support (for Inbox)
  */
 export function SessionListItem({
-  session,
+  // Core
+  sessionId,
   projectId,
+  title,
+  // Optional display data
+  fullTitle,
+  projectName,
+  updatedAt,
+  hasUnread: hasUnreadProp,
+  processState,
+  pendingInputType,
+  contextUsage,
+  status,
+  provider,
+  // Feature toggles
   mode,
+  showProjectName = false,
+  showTimestamp = true,
+  showContextUsage = true,
+  showStatusBadge = true,
+  // Custom badge
+  customBadge,
+  // Actions
+  isStarred: isStarredProp,
+  isArchived: isArchivedProp,
+  onToggleStar,
+  onToggleArchive,
+  onToggleRead,
+  onRename,
+  // Selection
   isCurrent = false,
   isSelected = false,
-  processState,
-  hasDraft = false,
-  showProjectName = false,
-  projectName,
-  onNavigate,
-  onSelect,
   isSelectionMode = false,
+  onSelect,
+  onNavigate,
+  // Sidebar
+  hasDraft = false,
 }: SessionListItemProps) {
   const navigate = useNavigate();
 
-  // Local state for optimistic updates
+  // Local state for optimistic updates (only used when action handlers are provided)
   const [localIsStarred, setLocalIsStarred] = useState<boolean | undefined>(
     undefined,
   );
@@ -72,9 +128,9 @@ export function SessionListItem({
   const isSavingRef = useRef(false);
 
   // Computed values with optimistic fallback
-  const isStarred = localIsStarred ?? session.isStarred;
-  const isArchived = localIsArchived ?? session.isArchived;
-  const displayTitle = localTitle ?? getSessionDisplayTitle(session);
+  const isStarred = localIsStarred ?? isStarredProp;
+  const isArchived = localIsArchived ?? isArchivedProp;
+  const displayTitle = localTitle ?? title ?? "Untitled session";
 
   // Focus input when entering edit mode
   useEffect(() => {
@@ -86,12 +142,19 @@ export function SessionListItem({
     }
   }, [isEditing]);
 
+  // Local state for optimistic unread toggle
+  const [localHasUnread, setLocalHasUnread] = useState<boolean | undefined>(
+    undefined,
+  );
+  const hasUnread = localHasUnread ?? hasUnreadProp;
+
   // Handlers for menu actions
   const handleToggleStar = async () => {
     const newStarred = !isStarred;
     setLocalIsStarred(newStarred);
     try {
-      await api.updateSessionMetadata(session.id, { starred: newStarred });
+      await api.updateSessionMetadata(sessionId, { starred: newStarred });
+      onToggleStar?.();
     } catch (err) {
       console.error("Failed to update star status:", err);
       setLocalIsStarred(undefined); // Revert on error
@@ -102,28 +165,24 @@ export function SessionListItem({
     const newArchived = !isArchived;
     setLocalIsArchived(newArchived);
     try {
-      await api.updateSessionMetadata(session.id, { archived: newArchived });
+      await api.updateSessionMetadata(sessionId, { archived: newArchived });
+      onToggleArchive?.();
     } catch (err) {
       console.error("Failed to update archive status:", err);
       setLocalIsArchived(undefined); // Revert on error
     }
   };
 
-  // Local state for optimistic unread toggle
-  const [localHasUnread, setLocalHasUnread] = useState<boolean | undefined>(
-    undefined,
-  );
-  const hasUnread = localHasUnread ?? session.hasUnread;
-
   const handleToggleRead = async () => {
     const newHasUnread = !hasUnread;
     setLocalHasUnread(newHasUnread);
     try {
       if (newHasUnread) {
-        await api.markSessionUnread(session.id);
+        await api.markSessionUnread(sessionId);
       } else {
-        await api.markSessionSeen(session.id);
+        await api.markSessionSeen(sessionId);
       }
+      onToggleRead?.();
     } catch (err) {
       console.error("Failed to update read status:", err);
       setLocalHasUnread(undefined); // Revert on error
@@ -150,11 +209,12 @@ export function SessionListItem({
     isSavingRef.current = true;
     setIsSaving(true);
     try {
-      await api.updateSessionMetadata(session.id, {
+      await api.updateSessionMetadata(sessionId, {
         title: renameValue.trim(),
       });
       setLocalTitle(renameValue.trim());
       setIsEditing(false);
+      onRename?.();
     } catch (err) {
       console.error("Failed to rename session:", err);
     } finally {
@@ -184,27 +244,26 @@ export function SessionListItem({
 
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     e.stopPropagation();
-    onSelect?.(session.id, e.target.checked);
+    onSelect?.(sessionId, e.target.checked);
   };
 
   // Activity indicator for compact mode
   const getCompactActivityIndicator = () => {
     // External sessions always show external badge
-    if (session.status.state === "external") {
+    if (status?.state === "external") {
       return <span className="session-badge session-badge-external">Ext</span>;
     }
 
     // Priority 1: Needs input
-    if (session.pendingInputType) {
-      const label = session.pendingInputType === "tool-approval" ? "Appr" : "Q";
+    if (pendingInputType) {
+      const label = pendingInputType === "tool-approval" ? "Appr" : "Q";
       return (
         <span className="session-badge session-badge-needs-input">{label}</span>
       );
     }
 
     // Priority 2: Running (thinking)
-    const effectiveProcessState = processState ?? session.processState;
-    if (effectiveProcessState === "running") {
+    if (processState === "running") {
       return <ThinkingIndicator />;
     }
 
@@ -285,14 +344,14 @@ export function SessionListItem({
         />
       ) : (
         <Link
-          to={`/projects/${projectId}/sessions/${session.id}`}
+          to={`/projects/${projectId}/sessions/${sessionId}`}
           onClick={(e) => {
             if (isSelectionMode) {
               e.preventDefault();
             }
-            onNavigate();
+            onNavigate?.();
           }}
-          title={session.fullTitle || displayTitle}
+          title={fullTitle || displayTitle}
           className="session-list-item__link"
         >
           {mode === "card" ? (
@@ -311,14 +370,23 @@ export function SessionListItem({
                     {projectName}
                   </span>
                 )}
-                {formatRelativeTime(session.updatedAt)}
-                <ContextUsageIndicator usage={session.contextUsage} size={14} />
-                <SessionStatusBadge
-                  status={session.status}
-                  pendingInputType={session.pendingInputType}
-                  hasUnread={session.hasUnread}
-                  processState={processState ?? session.processState}
-                />
+                {showTimestamp && updatedAt && formatRelativeTime(updatedAt)}
+                {showContextUsage && (
+                  <ContextUsageIndicator usage={contextUsage} size={14} />
+                )}
+                {customBadge && (
+                  <span className={`inbox-item-badge ${customBadge.className}`}>
+                    {customBadge.label}
+                  </span>
+                )}
+                {showStatusBadge && status && (
+                  <SessionStatusBadge
+                    status={status}
+                    pendingInputType={pendingInputType}
+                    hasUnread={hasUnread}
+                    processState={processState}
+                  />
+                )}
               </span>
             </>
           ) : (
@@ -344,24 +412,30 @@ export function SessionListItem({
         </Link>
       )}
 
-      <SessionMenu
-        sessionId={session.id}
-        projectId={projectId}
-        isStarred={isStarred ?? false}
-        isArchived={isArchived ?? false}
-        hasUnread={hasUnread ?? false}
-        provider={session.provider}
-        onToggleStar={handleToggleStar}
-        onToggleArchive={handleToggleArchive}
-        onToggleRead={handleToggleRead}
-        onRename={handleRename}
-        onClone={(newSessionId) => {
-          navigate(`/projects/${projectId}/sessions/${newSessionId}`);
-        }}
-        useEllipsisIcon
-        useFixedPositioning
-        className="session-list-item__menu"
-      />
+      {/* Only show menu when provider is available (required for clone) */}
+      {provider && (
+        <SessionMenu
+          sessionId={sessionId}
+          projectId={projectId}
+          isStarred={isStarred ?? false}
+          isArchived={isArchived ?? false}
+          hasUnread={hasUnread ?? false}
+          provider={provider}
+          onToggleStar={handleToggleStar}
+          onToggleArchive={handleToggleArchive}
+          onToggleRead={handleToggleRead}
+          onRename={() => {
+            setRenameValue(displayTitle);
+            setIsEditing(true);
+          }}
+          onClone={(newSessionId) => {
+            navigate(`/projects/${projectId}/sessions/${newSessionId}`);
+          }}
+          useEllipsisIcon
+          useFixedPositioning
+          className="session-list-item__menu"
+        />
+      )}
     </li>
   );
 }

@@ -4459,16 +4459,6 @@ a.sidebar-nav-item {
   flex-shrink: 0;
 }
 
-/* Left border stripe for provider indicator in sidebar */
-.provider-badge-stripe {
-  position: absolute;
-  left: 0;
-  top: 4px;
-  bottom: 4px;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-}
-
 /* Model Selection Section */
 .new-session-model-section {
   margin-bottom: 1.5rem;
@@ -5280,64 +5270,7 @@ a.sidebar-nav-item {
   font-style: italic;
 }
 
-/* Inbox list */
-.inbox-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.inbox-list li {
-  margin-bottom: var(--space-2);
-}
-
-.inbox-list li a {
-  display: block;
-  padding: var(--space-3);
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  text-decoration: none;
-  color: inherit;
-  transition: background 0.15s;
-}
-
-.inbox-list li a:hover {
-  background: var(--bg-hover);
-}
-
-.inbox-item-main {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-1);
-}
-
-/* Read sessions - muted for contrast with unread (default state) */
-.inbox-item-title {
-  font-weight: 400;
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
-}
-
-/* Unread sessions - Gmail-style bold/bright */
-.inbox-section .inbox-list li.unread .inbox-item-title {
-  color: var(--text-primary);
-  font-weight: 700;
-}
-
-/* Also style the full link for unread items for consistency with sidebar */
-.inbox-list li.unread > a {
-  font-weight: 700;
-}
-
-.inbox-list li.unread .inbox-item-title {
-  color: var(--text-primary);
-}
-
+/* Inbox badges (used by SessionListItem customBadge) */
 .inbox-item-badge {
   font-size: var(--font-size-xs);
   font-weight: 500;
@@ -5361,43 +5294,10 @@ a.sidebar-nav-item {
   color: var(--warning-color);
 }
 
-.inbox-item-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: var(--font-size-sm);
-  color: var(--text-muted);
-}
-
-.inbox-item-project {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
-}
-
-.inbox-item-time {
-  flex-shrink: 0;
-  margin-left: var(--space-2);
-}
-
 /* Mobile adjustments */
 @media (max-width: 600px) {
   .inbox-section-header {
     font-size: var(--font-size-sm);
-  }
-
-  .inbox-list li a {
-    padding: var(--space-2);
-  }
-
-  .inbox-item-title {
-    font-size: var(--font-size-sm);
-  }
-
-  .inbox-item-meta {
-    font-size: var(--font-size-xs);
   }
 }
 
@@ -5687,15 +5587,10 @@ a.sidebar-nav-item {
 }
 
 /* Card mode: larger padding, block style */
-.session-list-item--card {
-  padding-left: 4px; /* Space for provider stripe */
-}
-
 .session-list-item--card .session-list-item__link {
   display: block;
   flex: 1;
   padding: 1rem;
-  padding-left: calc(1rem + 4px);
   background: var(--bg-secondary);
   border-radius: 8px;
   text-decoration: none;
@@ -5789,16 +5684,6 @@ a.sidebar-nav-item {
 .session-list-item--compact.current .session-list-item__link {
   background: var(--bg-hover);
   font-weight: 500;
-}
-
-/* Provider stripe (positioned absolute left) */
-.session-list-item .provider-badge-stripe {
-  position: absolute;
-  left: 0;
-  top: 4px;
-  bottom: 4px;
-  width: 3px;
-  border-radius: 2px;
 }
 
 /* Star icon */

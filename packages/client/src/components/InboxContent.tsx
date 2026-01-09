@@ -1,27 +1,8 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { type InboxItem, useInboxContext } from "../contexts/InboxContext";
 import type { Project } from "../types";
 import { FilterDropdown, type FilterOption } from "./FilterDropdown";
-import { ThinkingIndicator } from "./ThinkingIndicator";
-
-/**
- * Format relative time from a timestamp to now.
- */
-function formatRelativeTime(timestamp: string): string {
-  const now = Date.now();
-  const then = new Date(timestamp).getTime();
-  const diffMs = now - then;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return new Date(timestamp).toLocaleDateString();
-}
+import { SessionListItem } from "./SessionListItem";
 
 /**
  * Tier configuration for visual styling.
@@ -92,38 +73,29 @@ function InboxSection({ config, items, hideProjectName }: InboxSectionProps) {
       {isEmpty ? (
         <p className="inbox-section-empty-message">No sessions</p>
       ) : (
-        <ul className="inbox-list">
+        <ul className="sessions-list">
           {items.map((item) => {
             const badge = config.getBadge?.(item);
-            const liClassName = item.hasUnread ? "unread" : undefined;
             return (
-              <li key={item.sessionId} className={liClassName}>
-                <Link
-                  to={`/projects/${item.projectId}/sessions/${item.sessionId}`}
-                >
-                  <div className="inbox-item-main">
-                    <span className="inbox-item-title">
-                      {item.sessionTitle ?? "Untitled"}
-                    </span>
-                    {badge && (
-                      <span className={`inbox-item-badge ${badge.className}`}>
-                        {badge.label}
-                      </span>
-                    )}
-                    {config.key === "active" && <ThinkingIndicator />}
-                  </div>
-                  <div className="inbox-item-meta">
-                    {!hideProjectName && (
-                      <span className="inbox-item-project">
-                        {item.projectName}
-                      </span>
-                    )}
-                    <span className="inbox-item-time">
-                      {formatRelativeTime(item.updatedAt)}
-                    </span>
-                  </div>
-                </Link>
-              </li>
+              <SessionListItem
+                key={item.sessionId}
+                sessionId={item.sessionId}
+                projectId={item.projectId}
+                title={item.sessionTitle}
+                projectName={item.projectName}
+                updatedAt={item.updatedAt}
+                hasUnread={item.hasUnread}
+                processState={
+                  config.key === "active" ? "running" : item.processState
+                }
+                pendingInputType={item.pendingInputType}
+                mode="card"
+                showProjectName={!hideProjectName}
+                showTimestamp
+                showContextUsage={false}
+                showStatusBadge={false}
+                customBadge={badge}
+              />
             );
           })}
         </ul>

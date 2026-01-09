@@ -157,7 +157,9 @@ export class ClaudeProvider implements AgentProvider {
     const onToolApproval = options.onToolApproval;
     const canUseTool: SDKCanUseTool | undefined = onToolApproval
       ? async (toolName, input, opts) => {
+          console.log(`[canUseTool] Called for tool: ${toolName}`);
           const result = await onToolApproval(toolName, input, opts);
+          console.log(`[canUseTool] Result for ${toolName}: ${result.behavior}`);
           // Convert our result to SDK's PermissionResult format
           if (result.behavior === "allow") {
             return {

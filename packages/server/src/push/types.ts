@@ -53,8 +53,8 @@ export interface PendingInputPayload extends BasePushPayload {
   inputType: "tool-approval" | "user-question";
   /** Brief summary of what needs approval */
   summary: string;
-  /** ID of the input request (for approve/deny from notification) */
-  requestId: string;
+  /** ID of the input request (legacy, no longer used by client) */
+  requestId?: string;
 }
 
 /** Notification for session that stopped working */

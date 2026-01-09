@@ -11,7 +11,7 @@ import { PageHeader } from "../components/PageHeader";
 import { SessionListItem } from "../components/SessionListItem";
 import { useGlobalSessions } from "../hooks/useGlobalSessions";
 import { useNavigationLayout } from "../layouts";
-import { type SessionSummary, toUrlProjectId } from "../types";
+import { toUrlProjectId } from "../types";
 
 // Long-press threshold for entering selection mode on mobile
 const LONG_PRESS_MS = 500;
@@ -447,25 +447,6 @@ export function GlobalSessionsPage() {
     setSearchParams(new URLSearchParams());
   };
 
-  // Convert GlobalSessionItem to SessionSummary for SessionListItem
-  const toSessionSummary = (session: GlobalSessionItem): SessionSummary => ({
-    id: session.id,
-    projectId: toUrlProjectId(session.projectId),
-    title: session.title,
-    fullTitle: session.customTitle || session.title,
-    customTitle: session.customTitle,
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt,
-    messageCount: session.messageCount,
-    provider: session.provider,
-    status: session.status,
-    pendingInputType: session.pendingInputType,
-    processState: session.processState,
-    hasUnread: session.hasUnread,
-    isArchived: session.isArchived,
-    isStarred: session.isStarred,
-  });
-
   const isEmpty = filteredSessions.length === 0;
   const hasFilters =
     searchQuery ||
@@ -638,10 +619,20 @@ export function GlobalSessionsPage() {
                       onContextMenu={handleContextMenu}
                     >
                       <SessionListItem
-                        session={toSessionSummary(session)}
+                        sessionId={session.id}
                         projectId={session.projectId}
-                        mode="card"
+                        title={session.title}
+                        fullTitle={session.customTitle || session.title}
+                        updatedAt={session.updatedAt}
+                        hasUnread={session.hasUnread}
                         processState={session.processState}
+                        pendingInputType={session.pendingInputType}
+                        status={session.status}
+                        provider={session.provider}
+                        isStarred={session.isStarred}
+                        isArchived={session.isArchived}
+                        mode="card"
+                        showContextUsage={false}
                         isSelected={selectedIds.has(session.id)}
                         isSelectionMode={isSelectionMode && !isWideScreen}
                         onNavigate={() => {

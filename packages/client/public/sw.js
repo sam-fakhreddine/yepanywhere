@@ -296,25 +296,13 @@ async function showPendingInputNotification(data) {
     data: {
       sessionId: data.sessionId,
       projectId: data.projectId,
-      inputType: data.inputType,
-      requestId: data.requestId,
     },
     requireInteraction: true,
   };
 
-  // Only show Approve/Deny buttons for tool approvals
-  if (data.inputType === "tool-approval") {
-    options.actions = [
-      { action: "approve", title: "Approve" },
-      { action: "deny", title: "Deny" },
-    ];
-  }
-
   await swLog("info", "Showing pending-input notification", {
     sessionId: data.sessionId,
-    requestId: data.requestId,
     inputType: data.inputType,
-    hasActions: !!options.actions,
   });
 
   return self.registration.showNotification(title, options);
@@ -344,105 +332,22 @@ function showSessionHaltedNotification(data) {
 }
 
 /**
- * Handle notification clicks
+ * Handle notification clicks - always open the session
  */
 self.addEventListener("notificationclick", (event) => {
   const notification = event.notification;
-  const action = event.action;
   const data = notification.data || {};
 
   notification.close();
 
-  event.waitUntil(handleNotificationClick(action, data));
+  event.waitUntil(handleNotificationClick(data));
 });
 
-async function handleNotificationClick(action, data) {
-  const { sessionId, projectId, requestId, inputType } = data;
+async function handleNotificationClick(data) {
+  const { sessionId, projectId } = data;
 
-  await swLog("info", "Notification clicked", {
-    action,
-    sessionId,
-    projectId,
-    requestId,
-    inputType,
-  });
+  await swLog("info", "Notification clicked", { sessionId, projectId });
 
-  // Handle approve/deny actions via API (don't open the app)
-  if ((action === "approve" || action === "deny") && requestId) {
-    await swLog("info", `Processing ${action} action for request ${requestId}`);
-
-    try {
-      const url = `/api/sessions/${sessionId}/input`;
-      const body = JSON.stringify({ requestId, response: action });
-
-      await swLog("info", `Fetching ${url}`, { body });
-
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include", // Include cookies for auth
-        body,
-      });
-
-      if (response.ok) {
-        const result = await response.json().catch(() => ({}));
-        await swLog(
-          "info",
-          `Successfully sent '${action}' for session ${sessionId}`,
-          { result },
-        );
-        return; // Don't open the app
-      }
-
-      // API call failed
-      const errorText = await response.text().catch(() => "unknown");
-      await swLog("error", `API call failed for '${action}'`, {
-        status: response.status,
-        statusText: response.statusText,
-        errorText,
-        sessionId,
-        requestId,
-      });
-
-      // Show user-friendly notification - tapping opens the session
-      await self.registration.showNotification("Couldn't complete action", {
-        body: "Tap to open the session and try again",
-        tag: "action-error",
-        icon: "/icon-192.png",
-        badge: "/badge-96.png",
-        data: { sessionId, projectId },
-        requireInteraction: true,
-      });
-
-      return;
-    } catch (e) {
-      await swLog("error", "Failed to send action (network error)", {
-        error: e.message,
-        stack: e.stack,
-        sessionId,
-        requestId,
-        action,
-      });
-
-      // Show user-friendly notification - tapping opens the session
-      await self.registration.showNotification("Couldn't complete action", {
-        body: "Tap to open the session and try again",
-        tag: "action-error",
-        icon: "/icon-192.png",
-        badge: "/badge-96.png",
-        data: { sessionId, projectId },
-        requireInteraction: true,
-      });
-
-      return;
-    }
-  }
-
-  // No action or no requestId - open the session
-  await swLog("info", "Opening session (no action or missing requestId)", {
-    action,
-    requestId,
-  });
   return openSession(sessionId, projectId);
 }
 

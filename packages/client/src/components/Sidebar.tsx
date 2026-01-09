@@ -4,7 +4,7 @@ import type { GlobalSessionItem } from "../api/client";
 import { useGlobalSessions } from "../hooks/useGlobalSessions";
 import { useNeedsAttentionBadge } from "../hooks/useNeedsAttentionBadge";
 import { useRecentProjects } from "../hooks/useRecentProjects";
-import { type SessionSummary, toUrlProjectId } from "../types";
+import { toUrlProjectId } from "../types";
 import { AgentsNavItem } from "./AgentsNavItem";
 import { SessionListItem } from "./SessionListItem";
 import {
@@ -18,27 +18,6 @@ const SWIPE_THRESHOLD = 50; // Minimum distance to trigger close
 const SWIPE_ENGAGE_THRESHOLD = 15; // Minimum horizontal distance before swipe engages
 const RECENT_SESSIONS_INITIAL = 12; // Initial number of recent sessions to show
 const RECENT_SESSIONS_INCREMENT = 10; // How many more to show on each expand
-
-// Convert GlobalSessionItem to SessionSummary for SessionListItem
-function toSessionSummary(session: GlobalSessionItem): SessionSummary {
-  return {
-    id: session.id,
-    projectId: toUrlProjectId(session.projectId),
-    title: session.title,
-    fullTitle: session.customTitle || session.title,
-    customTitle: session.customTitle,
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt,
-    messageCount: session.messageCount,
-    provider: session.provider,
-    status: session.status,
-    pendingInputType: session.pendingInputType,
-    processState: session.processState,
-    hasUnread: session.hasUnread,
-    isArchived: session.isArchived,
-    isStarred: session.isStarred,
-  };
-}
 
 interface SidebarProps {
   isOpen: boolean;
@@ -385,8 +364,16 @@ export function Sidebar({
                   .map((session) => (
                     <SessionListItem
                       key={session.id}
-                      session={toSessionSummary(session)}
+                      sessionId={session.id}
                       projectId={session.projectId}
+                      title={session.title}
+                      fullTitle={session.customTitle || session.title}
+                      provider={session.provider}
+                      status={session.status}
+                      pendingInputType={session.pendingInputType}
+                      hasUnread={session.hasUnread}
+                      isStarred={session.isStarred}
+                      isArchived={session.isArchived}
                       mode="compact"
                       isCurrent={session.id === currentSessionId}
                       processState={session.processState}
@@ -426,8 +413,16 @@ export function Sidebar({
                   .map((session) => (
                     <SessionListItem
                       key={session.id}
-                      session={toSessionSummary(session)}
+                      sessionId={session.id}
                       projectId={session.projectId}
+                      title={session.title}
+                      fullTitle={session.customTitle || session.title}
+                      provider={session.provider}
+                      status={session.status}
+                      pendingInputType={session.pendingInputType}
+                      hasUnread={session.hasUnread}
+                      isStarred={session.isStarred}
+                      isArchived={session.isArchived}
                       mode="compact"
                       isCurrent={session.id === currentSessionId}
                       processState={session.processState}
@@ -465,8 +460,16 @@ export function Sidebar({
                 {olderSessions.slice(0, olderSessionsLimit).map((session) => (
                   <SessionListItem
                     key={session.id}
-                    session={toSessionSummary(session)}
+                    sessionId={session.id}
                     projectId={session.projectId}
+                    title={session.title}
+                    fullTitle={session.customTitle || session.title}
+                    provider={session.provider}
+                    status={session.status}
+                    pendingInputType={session.pendingInputType}
+                    hasUnread={session.hasUnread}
+                    isStarred={session.isStarred}
+                    isArchived={session.isArchived}
                     mode="compact"
                     isCurrent={session.id === currentSessionId}
                     processState={session.processState}
