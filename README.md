@@ -4,12 +4,11 @@ Yep, you can keep working anywhere.
 
 A polished web interface for managing Claude and Codex agents. Works great on mobile and desktop — walk away from your desk, watch your kids, and keep your agents productive from your phone.
 
-We only integrate with providers that provide session persistence, the primary goal is to share session history with VSCode Claude, Claude CLI. So you can resume your sessions whenever you want.
-
 ## What is this?
 
 If you use Claude Code from the terminal, this gives you a better interface. Auto-detects your installed CLI tools and provides:
 
+- **Interop first** — View sessions running in Claude CLI, VS Code, or other tools in real time, or resume them later from your phone. No new database — just a tiny JSON cache and optional metadata for starring/archiving
 - **Multi-session dashboard** — See all your agents at a glance, easy multitasking
 - **Mobile-friendly** — Approve requests, upload files, share screenshots from your phone
 - **Push notifications** — Get notified when approval is needed (VAPID, no third-party server)
@@ -26,10 +25,10 @@ No database, no cloud, no accounts, no hidden gimmicks. 100% open source. Piggyb
 | Provider | Edit Visibility | Local Models | Approval Flow | Notes |
 |----------|-----------------|--------------|---------------|-------|
 | Claude Code | Full | No | Yes (per-tool) | Primary provider, full mobile supervision |
-| Codex | Black box | Yes | In-chat only | Can't see what edits are happening |
+| Codex | Black box | No | In-chat only | Can't see what edits are happening |
 | Codex-OSS | Full | Yes | No | Local models struggle with 6k system prompt |
 | Gemini | N/A (read-only) | No | N/A | Analysis only, no write tools |
-| OpenCode | Full | Yes | Not yet | Early integration, approvals not implemented |
+| OpenCode | ? | ? | ? | Early integration, approvals not implemented |
 
 ## Screenshots
 
