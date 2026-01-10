@@ -24,6 +24,7 @@ import {
   extractTextDelta,
   extractTextFromAssistant,
   isStreamingComplete,
+  markSubagent,
 } from "../augments/index.js";
 import type { Supervisor } from "../supervisor/Supervisor.js";
 import type { UploadManager } from "../uploads/manager.js";
@@ -321,7 +322,7 @@ export function createWsRelayRoutes(
         subscriptionId,
         eventType: "message",
         eventId: String(eventId++),
-        data: message,
+        data: markSubagent(message),
       };
       sendMessage(ws, messageEvent);
     }
@@ -362,7 +363,7 @@ export function createWsRelayRoutes(
             const aug = await getAugmenter();
             await aug.processMessage(message);
 
-            sendEvent("message", message);
+            sendEvent("message", markSubagent(message));
 
             // Track message ID for text accumulation (for catch-up)
             // This ensures late-joining clients get streaming content
