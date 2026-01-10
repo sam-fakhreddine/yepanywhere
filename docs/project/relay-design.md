@@ -184,11 +184,17 @@ new SecureConnection('wss://relay.yepanywhere.com/ws', 'kgraehl')
 
 | Mode | Transport | Auth | Use Case |
 |------|-----------|------|----------|
-| DirectConnection | fetch/WS/SSE | Cookie session | localhost dev, network tab debugging |
+| DirectConnection | fetch/WS/SSE | Cookie session | Default for localhost, network tab debugging |
+| WebSocketConnection | WS to yepanywhere | Cookie session | Dev setting to test WS protocol without encryption |
 | SecureConnection (direct) | WS to yepanywhere | SRP + encryption | LAN, test secure protocol without relay |
 | SecureConnection (relay) | WS to relay | SRP + encryption | Production remote access |
 
-SecureConnection is reusable - same SRP, same encryption, same protocol. Only the WebSocket URL differs.
+**Mode selection:**
+- DirectConnection is the **default** for localhost/LAN access (normal fetch/XHR/SSE)
+- WebSocketConnection can be enabled via **developer settings** toggle for testing
+- SecureConnection is used automatically when connecting via relay URL
+
+SecureConnection extends WebSocketConnection, adding SRP handshake and encryption. Same WS protocol, same message routing - just with an encryption layer on top.
 
 ## Multi-Relay Scaling
 
@@ -343,27 +349,32 @@ type YepMessage = RelayResponse | RelayEvent
 ```
 
 Tasks:
-- [ ] Define all types above in shared package
-- [ ] Export from shared/index.ts
+- [x] Define all types above in shared package
+- [x] Export from shared/index.ts
 
 ### Phase 2a: Connection Interface + DirectConnection
-- [ ] Define Connection interface
-- [ ] DirectConnection wraps existing fetch (trivial)
-- [ ] useConnection hook returns DirectConnection
-- [ ] App works unchanged (just routed through interface)
+- [x] Define Connection interface
+- [x] DirectConnection wraps existing fetch (trivial)
+- [x] useConnection hook returns DirectConnection
+- [x] App works unchanged (just routed through interface)
 
 ### Phase 2b: WebSocket Endpoint + Request/Response
-- [ ] `/ws` endpoint on yepanywhere server
-- [ ] Basic message routing: receive request, call Hono handler, send response
-- [ ] WebSocketConnection.fetch() - send request, match response by ID
-- [ ] Test: simple API calls work over WS
+- [x] `/ws` endpoint on yepanywhere server
+- [x] Basic message routing: receive request, call Hono handler, send response
+- [x] WebSocketConnection class implementing Connection interface
+- [x] WebSocketConnection.fetch() - send request, match response by ID
+- [x] Developer settings toggle: "Use WebSocket transport" (default: off)
+- [x] useConnection hook checks dev setting, returns WebSocketConnection or DirectConnection
+- [x] "Test" button in settings to verify WebSocket connection before enabling
+- [x] Wire up `fetchJSON` in `api/client.ts` to check setting and use WebSocketConnection
+- [x] Test: simple API calls work over WS when enabled (ws-transport.e2e.test.ts)
 
 ### Phase 2c: Event Subscriptions (SSE Replacement)
-- [ ] Server: track subscriptions per WS connection
-- [ ] Server: pipe session events to subscribed connections
-- [ ] Client: WebSocketConnection.subscribe() returns AsyncIterable
-- [ ] Handle multiple concurrent subscriptions (session + activity)
-- [ ] Test: live streaming works over WS
+- [x] Server: track subscriptions per WS connection
+- [x] Server: pipe session events to subscribed connections
+- [x] Client: WebSocketConnection.subscribeSession() and subscribeActivity()
+- [x] Handle multiple concurrent subscriptions (session + activity)
+- [x] Test: live streaming works over WS (ws-transport.e2e.test.ts)
 
 ### Phase 2d: File Upload
 - [ ] Server: handle upload_start/chunk/end messages

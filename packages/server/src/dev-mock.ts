@@ -24,6 +24,7 @@ import {
 } from "./frontend/index.js";
 import { ProjectScanner } from "./projects/scanner.js";
 import { createUploadRoutes } from "./routes/upload.js";
+import { createWsRelayRoutes } from "./routes/ws-relay.js";
 import {
   type MockScenario as LegacyMockScenario,
   MockClaudeSDK,
@@ -211,7 +212,7 @@ if (config.serveFrontend) {
 
 // Create the main app first (without WebSocket support or frontend proxy)
 // We'll add those after setting up WebSocket support to ensure correct route order
-const { app } = createApp({
+const { app, supervisor } = createApp({
   sdk: mockSdk,
   idleTimeoutMs: 60000, // 1 minute for testing
   eventBus,
@@ -228,6 +229,17 @@ const { wss, upgradeWebSocket } = createNodeWebSocket({ app });
 const scanner = new ProjectScanner();
 const uploadRoutes = createUploadRoutes({ scanner, upgradeWebSocket });
 app.route("/api", uploadRoutes);
+
+// Add WebSocket relay route for Phase 2b/2c
+// This allows clients to make HTTP-like requests and subscriptions over WebSocket
+const wsRelayHandler = createWsRelayRoutes({
+  upgradeWebSocket,
+  app,
+  baseUrl: `http://localhost:${config.port}`,
+  supervisor,
+  eventBus,
+});
+app.get("/api/ws", wsRelayHandler);
 
 // Add mock auth status endpoint (auth disabled for testing)
 app.get("/api/auth/status", (c) => {

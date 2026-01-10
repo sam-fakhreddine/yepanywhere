@@ -8,6 +8,8 @@ import type {
   ThinkingOption,
   UploadedFile,
 } from "@yep-anywhere/shared";
+import { getWebsocketTransportEnabled } from "../hooks/useDeveloperMode";
+import { getWebSocketConnection } from "../lib/connection";
 import type {
   AgentSession,
   InputRequest,
@@ -136,6 +138,11 @@ export async function fetchJSON<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
+  // Route through WebSocket if enabled (Phase 2b)
+  if (getWebsocketTransportEnabled()) {
+    return getWebSocketConnection().fetch<T>(path, options);
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     credentials: "include",

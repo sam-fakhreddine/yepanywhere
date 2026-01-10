@@ -23,6 +23,7 @@ import { useStreamingEnabled } from "../hooks/useStreamingEnabled";
 import { THEMES, getThemeLabel, useTheme } from "../hooks/useTheme";
 import { useVersion } from "../hooks/useVersion";
 import { useNavigationLayout } from "../layouts";
+import { getWebSocketConnection } from "../lib/connection";
 import { getAllProviders } from "../providers/registry";
 
 export function SettingsPage() {
@@ -50,7 +51,12 @@ export function SettingsPage() {
   const { canInstall, isInstalled, install } = usePwaInstall();
   const { settings: validationSettings, setEnabled: setValidationEnabled } =
     useSchemaValidation();
-  const { holdModeEnabled, setHoldModeEnabled } = useDeveloperMode();
+  const {
+    holdModeEnabled,
+    setHoldModeEnabled,
+    websocketTransportEnabled,
+    setWebsocketTransportEnabled,
+  } = useDeveloperMode();
   const { ignoredTools, clearIgnoredTools } = useSchemaValidationContext();
   const {
     isAuthenticated,
@@ -95,6 +101,11 @@ export function SettingsPage() {
   // Disable auth confirmation
   const [showDisableConfirm, setShowDisableConfirm] = useState(false);
   const [isDisablingAuth, setIsDisablingAuth] = useState(false);
+  // WebSocket transport test state
+  const [wsTestStatus, setWsTestStatus] = useState<
+    "idle" | "testing" | "success" | "error"
+  >("idle");
+  const [wsTestError, setWsTestError] = useState<string | null>(null);
 
   const { openSidebar, isWideScreen } = useNavigationLayout();
 
@@ -112,6 +123,27 @@ export function SettingsPage() {
 
   const handleReloadFrontend = () => {
     reloadFrontend();
+  };
+
+  const handleTestWebSocket = async () => {
+    setWsTestStatus("testing");
+    setWsTestError(null);
+    try {
+      const ws = getWebSocketConnection();
+      // Try a simple API call through WebSocket
+      const result = await ws.fetch<{ current: string }>("/version");
+      if (result?.current) {
+        setWsTestStatus("success");
+        // Auto-enable after successful test
+        setWebsocketTransportEnabled(true);
+      } else {
+        setWsTestStatus("error");
+        setWsTestError("Unexpected response format");
+      }
+    } catch (err) {
+      setWsTestStatus("error");
+      setWsTestError(err instanceof Error ? err.message : "Connection failed");
+    }
   };
 
   return (
@@ -750,6 +782,45 @@ export function SettingsPage() {
                       />
                       <span className="toggle-slider" />
                     </label>
+                  </div>
+                  <div className="settings-item">
+                    <div className="settings-item-info">
+                      <strong>WebSocket Transport</strong>
+                      <p>
+                        Use WebSocket for API requests instead of fetch/SSE.
+                        Tests the relay protocol without encryption (Phase 2b).
+                      </p>
+                      {wsTestStatus === "success" && (
+                        <p className="form-success">
+                          Connection successful! WebSocket enabled.
+                        </p>
+                      )}
+                      {wsTestStatus === "error" && (
+                        <p className="form-error">
+                          {wsTestError || "Connection failed"}
+                        </p>
+                      )}
+                    </div>
+                    <div className="settings-confirm-buttons">
+                      <button
+                        type="button"
+                        className="settings-button"
+                        onClick={handleTestWebSocket}
+                        disabled={wsTestStatus === "testing"}
+                      >
+                        {wsTestStatus === "testing" ? "Testing..." : "Test"}
+                      </button>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={websocketTransportEnabled}
+                          onChange={(e) =>
+                            setWebsocketTransportEnabled(e.target.checked)
+                          }
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </div>
                   </div>
                 </div>
 

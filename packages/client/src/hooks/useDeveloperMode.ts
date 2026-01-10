@@ -4,10 +4,13 @@ const DEV_MODE_KEY = "yep-anywhere-developer-mode";
 
 interface DeveloperModeSettings {
   holdModeEnabled: boolean;
+  /** Use WebSocket transport instead of fetch/SSE (Phase 2b testing) */
+  websocketTransportEnabled: boolean;
 }
 
 const DEFAULT_SETTINGS: DeveloperModeSettings = {
   holdModeEnabled: false,
+  websocketTransportEnabled: false,
 };
 
 function loadSettings(): DeveloperModeSettings {
@@ -56,8 +59,22 @@ export function useDeveloperMode() {
     updateSettings({ ...currentSettings, holdModeEnabled: enabled });
   }, []);
 
+  const setWebsocketTransportEnabled = useCallback((enabled: boolean) => {
+    updateSettings({ ...currentSettings, websocketTransportEnabled: enabled });
+  }, []);
+
   return {
     holdModeEnabled: settings.holdModeEnabled,
     setHoldModeEnabled,
+    websocketTransportEnabled: settings.websocketTransportEnabled,
+    setWebsocketTransportEnabled,
   };
+}
+
+/**
+ * Get the current WebSocket transport setting without React hooks.
+ * Used by useConnection to check the setting synchronously.
+ */
+export function getWebsocketTransportEnabled(): boolean {
+  return currentSettings.websocketTransportEnabled;
 }

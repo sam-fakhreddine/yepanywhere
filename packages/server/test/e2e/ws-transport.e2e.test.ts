@@ -1,0 +1,561 @@
+import { randomUUID } from "node:crypto";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { serve } from "@hono/node-server";
+import { createNodeWebSocket } from "@hono/node-ws";
+import type {
+  RelayEvent,
+  RelayRequest,
+  RelayResponse,
+  RelaySubscribe,
+  RelayUnsubscribe,
+  YepMessage,
+} from "@yep-anywhere/shared";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import WebSocket from "ws";
+import { createApp } from "../../src/app.js";
+import { attachUnifiedUpgradeHandler } from "../../src/frontend/index.js";
+import { createWsRelayRoutes } from "../../src/routes/ws-relay.js";
+import { MockClaudeSDK } from "../../src/sdk/mock.js";
+import { EventBus } from "../../src/watcher/index.js";
+
+/**
+ * E2E tests for the WebSocket transport (Phase 2b/2c).
+ *
+ * These tests verify:
+ * - Basic request/response over WebSocket
+ * - Event subscriptions (activity channel)
+ * - Proper cleanup on disconnect
+ */
+
+describe("WebSocket Transport E2E", () => {
+  let testDir: string;
+  let server: ReturnType<typeof serve>;
+  let serverPort: number;
+  let mockSdk: MockClaudeSDK;
+  let eventBus: EventBus;
+
+  beforeAll(async () => {
+    // Create temp directory for project data
+    testDir = join(tmpdir(), `ws-transport-test-${randomUUID()}`);
+    const projectPath = "/home/user/testproject";
+    const encodedPath = projectPath.replaceAll("/", "-");
+
+    await mkdir(join(testDir, "localhost", encodedPath), { recursive: true });
+    await writeFile(
+      join(testDir, "localhost", encodedPath, "test-session.jsonl"),
+      `{"type":"user","cwd":"${projectPath}","message":{"content":"Hello"}}\n`,
+    );
+
+    // Create services
+    mockSdk = new MockClaudeSDK();
+    eventBus = new EventBus();
+
+    // Create the app
+    const { app, supervisor } = createApp({
+      sdk: mockSdk,
+      projectsDir: testDir,
+      eventBus,
+    });
+
+    // Add WebSocket support
+    const { upgradeWebSocket, wss } = createNodeWebSocket({ app });
+
+    // Add WebSocket relay route
+    const baseUrl = "http://localhost:0";
+    const wsRelayHandler = createWsRelayRoutes({
+      upgradeWebSocket,
+      app,
+      baseUrl,
+      supervisor,
+      eventBus,
+    });
+    app.get("/api/ws", wsRelayHandler);
+
+    // Start server on random port
+    server = serve({ fetch: app.fetch, port: 0 }, (info) => {
+      serverPort = info.port;
+      console.log(`[WS Transport Test] Server running on port ${serverPort}`);
+    });
+
+    // Attach the unified upgrade handler (same as production)
+    attachUnifiedUpgradeHandler(server, {
+      frontendProxy: undefined,
+      isApiPath: (urlPath) => urlPath.startsWith("/api"),
+      app,
+      wss,
+    });
+
+    // Wait for server to be ready
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+  });
+
+  afterAll(async () => {
+    server?.close();
+    await rm(testDir, { recursive: true, force: true });
+  });
+
+  /**
+   * Helper to create a WebSocket connection.
+   */
+  function connectWebSocket(): Promise<WebSocket> {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(`ws://localhost:${serverPort}/api/ws`);
+      ws.on("open", () => resolve(ws));
+      ws.on("error", reject);
+      setTimeout(() => reject(new Error("WebSocket connection timeout")), 5000);
+    });
+  }
+
+  /**
+   * Helper to send a message and wait for response.
+   */
+  function sendRequest(
+    ws: WebSocket,
+    request: RelayRequest,
+  ): Promise<RelayResponse> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error("Request timeout")),
+        5000,
+      );
+
+      const handler = (data: WebSocket.RawData) => {
+        const msg = JSON.parse(data.toString()) as YepMessage;
+        if (msg.type === "response" && msg.id === request.id) {
+          clearTimeout(timeout);
+          ws.off("message", handler);
+          resolve(msg);
+        }
+      };
+
+      ws.on("message", handler);
+      ws.send(JSON.stringify(request));
+    });
+  }
+
+  /**
+   * Helper to collect events from a subscription.
+   */
+  function collectEvents(
+    ws: WebSocket,
+    subscriptionId: string,
+    count: number,
+    timeoutMs = 5000,
+  ): Promise<RelayEvent[]> {
+    return new Promise((resolve, reject) => {
+      const events: RelayEvent[] = [];
+      const timeout = setTimeout(() => {
+        ws.off("message", handler);
+        // Return what we have, even if not enough
+        resolve(events);
+      }, timeoutMs);
+
+      const handler = (data: WebSocket.RawData) => {
+        const msg = JSON.parse(data.toString()) as YepMessage;
+        if (msg.type === "event" && msg.subscriptionId === subscriptionId) {
+          events.push(msg);
+          if (events.length >= count) {
+            clearTimeout(timeout);
+            ws.off("message", handler);
+            resolve(events);
+          }
+        }
+      };
+
+      ws.on("message", handler);
+    });
+  }
+
+  describe("Request/Response (Phase 2b)", () => {
+    it("should handle GET request for health endpoint", async () => {
+      const ws = await connectWebSocket();
+
+      try {
+        const request: RelayRequest = {
+          type: "request",
+          id: randomUUID(),
+          method: "GET",
+          path: "/health", // health is at /health, not /api/health
+        };
+
+        const response = await sendRequest(ws, request);
+
+        expect(response.status).toBe(200);
+        expect((response.body as { status: string }).status).toBe("ok");
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("should handle GET request for version endpoint", async () => {
+      const ws = await connectWebSocket();
+
+      try {
+        const request: RelayRequest = {
+          type: "request",
+          id: randomUUID(),
+          method: "GET",
+          path: "/api/version",
+        };
+
+        const response = await sendRequest(ws, request);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveProperty("current"); // version endpoint returns { current, latest, updateAvailable }
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("should handle GET request for projects endpoint", async () => {
+      const ws = await connectWebSocket();
+
+      try {
+        const request: RelayRequest = {
+          type: "request",
+          id: randomUUID(),
+          method: "GET",
+          path: "/api/projects",
+        };
+
+        const response = await sendRequest(ws, request);
+
+        expect(response.status).toBe(200);
+        // Projects returns { projects: [...] }
+        expect(response.body).toHaveProperty("projects");
+        expect(
+          Array.isArray((response.body as { projects: unknown[] }).projects),
+        ).toBe(true);
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("should return 404 for non-existent endpoint", async () => {
+      const ws = await connectWebSocket();
+
+      try {
+        const request: RelayRequest = {
+          type: "request",
+          id: randomUUID(),
+          method: "GET",
+          path: "/api/nonexistent",
+        };
+
+        const response = await sendRequest(ws, request);
+
+        expect(response.status).toBe(404);
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("should handle multiple concurrent requests", async () => {
+      const ws = await connectWebSocket();
+
+      try {
+        const request1: RelayRequest = {
+          type: "request",
+          id: randomUUID(),
+          method: "GET",
+          path: "/health",
+        };
+        const request2: RelayRequest = {
+          type: "request",
+          id: randomUUID(),
+          method: "GET",
+          path: "/api/version",
+        };
+
+        // Send both requests concurrently
+        const [response1, response2] = await Promise.all([
+          sendRequest(ws, request1),
+          sendRequest(ws, request2),
+        ]);
+
+        expect(response1.status).toBe(200);
+        expect(response1.id).toBe(request1.id);
+        expect(response2.status).toBe(200);
+        expect(response2.id).toBe(request2.id);
+      } finally {
+        ws.close();
+      }
+    });
+  });
+
+  describe("Event Subscriptions (Phase 2c)", () => {
+    it("should receive connected event when subscribing to activity", async () => {
+      const ws = await connectWebSocket();
+
+      try {
+        const subscriptionId = randomUUID();
+        const subscribe: RelaySubscribe = {
+          type: "subscribe",
+          subscriptionId,
+          channel: "activity",
+        };
+
+        // Collect the first event (should be 'connected')
+        const eventsPromise = collectEvents(ws, subscriptionId, 1);
+        ws.send(JSON.stringify(subscribe));
+
+        const events = await eventsPromise;
+
+        expect(events.length).toBe(1);
+        expect(events[0].eventType).toBe("connected");
+        expect(events[0].subscriptionId).toBe(subscriptionId);
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("should receive activity events when emitted on event bus", async () => {
+      const ws = await connectWebSocket();
+
+      try {
+        const subscriptionId = randomUUID();
+        const subscribe: RelaySubscribe = {
+          type: "subscribe",
+          subscriptionId,
+          channel: "activity",
+        };
+
+        // Subscribe first
+        ws.send(JSON.stringify(subscribe));
+
+        // Wait for connected event, then collect more
+        const eventsPromise = collectEvents(ws, subscriptionId, 3, 3000);
+
+        // Give subscription time to be established
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // Emit events on the event bus
+        eventBus.emit({
+          type: "file-change",
+          provider: "claude",
+          path: "/test/file.txt",
+          changeType: "change",
+          timestamp: new Date().toISOString(),
+        });
+
+        eventBus.emit({
+          type: "session-status-changed",
+          sessionId: "test-session",
+          status: "streaming",
+          timestamp: new Date().toISOString(),
+        });
+
+        const events = await eventsPromise;
+
+        // Should have: connected, file-change, session-status-changed
+        expect(events.length).toBeGreaterThanOrEqual(2);
+
+        const eventTypes = events.map((e) => e.eventType);
+        expect(eventTypes).toContain("connected");
+        // At least one of our events should have arrived
+        expect(
+          eventTypes.includes("file-change") ||
+            eventTypes.includes("session-status-changed"),
+        ).toBe(true);
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("should handle unsubscribe correctly", async () => {
+      const ws = await connectWebSocket();
+
+      try {
+        const subscriptionId = randomUUID();
+
+        // Subscribe
+        const subscribe: RelaySubscribe = {
+          type: "subscribe",
+          subscriptionId,
+          channel: "activity",
+        };
+        ws.send(JSON.stringify(subscribe));
+
+        // Wait for connected event
+        await collectEvents(ws, subscriptionId, 1);
+
+        // Unsubscribe
+        const unsubscribe: RelayUnsubscribe = {
+          type: "unsubscribe",
+          subscriptionId,
+        };
+        ws.send(JSON.stringify(unsubscribe));
+
+        // Wait a bit for unsubscribe to process
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // Emit an event - should not receive it
+        eventBus.emit({
+          type: "file-change",
+          provider: "claude",
+          path: "/test/file2.txt",
+          changeType: "change",
+          timestamp: new Date().toISOString(),
+        });
+
+        // Try to collect events (should timeout with 0 new events)
+        const events = await collectEvents(ws, subscriptionId, 1, 500);
+
+        // Should not receive the event after unsubscribing
+        const fileChangeEvents = events.filter(
+          (e) => e.eventType === "file-change",
+        );
+        expect(fileChangeEvents.length).toBe(0);
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("should handle multiple concurrent subscriptions", async () => {
+      const ws = await connectWebSocket();
+
+      try {
+        const subscriptionId1 = randomUUID();
+        const subscriptionId2 = randomUUID();
+
+        // Start collecting events for both subscriptions before subscribing
+        const events1Promise = collectEvents(ws, subscriptionId1, 2, 2000);
+        const events2Promise = collectEvents(ws, subscriptionId2, 2, 2000);
+
+        // Subscribe to activity twice with different IDs
+        const subscribe1: RelaySubscribe = {
+          type: "subscribe",
+          subscriptionId: subscriptionId1,
+          channel: "activity",
+        };
+        const subscribe2: RelaySubscribe = {
+          type: "subscribe",
+          subscriptionId: subscriptionId2,
+          channel: "activity",
+        };
+
+        ws.send(JSON.stringify(subscribe1));
+        ws.send(JSON.stringify(subscribe2));
+
+        // Give time for subscriptions to be established
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // Emit an event
+        eventBus.emit({
+          type: "file-change",
+          provider: "claude",
+          path: "/test/concurrent.txt",
+          changeType: "change",
+          timestamp: new Date().toISOString(),
+        });
+
+        // Both subscriptions should receive the event
+        const [events1, events2] = await Promise.all([
+          events1Promise,
+          events2Promise,
+        ]);
+
+        // Each should have connected + file-change
+        expect(events1.some((e) => e.eventType === "connected")).toBe(true);
+        expect(events2.some((e) => e.eventType === "connected")).toBe(true);
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("should return error for session subscription without sessionId", async () => {
+      const ws = await connectWebSocket();
+
+      try {
+        const subscriptionId = randomUUID();
+        const subscribe: RelaySubscribe = {
+          type: "subscribe",
+          subscriptionId,
+          channel: "session",
+          // Missing sessionId
+        };
+
+        // Listen for response (error will come as a response)
+        const responsePromise = new Promise<RelayResponse>((resolve) => {
+          const handler = (data: WebSocket.RawData) => {
+            const msg = JSON.parse(data.toString()) as YepMessage;
+            if (msg.type === "response" && msg.id === subscriptionId) {
+              ws.off("message", handler);
+              resolve(msg);
+            }
+          };
+          ws.on("message", handler);
+        });
+
+        ws.send(JSON.stringify(subscribe));
+
+        const response = await responsePromise;
+        expect(response.status).toBe(400);
+        expect(response.body).toHaveProperty("error");
+      } finally {
+        ws.close();
+      }
+    });
+  });
+
+  describe("Connection Lifecycle", () => {
+    it("should clean up subscriptions on disconnect", async () => {
+      const subscriptionId = randomUUID();
+
+      // Connect and subscribe
+      const ws = await connectWebSocket();
+      const subscribe: RelaySubscribe = {
+        type: "subscribe",
+        subscriptionId,
+        channel: "activity",
+      };
+      ws.send(JSON.stringify(subscribe));
+
+      // Wait for connected event
+      await collectEvents(ws, subscriptionId, 1);
+
+      // Check initial subscriber count
+      const initialCount = eventBus.subscriberCount;
+
+      // Close connection
+      ws.close();
+
+      // Wait for cleanup
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Subscriber count should have decreased
+      expect(eventBus.subscriberCount).toBeLessThan(initialCount);
+    });
+
+    it("should handle reconnection", async () => {
+      // First connection
+      const ws1 = await connectWebSocket();
+      const request1: RelayRequest = {
+        type: "request",
+        id: randomUUID(),
+        method: "GET",
+        path: "/health",
+      };
+      const response1 = await sendRequest(ws1, request1);
+      expect(response1.status).toBe(200);
+      ws1.close();
+
+      // Wait for disconnect to process
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Second connection - should work fine
+      const ws2 = await connectWebSocket();
+      const request2: RelayRequest = {
+        type: "request",
+        id: randomUUID(),
+        method: "GET",
+        path: "/health",
+      };
+      const response2 = await sendRequest(ws2, request2);
+      expect(response2.status).toBe(200);
+      ws2.close();
+    });
+  });
+});

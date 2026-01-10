@@ -30,6 +30,7 @@ import { ProjectScanner } from "./projects/scanner.js";
 import { PushService, getOrCreateVapidKeys } from "./push/index.js";
 import { RecentsService } from "./recents/index.js";
 import { createUploadRoutes } from "./routes/upload.js";
+import { createWsRelayRoutes } from "./routes/ws-relay.js";
 import { detectClaudeCli } from "./sdk/cli-detection.js";
 import { initMessageLogger } from "./sdk/messageLogger.js";
 import { RealClaudeSDK } from "./sdk/real.js";
@@ -225,6 +226,18 @@ async function startServer() {
     maxUploadSizeBytes: config.maxUploadSizeBytes,
   });
   app.route("/api", uploadRoutes);
+
+  // Add WebSocket relay route for Phase 2b/2c
+  // This allows clients to make HTTP-like requests and subscriptions over WebSocket
+  const baseUrl = `http://${config.host}:${config.port}`;
+  const wsRelayHandler = createWsRelayRoutes({
+    upgradeWebSocket,
+    app,
+    baseUrl,
+    supervisor,
+    eventBus,
+  });
+  app.get("/api/ws", wsRelayHandler);
 
   // Serve stable (emergency) UI from /_stable/ path if available
   // This bypasses HMR and serves pre-built assets directly
