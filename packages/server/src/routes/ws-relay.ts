@@ -16,6 +16,10 @@ import type {
 } from "@yep-anywhere/shared";
 import type { Context, Hono } from "hono";
 import type { WSContext, WSEvents } from "hono/ws";
+import {
+  type StreamAugmenter,
+  createStreamAugmenter,
+} from "../augments/index.js";
 import type { Supervisor } from "../supervisor/Supervisor.js";
 import type { UploadManager } from "../uploads/manager.js";
 import type { EventBus } from "../watcher/index.js";
@@ -218,7 +222,7 @@ export function createWsRelayRoutes(
 
   /**
    * Handle a session subscription.
-   * Subscribes to process events and forwards them as RelayEvent messages.
+   * Subscribes to process events, computes augments, and forwards them as RelayEvent messages.
    */
   const handleSessionSubscribe = (
     ws: WSContext,
@@ -245,6 +249,41 @@ export function createWsRelayRoutes(
 
     let eventId = 0;
 
+    // Helper to send a relay event
+    const sendEvent = (eventType: string, data: unknown) => {
+      const relayEvent: RelayEvent = {
+        type: "event",
+        subscriptionId,
+        eventType,
+        eventId: String(eventId++),
+        data,
+      };
+      sendMessage(ws, relayEvent);
+    };
+
+    // Create stream augmenter lazily with WebSocket-specific emitters
+    let augmenter: StreamAugmenter | null = null;
+    let augmenterPromise: Promise<StreamAugmenter> | null = null;
+
+    const getAugmenter = async (): Promise<StreamAugmenter> => {
+      if (augmenter) return augmenter;
+      if (!augmenterPromise) {
+        augmenterPromise = createStreamAugmenter({
+          onMarkdownAugment: (data) => {
+            sendEvent("markdown-augment", data);
+          },
+          onPending: (data) => {
+            sendEvent("pending", data);
+          },
+          onError: (err, context) => {
+            console.warn(`[WS Relay] ${context}:`, err);
+          },
+        });
+      }
+      augmenter = await augmenterPromise;
+      return augmenter;
+    };
+
     // Send initial connected event with current state
     const currentState = process.state;
     const connectedEvent: RelayEvent = {
@@ -267,7 +306,7 @@ export function createWsRelayRoutes(
     };
     sendMessage(ws, connectedEvent);
 
-    // Replay buffered messages for clients that connect after messages were emitted
+    // Replay buffered messages
     for (const message of process.getMessageHistory()) {
       const messageEvent: RelayEvent = {
         type: "event",
@@ -279,87 +318,88 @@ export function createWsRelayRoutes(
       sendMessage(ws, messageEvent);
     }
 
+    // Catch-up: send accumulated streaming text as pending HTML for late-joining clients
+    const streamingContent = process.getStreamingContent();
+    if (streamingContent) {
+      getAugmenter()
+        .then(async (aug) => {
+          await aug.processCatchUp(
+            streamingContent.text,
+            streamingContent.messageId,
+          );
+        })
+        .catch((err) => {
+          console.warn("[WS Relay] Failed to send catch-up pending HTML:", err);
+        });
+    }
+
     // Set up heartbeat
     const heartbeatInterval = setInterval(() => {
       try {
-        const heartbeatEvent: RelayEvent = {
-          type: "event",
-          subscriptionId,
-          eventType: "heartbeat",
-          eventId: String(eventId++),
-          data: { timestamp: new Date().toISOString() },
-        };
-        sendMessage(ws, heartbeatEvent);
+        sendEvent("heartbeat", { timestamp: new Date().toISOString() });
       } catch {
         clearInterval(heartbeatInterval);
       }
     }, 30000);
 
     // Subscribe to process events
-    const unsubscribe = process.subscribe((event) => {
+    const unsubscribe = process.subscribe(async (event) => {
       try {
-        let eventType: string;
-        let data: unknown;
-
         switch (event.type) {
-          case "message":
-            eventType = "message";
-            data = event.message;
+          case "message": {
+            const message = event.message as Record<string, unknown>;
+
+            // Process all augments (Edit, Write, Read, ExitPlanMode, streaming markdown)
+            // This mutates the message and emits markdown-augment/pending events
+            const aug = await getAugmenter();
+            await aug.processMessage(message);
+
+            sendEvent("message", message);
             break;
+          }
 
           case "state-change":
-            eventType = "status";
-            data = {
+            sendEvent("status", {
               state: event.state.type,
               ...(event.state.type === "waiting-input"
                 ? { request: event.state.request }
                 : {}),
-            };
+            });
             break;
 
           case "mode-change":
-            eventType = "mode-change";
-            data = {
+            sendEvent("mode-change", {
               permissionMode: event.mode,
               modeVersion: event.version,
-            };
+            });
             break;
 
           case "error":
-            eventType = "error";
-            data = { message: event.error.message };
+            sendEvent("error", { message: event.error.message });
             break;
 
           case "claude-login":
-            eventType = "claude-login";
-            data = event.event;
+            sendEvent("claude-login", event.event);
             break;
 
           case "session-id-changed":
-            eventType = "session-id-changed";
-            data = {
+            sendEvent("session-id-changed", {
               oldSessionId: event.oldSessionId,
               newSessionId: event.newSessionId,
-            };
+            });
             break;
 
           case "complete":
-            eventType = "complete";
-            data = { timestamp: new Date().toISOString() };
+            // Flush any remaining augments before completing
+            if (augmenter) {
+              await augmenter.flush();
+            }
+            sendEvent("complete", { timestamp: new Date().toISOString() });
             break;
 
           default:
             return; // Unknown event type, skip
         }
-
-        const relayEvent: RelayEvent = {
-          type: "event",
-          subscriptionId,
-          eventType,
-          eventId: String(eventId++),
-          data,
-        };
-        sendMessage(ws, relayEvent);
       } catch (err) {
         console.error("[WS Relay] Error sending session event:", err);
       }

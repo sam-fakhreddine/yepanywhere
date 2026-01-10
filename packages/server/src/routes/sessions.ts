@@ -9,18 +9,19 @@ import {
 } from "@yep-anywhere/shared";
 import { Hono } from "hono";
 import {
-  type EditInput,
+  type EditInputWithAugment,
+  type ExitPlanModeInput,
+  type ExitPlanModeResult,
+  type ReadResultWithAugment,
+  type WriteInputWithAugment,
   computeEditAugment,
-} from "../augments/edit-augments.js";
+  computeReadAugment,
+  computeWriteAugment,
+} from "../augments/index.js";
 import {
   augmentTextBlocks,
   renderMarkdownToHtml,
 } from "../augments/markdown-augments.js";
-import { computeReadAugment } from "../augments/read-augments.js";
-import {
-  type WriteInput,
-  computeWriteAugment,
-} from "../augments/write-augments.js";
 import type { SessionMetadataService } from "../metadata/index.js";
 import type { NotificationService } from "../notifications/index.js";
 import type { CodexSessionScanner } from "../projects/codex-scanner.js";
@@ -256,56 +257,12 @@ async function augmentEditInputs(messages: Message[]): Promise<void> {
   await Promise.all(promises);
 }
 
-/** ExitPlanMode tool_use input with rendered HTML */
-interface ExitPlanModeInput {
-  plan?: string;
-  _renderedHtml?: string;
-}
-
-/** ExitPlanMode tool_result structured data */
-interface ExitPlanModeResult {
-  plan?: string;
-  _renderedHtml?: string;
-}
-
-/** Edit tool_use input with embedded augment data */
-interface EditInputWithAugment {
-  file_path: string;
-  old_string: string;
-  new_string: string;
-  replace_all?: boolean;
-  _structuredPatch?: Array<{
-    oldStart: number;
-    oldLines: number;
-    newStart: number;
-    newLines: number;
-    lines: string[];
-  }>;
-  _diffHtml?: string;
-}
-
-/** Write tool_use input with embedded augment data */
-interface WriteInputWithAugment extends WriteInput {
-  _highlightedContentHtml?: string;
-  _highlightedLanguage?: string;
-  _highlightedTruncated?: boolean;
-}
-
-/** Read tool_result structured data with augment fields */
-interface ReadResultWithAugment {
-  type?: "text" | "image";
-  file?: {
-    filePath?: string;
-    content?: string;
-    numLines?: number;
-    startLine?: number;
-    totalLines?: number;
-  };
-  _highlightedContentHtml?: string;
-  _highlightedLanguage?: string;
-  _highlightedTruncated?: boolean;
-  _renderedMarkdownHtml?: string;
-}
+// Types imported from augments/types.ts:
+// - EditInputWithAugment
+// - ExitPlanModeInput
+// - ExitPlanModeResult
+// - ReadResultWithAugment
+// - WriteInputWithAugment
 
 /**
  * Embed Write augment data directly into tool_use inputs.

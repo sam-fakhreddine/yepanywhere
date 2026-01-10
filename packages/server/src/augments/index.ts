@@ -4,6 +4,7 @@
  * This module provides components for:
  * - Rendering markdown blocks as they stream in from Claude
  * - Computing edit augments with unified diff and syntax highlighting
+ * - Transport-agnostic stream augmentation for SSE and WebSocket
  */
 
 // Block detection
@@ -25,10 +26,7 @@ export {
 } from "./stream-coordinator.js";
 
 // Edit augments (unified diff computation and highlighting)
-export {
-  computeEditAugment,
-  type EditInput,
-} from "./edit-augments.js";
+export { computeEditAugment, type EditInput } from "./edit-augments.js";
 
 // Write augments (syntax highlighting for written files)
 export {
@@ -43,3 +41,36 @@ export {
   type ReadAugmentInput,
   type ReadAugmentResult,
 } from "./read-augments.js";
+
+// Shared types for augmentation
+export type {
+  EditInputWithAugment,
+  ExitPlanModeInput,
+  ExitPlanModeResult,
+  ReadResultWithAugment,
+  SDKMessageLike,
+  WriteInputWithAugment,
+} from "./types.js";
+
+// Message parsing utilities
+export {
+  extractIdFromAssistant,
+  extractMessageIdFromStart,
+  extractTextDelta,
+  extractTextForFinalRender,
+  extractTextFromAssistant,
+  getMessageContent,
+  isMessageStop,
+  isResultMessage,
+  isStreamingComplete,
+  markSubagent,
+} from "./message-utils.js";
+
+// Stream augmenter (transport-agnostic)
+export {
+  createStreamAugmenter,
+  type MarkdownAugmentData,
+  type PendingData,
+  type StreamAugmenter,
+  type StreamAugmenterConfig,
+} from "./stream-augmenter.js";
