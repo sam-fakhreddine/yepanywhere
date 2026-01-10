@@ -907,9 +907,11 @@ export class Process {
 
         const message = result.value;
 
-        // Store message in history (for mock SDK that doesn't persist to disk)
-        // See shouldEmitMessage() for why we never filter messages
-        if (shouldEmitMessage(message)) {
+        // Store message in history for replay to late-joining clients.
+        // Exclude stream_event messages - they're transient streaming deltas that
+        // are redundant once the final assistant message arrives. Replaying them
+        // causes flickering as the last message appears to stream in again.
+        if (shouldEmitMessage(message) && message.type !== "stream_event") {
           // Check for duplicates before adding to history
           // This handles the case where queueMessage added the optimistic message
           // and now the provider is echoing it back with the same UUID
