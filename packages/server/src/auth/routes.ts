@@ -2,8 +2,10 @@
  * Authentication API routes
  */
 
+import { execSync } from "node:child_process";
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import { getLogger } from "../logging/logger.js";
 import type { AuthService } from "./AuthService.js";
 import { getClaudeLoginService } from "./claude-login.js";
 
@@ -367,6 +369,60 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
     const claudeLogin = getClaudeLoginService();
     const available = await claudeLogin.checkTmuxAvailable();
     return c.json({ available });
+  });
+
+  /**
+   * POST /api/auth/claude-login/apikey
+   * Set Claude API key directly (no tmux needed)
+   * Uses `claude config set apiKey <key>` command
+   */
+  app.post("/claude-login/apikey", async (c) => {
+    const log = getLogger();
+    const body = await c.req.json<{ apiKey: string }>();
+
+    if (!body.apiKey || typeof body.apiKey !== "string") {
+      return c.json({ success: false, error: "API key is required" }, 400);
+    }
+
+    const apiKey = body.apiKey.trim();
+
+    // Basic validation - Anthropic API keys start with "sk-ant-"
+    if (!apiKey.startsWith("sk-ant-")) {
+      return c.json(
+        {
+          success: false,
+          error:
+            "Invalid API key format. Anthropic API keys start with 'sk-ant-'",
+        },
+        400,
+      );
+    }
+
+    try {
+      // Use claude CLI to set the API key
+      // This ensures proper config file handling
+      log.info({ event: "claude_apikey_set" }, "Setting Claude API key");
+      execSync(`claude config set apiKey '${apiKey}'`, {
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+
+      log.info(
+        { event: "claude_apikey_success" },
+        "Claude API key set successfully",
+      );
+      return c.json({ success: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.error(
+        { event: "claude_apikey_error", error: message },
+        "Failed to set Claude API key",
+      );
+      return c.json(
+        { success: false, error: `Failed to set API key: ${message}` },
+        500,
+      );
+    }
   });
 
   return app;

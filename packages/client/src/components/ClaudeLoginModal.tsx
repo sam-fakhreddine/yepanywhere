@@ -2,8 +2,14 @@ import { useState } from "react";
 import { api } from "../api/client";
 import { Modal } from "./ui/Modal";
 
+export type AuthMethod = "oauth" | "apikey";
+
 interface ClaudeLoginModalProps {
-  /** OAuth URL (null while loading) */
+  /** Current auth method (null = show selection screen) */
+  authMethod: AuthMethod | null;
+  /** Callback when user selects an auth method */
+  onSelectMethod: (method: AuthMethod) => void;
+  /** OAuth URL (null while loading, only used for oauth method) */
   url: string | null;
   /** Loading status message to show while starting */
   statusMessage?: string;
@@ -14,10 +20,12 @@ interface ClaudeLoginModalProps {
 }
 
 /**
- * Modal for Claude CLI re-authentication flow.
- * Shows a loading state while starting, then the OAuth URL and code input.
+ * Modal for Claude CLI authentication.
+ * Shows method selection first, then either OAuth flow or API key input.
  */
 export function ClaudeLoginModal({
+  authMethod,
+  onSelectMethod,
   url,
   statusMessage,
   startupError,
@@ -25,12 +33,13 @@ export function ClaudeLoginModal({
   onCancel,
 }: ClaudeLoginModalProps) {
   const [code, setCode] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isLoading = !url && !startupError;
+  const isLoading = authMethod === "oauth" && !url && !startupError;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleOAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!code.trim()) {
       setError("Please enter the authorization code");
@@ -54,15 +63,166 @@ export function ClaudeLoginModal({
     }
   };
 
-  const handleCancel = async () => {
+  const handleApiKeySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!apiKey.trim()) {
+      setError("Please enter your API key");
+      return;
+    }
+
+    // Basic validation - Anthropic API keys start with "sk-ant-"
+    if (!apiKey.trim().startsWith("sk-ant-")) {
+      setError(
+        "Invalid API key format. Anthropic API keys start with 'sk-ant-'",
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
     try {
-      await api.cancelClaudeLogin();
-    } catch {
-      // Ignore errors on cancel
+      const result = await api.setClaudeApiKey(apiKey.trim());
+      if (result.success) {
+        onSuccess();
+      } else {
+        setError(result.error || "Failed to set API key");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to set API key");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    // Only cancel tmux session if we're in OAuth flow
+    if (authMethod === "oauth") {
+      try {
+        await api.cancelClaudeLogin();
+      } catch {
+        // Ignore errors on cancel
+      }
     }
     onCancel();
   };
 
+  // Method selection screen
+  if (!authMethod) {
+    return (
+      <Modal title="Authenticate Claude CLI" onClose={onCancel}>
+        <div className="claude-login-modal-content">
+          <p className="claude-login-instructions">
+            Choose how you'd like to authenticate with Claude:
+          </p>
+
+          <div className="claude-login-methods">
+            <button
+              type="button"
+              className="claude-login-method-option"
+              onClick={() => onSelectMethod("oauth")}
+            >
+              <div className="method-option-header">
+                <span className="method-option-title">Claude Max/Pro</span>
+              </div>
+              <p className="method-option-desc">
+                For Claude Max, Pro, or Team subscriptions. Authenticates via
+                OAuth.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              className="claude-login-method-option"
+              onClick={() => onSelectMethod("apikey")}
+            >
+              <div className="method-option-header">
+                <span className="method-option-title">API Key</span>
+              </div>
+              <p className="method-option-desc">
+                For Anthropic API users. Enter your API key directly.
+              </p>
+            </button>
+          </div>
+
+          <div className="claude-login-actions">
+            <button type="button" className="btn-secondary" onClick={onCancel}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
+  // API Key flow - simple input
+  if (authMethod === "apikey") {
+    return (
+      <Modal title="API Key Authentication" onClose={handleCancel}>
+        <div className="claude-login-modal-content">
+          {startupError ? (
+            <div className="claude-login-error-state">
+              <p className="claude-login-error">{startupError}</p>
+              <div className="claude-login-actions">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={onCancel}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="claude-login-instructions">
+                Enter your Anthropic API key. You can find this in the{" "}
+                <a
+                  href="https://console.anthropic.com/settings/keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Anthropic Console
+                </a>
+                .
+              </p>
+
+              <form onSubmit={handleApiKeySubmit}>
+                <input
+                  type="password"
+                  className="claude-login-apikey-input"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk-ant-..."
+                  disabled={isSubmitting}
+                />
+                {error && <p className="claude-login-error">{error}</p>}
+                <div className="claude-login-actions">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={handleCancel}
+                    disabled={isSubmitting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-primary"
+                    disabled={isSubmitting || !apiKey.trim()}
+                  >
+                    {isSubmitting ? "Saving..." : "Save API Key"}
+                  </button>
+                </div>
+              </form>
+            </>
+          )}
+        </div>
+      </Modal>
+    );
+  }
+
+  // OAuth flow
   return (
     <Modal title="Claude Max/Pro Login" onClose={handleCancel}>
       <div className="claude-login-modal-content">
@@ -92,8 +252,8 @@ export function ClaudeLoginModal({
           // Ready state with URL
           <>
             <p className="claude-login-instructions">
-              Your Claude authentication has expired. Please complete the login
-              flow to continue.
+              Complete the OAuth flow to authenticate with your Claude
+              subscription.
             </p>
 
             <div className="claude-login-step">
@@ -125,7 +285,7 @@ export function ClaudeLoginModal({
               <span className="step-number">3</span>
               <div className="step-content">
                 <p>Paste the authorization code below:</p>
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleOAuthSubmit}>
                   <textarea
                     className="claude-login-code-input"
                     value={code}

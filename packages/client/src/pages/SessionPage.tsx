@@ -944,6 +944,8 @@ function SessionPageContent({
         {/* Claude Login Modal for /login command */}
         {claudeLogin.isOpen && (
           <ClaudeLoginModal
+            authMethod={claudeLogin.authMethod}
+            onSelectMethod={claudeLogin.selectMethod}
             url={claudeLogin.url}
             statusMessage={claudeLogin.statusMessage}
             startupError={claudeLogin.error}

@@ -572,6 +572,15 @@ export const api = {
   checkTmuxAvailable: () =>
     fetchJSON<{ available: boolean }>("/auth/claude-login/tmux"),
 
+  setClaudeApiKey: (apiKey: string) =>
+    fetchJSON<{ success: boolean; error?: string }>(
+      "/auth/claude-login/apikey",
+      {
+        method: "POST",
+        body: JSON.stringify({ apiKey }),
+      },
+    ),
+
   // Recents API
   getRecents: (limit?: number) =>
     fetchJSON<{
