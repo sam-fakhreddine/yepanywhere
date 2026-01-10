@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
+import { ContextUsageIndicator } from "../components/ContextUsageIndicator";
 import { PageHeader } from "../components/PageHeader";
 import { ThinkingIndicator } from "../components/ThinkingIndicator";
 import { type ProcessInfo, useProcesses } from "../hooks/useProcesses";
 import { useNavigationLayout } from "../layouts";
-import { shortenPath } from "../lib/text";
 
 /**
  * Format uptime duration from start time to now.
@@ -106,12 +106,9 @@ interface ProcessCardProps {
 }
 
 function ProcessCard({ process, isTerminated = false }: ProcessCardProps) {
-  // Extract project name from path (last directory)
-  const projectName =
-    process.projectPath.split("/").pop() ?? process.projectPath;
-
   return (
-    <div
+    <Link
+      to={`/projects/${process.projectId}/sessions/${process.sessionId}`}
       className={`agent-card ${isTerminated ? "agent-card-terminated" : ""}`}
     >
       <div className="agent-card-header">
@@ -135,63 +132,47 @@ function ProcessCard({ process, isTerminated = false }: ProcessCardProps) {
           )}
         </div>
         <div className="agent-card-meta">
-          <span className="agent-card-project">{projectName}</span>
+          <span className="agent-card-project">{process.projectName}</span>
           {!isTerminated && (
             <span className="agent-card-uptime">
               {formatUptime(process.startedAt)}
             </span>
           )}
+          {process.contextUsage && (
+            <ContextUsageIndicator usage={process.contextUsage} />
+          )}
         </div>
       </div>
 
-      <div className="agent-card-details">
-        <div className="agent-detail-row">
-          <span className="agent-detail-label">Project Path</span>
-          <span
-            className="agent-detail-value agent-detail-mono"
-            title={process.projectPath}
-          >
-            {shortenPath(process.projectPath)}
-          </span>
+      {(process.permissionMode ||
+        process.queueDepth > 0 ||
+        process.terminationReason) && (
+        <div className="agent-card-details">
+          {process.permissionMode && (
+            <div className="agent-detail-row">
+              <span className="agent-detail-label">Permission Mode</span>
+              <span className="agent-detail-value">
+                {process.permissionMode}
+              </span>
+            </div>
+          )}
+          {process.queueDepth > 0 && (
+            <div className="agent-detail-row">
+              <span className="agent-detail-label">Messages Queued</span>
+              <span className="agent-detail-value">{process.queueDepth}</span>
+            </div>
+          )}
+          {process.terminationReason && (
+            <div className="agent-detail-row">
+              <span className="agent-detail-label">Stop Reason</span>
+              <span className="agent-detail-value">
+                {process.terminationReason}
+              </span>
+            </div>
+          )}
         </div>
-        {process.contextUsage && (
-          <div className="agent-detail-row">
-            <span className="agent-detail-label">Context</span>
-            <span className="agent-detail-value">
-              {process.contextUsage.percentage}%
-            </span>
-          </div>
-        )}
-        {process.permissionMode && (
-          <div className="agent-detail-row">
-            <span className="agent-detail-label">Permission Mode</span>
-            <span className="agent-detail-value">{process.permissionMode}</span>
-          </div>
-        )}
-        {process.queueDepth > 0 && (
-          <div className="agent-detail-row">
-            <span className="agent-detail-label">Messages Queued</span>
-            <span className="agent-detail-value">{process.queueDepth}</span>
-          </div>
-        )}
-        {process.terminationReason && (
-          <div className="agent-detail-row">
-            <span className="agent-detail-label">Stop Reason</span>
-            <span className="agent-detail-value">
-              {process.terminationReason}
-            </span>
-          </div>
-        )}
-        <div className="agent-card-actions">
-          <Link
-            to={`/projects/${process.projectId}/sessions/${process.sessionId}`}
-            className="agent-view-session-link"
-          >
-            {process.sessionTitle || "View Session"} →
-          </Link>
-        </div>
-      </div>
-    </div>
+      )}
+    </Link>
   );
 }
 

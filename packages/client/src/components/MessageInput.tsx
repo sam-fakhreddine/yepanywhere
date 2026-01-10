@@ -112,6 +112,17 @@ export function MessageInput({
     ? text + (text.trimEnd() ? " " : "") + interimTranscript
     : text;
 
+  // Auto-scroll textarea when voice input updates (interim transcript changes)
+  // Browser handles scrolling for normal typing, but programmatic updates need explicit scroll
+  useEffect(() => {
+    if (interimTranscript) {
+      const textarea = textareaRef.current;
+      if (textarea) {
+        textarea.scrollTop = textarea.scrollHeight;
+      }
+    }
+  }, [interimTranscript]);
+
   // Panel is collapsed if user collapsed it OR if externally collapsed (approval panel showing)
   const collapsed = userCollapsed || externalCollapsed;
 
@@ -237,6 +248,14 @@ export function MessageInput({
         setText(trimmedTranscript);
       }
       setInterimTranscript("");
+      // Scroll to bottom after committing voice transcript
+      // Use setTimeout to ensure state update has rendered
+      setTimeout(() => {
+        const textarea = textareaRef.current;
+        if (textarea) {
+          textarea.scrollTop = textarea.scrollHeight;
+        }
+      }, 0);
     },
     [text, setText],
   );

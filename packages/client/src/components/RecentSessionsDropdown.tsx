@@ -149,7 +149,7 @@ export function RecentSessionsDropdown({
             <Link
               key={session.id}
               to={`/projects/${session.projectId}/sessions/${session.id}`}
-              className="recent-session-item"
+              className={`recent-session-item${session.hasUnread ? " unread" : ""}`}
               onClick={() => {
                 onNavigate(session.id, session.projectId);
                 onClose();

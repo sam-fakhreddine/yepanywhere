@@ -189,6 +189,17 @@ export function NewSessionForm({
     ? message + (message.trimEnd() ? " " : "") + interimTranscript
     : message;
 
+  // Auto-scroll textarea when voice input updates (interim transcript changes)
+  // Browser handles scrolling for normal typing, but programmatic updates need explicit scroll
+  useEffect(() => {
+    if (interimTranscript) {
+      const textarea = textareaRef.current;
+      if (textarea) {
+        textarea.scrollTop = textarea.scrollHeight;
+      }
+    }
+  }, [interimTranscript]);
+
   // Focus textarea on mount if autoFocus is enabled
   useEffect(() => {
     if (autoFocus) {
@@ -449,6 +460,14 @@ export function NewSessionForm({
         setMessage(transcript);
       }
       setInterimTranscript("");
+      // Scroll to bottom after committing voice transcript
+      // Use setTimeout to ensure state update has rendered
+      setTimeout(() => {
+        const textarea = textareaRef.current;
+        if (textarea) {
+          textarea.scrollTop = textarea.scrollHeight;
+        }
+      }, 0);
     },
     [message, setMessage],
   );
