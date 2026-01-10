@@ -8,3 +8,9 @@ export {
   SESSION_COOKIE_NAME,
   type AuthRoutesDeps,
 } from "./routes.js";
+export {
+  createClaudeLoginService,
+  getClaudeLoginService,
+  type ClaudeLoginService,
+  type ClaudeLoginState,
+} from "./claude-login.js";

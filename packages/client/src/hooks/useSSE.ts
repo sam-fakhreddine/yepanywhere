@@ -72,6 +72,7 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
     es.addEventListener("markdown-augment", handleEvent("markdown-augment"));
     es.addEventListener("pending", handleEvent("pending"));
     es.addEventListener("edit-augment", handleEvent("edit-augment"));
+    es.addEventListener("claude-login", handleEvent("claude-login"));
 
     es.onerror = (error) => {
       setConnected(false);

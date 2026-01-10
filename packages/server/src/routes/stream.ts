@@ -628,6 +628,15 @@ export function createStreamRoutes(deps: StreamDeps): Hono {
               });
               break;
 
+            case "claude-login":
+              // Emit Claude login events for re-authentication flow
+              await stream.writeSSE({
+                id: String(eventId++),
+                event: "claude-login",
+                data: JSON.stringify(event.event),
+              });
+              break;
+
             case "complete":
               // Flush any remaining augments before completing
               await flushCoordinator();

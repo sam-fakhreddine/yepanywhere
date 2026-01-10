@@ -172,6 +172,12 @@ export interface ProcessInfo {
   model?: string;
 }
 
+// Claude login events for re-authentication flow
+export type ClaudeLoginEvent =
+  | { type: "claude-login-required"; url: string }
+  | { type: "claude-login-error"; error: string }
+  | { type: "claude-login-success" };
+
 // Process events for subscribers
 export type ProcessEvent =
   | { type: "message"; message: SDKMessage }
@@ -180,7 +186,8 @@ export type ProcessEvent =
   | { type: "session-id-changed"; oldSessionId: string; newSessionId: string }
   | { type: "error"; error: Error }
   | { type: "complete" }
-  | { type: "terminated"; reason: string; error?: Error };
+  | { type: "terminated"; reason: string; error?: Error }
+  | { type: "claude-login"; event: ClaudeLoginEvent };
 
 // Process options
 export interface ProcessOptions {

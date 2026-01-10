@@ -2,6 +2,7 @@ import type { ProviderName, UploadedFile } from "@yep-anywhere/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, uploadFile } from "../api/client";
+import { ClaudeLoginModal } from "../components/ClaudeLoginModal";
 import { MessageInput, type UploadProgress } from "../components/MessageInput";
 import { MessageInputToolbar } from "../components/MessageInputToolbar";
 import { MessageList } from "../components/MessageList";
@@ -17,6 +18,7 @@ import {
   useStreamingMarkdownContext,
 } from "../contexts/StreamingMarkdownContext";
 import { useToastContext } from "../contexts/ToastContext";
+import { useClaudeLogin } from "../hooks/useClaudeLogin";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import type { DraftControls } from "../hooks/useDraftPersistence";
 import { useEngagementTracking } from "../hooks/useEngagementTracking";
@@ -143,6 +145,15 @@ function SessionPageContent({
   }, []);
   const { showToast } = useToastContext();
 
+  // Claude CLI login flow (for /login command)
+  const claudeLogin = useClaudeLogin();
+
+  // Combine SDK slash commands with our custom commands
+  const allSlashCommands = useMemo(() => {
+    // Add our custom "login" command for Claude Max/Pro re-authentication
+    return [...slashCommands, "login"];
+  }, [slashCommands]);
+
   // Get provider capabilities based on session's provider
   const { providers } = useProviders();
   const currentProviderInfo = useMemo(() => {
@@ -236,6 +247,12 @@ function SessionPageContent({
   });
 
   const handleSend = async (text: string) => {
+    // Intercept /login command for Claude CLI re-authentication
+    if (text.trim() === "/login") {
+      claudeLogin.startLogin();
+      return;
+    }
+
     // Add to pending queue and get tempId to pass to server
     const tempId = addPendingMessage(text);
     setProcessState("running"); // Optimistic: show processing indicator immediately
@@ -918,11 +935,22 @@ function SessionPageContent({
                 onAttach={handleAttach}
                 onRemoveAttachment={handleRemoveAttachment}
                 uploadProgress={uploadProgress}
-                slashCommands={slashCommands}
+                slashCommands={allSlashCommands}
               />
             )}
           </div>
         </footer>
+
+        {/* Claude Login Modal for /login command */}
+        {claudeLogin.isOpen && (
+          <ClaudeLoginModal
+            url={claudeLogin.url}
+            statusMessage={claudeLogin.statusMessage}
+            startupError={claudeLogin.error}
+            onSuccess={claudeLogin.handleSuccess}
+            onCancel={claudeLogin.handleCancel}
+          />
+        )}
       </div>
     </div>
   );

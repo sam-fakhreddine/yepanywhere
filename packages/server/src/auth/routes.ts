@@ -5,6 +5,7 @@
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { AuthService } from "./AuthService.js";
+import { getClaudeLoginService } from "./claude-login.js";
 
 export const SESSION_COOKIE_NAME = "yep-anywhere-session";
 
@@ -296,6 +297,76 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
     // await authService.invalidateAllSessions();
 
     return c.json({ success: true });
+  });
+
+  // Claude CLI Login Flow endpoints
+  // These handle re-authentication when Claude SDK auth expires
+
+  /**
+   * GET /api/auth/claude-login/status
+   * Get current Claude login flow status
+   */
+  app.get("/claude-login/status", async (c) => {
+    const claudeLogin = getClaudeLoginService();
+    const state = claudeLogin.getState();
+    return c.json(state);
+  });
+
+  /**
+   * POST /api/auth/claude-login/start
+   * Start the Claude CLI login flow
+   * Returns the OAuth URL for the user to visit
+   */
+  app.post("/claude-login/start", async (c) => {
+    const claudeLogin = getClaudeLoginService();
+    const result = await claudeLogin.startLoginFlow();
+
+    if ("error" in result) {
+      return c.json({ success: false, error: result.error }, 400);
+    }
+
+    return c.json({ success: true, url: result.url });
+  });
+
+  /**
+   * POST /api/auth/claude-login/code
+   * Submit the auth code from OAuth callback
+   */
+  app.post("/claude-login/code", async (c) => {
+    const body = await c.req.json<{ code: string }>();
+
+    if (!body.code || typeof body.code !== "string") {
+      return c.json({ success: false, error: "Code is required" }, 400);
+    }
+
+    const claudeLogin = getClaudeLoginService();
+    const result = await claudeLogin.submitCode(body.code);
+
+    if (!result.success) {
+      return c.json({ success: false, error: result.error }, 400);
+    }
+
+    return c.json({ success: true });
+  });
+
+  /**
+   * POST /api/auth/claude-login/cancel
+   * Cancel the current login flow
+   */
+  app.post("/claude-login/cancel", async (c) => {
+    const claudeLogin = getClaudeLoginService();
+    await claudeLogin.cancel();
+    return c.json({ success: true });
+  });
+
+  /**
+   * GET /api/auth/claude-login/tmux
+   * Check if tmux is available
+   */
+  app.get("/claude-login/tmux", async (c) => {
+    const claudeLogin = getClaudeLoginService();
+    const available = await claudeLogin.checkTmuxAvailable();
+    return c.json({ available });
   });
 
   return app;
