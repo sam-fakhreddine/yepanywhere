@@ -1,5 +1,6 @@
 import type { HttpBindings } from "@hono/node-server";
 import type {
+  BinaryFormatValue,
   EncryptedEnvelope,
   RelayEvent,
   RelayRequest,
@@ -34,6 +35,7 @@ import {
   // Binary framing utilities
   encodeJsonFrame,
   isBinaryData,
+  isClientCapabilities,
   isEncryptedEnvelope,
   isSrpClientHello,
   isSrpClientProof,
@@ -54,12 +56,14 @@ import {
 } from "../augments/index.js";
 import {
   SrpServerSession,
+  decompressGzip,
   decrypt,
   decryptBinaryEnvelope,
   decryptBinaryEnvelopeRaw,
   deriveSecretboxKey,
   encrypt,
   encryptToBinaryEnvelope,
+  encryptToBinaryEnvelopeWithCompression,
 } from "../crypto/index.js";
 import type {
   RemoteAccessService,
@@ -112,6 +116,8 @@ interface ConnectionState {
   useBinaryFrames: boolean;
   /** Whether client sent binary encrypted frames (respond with binary encrypted if true) - Phase 1 */
   useBinaryEncrypted: boolean;
+  /** Client's supported binary formats (Phase 3 capabilities) - defaults to [0x01] */
+  supportedFormats: Set<BinaryFormatValue>;
 }
 
 /** Tracks an active upload over WebSocket relay */
@@ -180,6 +186,7 @@ type SendFn = (msg: YepMessage) => void;
  * Create an encryption-aware send function for a connection.
  * Automatically encrypts messages when the connection is authenticated with a session key.
  * Uses binary frames when the client has sent binary frames (Phase 0/1 binary protocol).
+ * Compresses large payloads when client supports format 0x03 (Phase 3).
  */
 const createSendFn = (ws: WSContext, connState: ConnectionState): SendFn => {
   return (msg: YepMessage) => {
@@ -187,11 +194,15 @@ const createSendFn = (ws: WSContext, connState: ConnectionState): SendFn => {
       const plaintext = JSON.stringify(msg);
 
       if (connState.useBinaryEncrypted) {
-        // Phase 1: Binary encrypted envelope
+        // Phase 1/3: Binary encrypted envelope with optional compression
         // Wire format: [version][nonce][ciphertext] where ciphertext decrypts to [format][payload]
-        const envelope = encryptToBinaryEnvelope(
+        const supportsCompression = connState.supportedFormats.has(
+          BinaryFormat.COMPRESSED_JSON,
+        );
+        const envelope = encryptToBinaryEnvelopeWithCompression(
           plaintext,
           connState.sessionKey,
+          supportsCompression,
         );
         ws.send(envelope);
       } else {
@@ -1242,25 +1253,47 @@ export function createWsRelayRoutes(
             return;
           }
 
-          if (format !== BinaryFormat.JSON) {
+          if (
+            format !== BinaryFormat.JSON &&
+            format !== BinaryFormat.COMPRESSED_JSON
+          ) {
+            // Capture format value before type narrowing makes it `never`
+            const formatByte = format as number;
             console.warn(
-              `[WS Relay] Unsupported encrypted format: 0x${format.toString(16).padStart(2, "0")}`,
+              `[WS Relay] Unsupported encrypted format: 0x${formatByte.toString(16).padStart(2, "0")}`,
             );
             send({
               type: "response",
               id: "binary-format-error",
               status: 400,
               body: {
-                error: `Unsupported binary format: 0x${format.toString(16).padStart(2, "0")}`,
+                error: `Unsupported binary format: 0x${formatByte.toString(16).padStart(2, "0")}`,
               },
             });
             return;
           }
 
-          // Parse decrypted JSON (format 0x01)
+          // Parse decrypted JSON (format 0x01 or 0x03)
           try {
-            const jsonStr = new TextDecoder().decode(payload);
+            let jsonStr: string;
+            if (format === BinaryFormat.COMPRESSED_JSON) {
+              // Decompress gzip payload (format 0x03)
+              jsonStr = decompressGzip(payload);
+            } else {
+              // Plain JSON (format 0x01)
+              jsonStr = new TextDecoder().decode(payload);
+            }
             const msg = JSON.parse(jsonStr) as RemoteClientMessage;
+
+            // Handle client_capabilities message (Phase 3)
+            if (isClientCapabilities(msg)) {
+              // Update supported formats
+              connState.supportedFormats = new Set(msg.formats);
+              console.log(
+                `[WS Relay] Client capabilities: formats=${[...connState.supportedFormats].map((f) => `0x${f.toString(16).padStart(2, "0")}`).join(", ")}`,
+              );
+              return;
+            }
             // Route by message type (skip the encryption check below)
             switch (msg.type) {
               case "request":
@@ -1508,6 +1541,8 @@ export function createWsRelayRoutes(
       sessionId: null,
       useBinaryFrames: false,
       useBinaryEncrypted: false,
+      // Default to JSON only until client sends capabilities
+      supportedFormats: new Set([BinaryFormat.JSON]),
     };
     // Encryption-aware send function (created on open, captures connState)
     let send: SendFn;

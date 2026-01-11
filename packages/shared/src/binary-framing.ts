@@ -625,3 +625,46 @@ export function encodeUploadChunkPayload(
 
   return result;
 }
+
+// =============================================================================
+// Phase 3: Compressed JSON
+// =============================================================================
+
+/**
+ * Encode a compressed JSON frame with format byte 0x03.
+ *
+ * @param compressedData - Gzip-compressed JSON bytes
+ * @returns ArrayBuffer containing [0x03][compressed bytes]
+ */
+export function encodeCompressedJsonFrame(
+  compressedData: Uint8Array,
+): ArrayBuffer {
+  const buffer = new ArrayBuffer(1 + compressedData.length);
+  const view = new Uint8Array(buffer);
+  view[0] = BinaryFormat.COMPRESSED_JSON;
+  view.set(compressedData, 1);
+  return buffer;
+}
+
+/**
+ * Decode a compressed JSON binary frame (format 0x03).
+ * Returns the raw compressed payload - decompression is handled separately.
+ *
+ * @param data - ArrayBuffer or Uint8Array containing the binary frame
+ * @returns Compressed payload bytes
+ * @throws BinaryFrameError if frame is invalid or not format 0x03
+ */
+export function decodeCompressedJsonFrame(
+  data: ArrayBuffer | Uint8Array,
+): Uint8Array {
+  const { format, payload } = decodeBinaryFrame(data);
+
+  if (format !== BinaryFormat.COMPRESSED_JSON) {
+    throw new BinaryFrameError(
+      `Expected compressed JSON format (0x03), got 0x${format.toString(16).padStart(2, "0")}`,
+      "UNKNOWN_FORMAT",
+    );
+  }
+
+  return payload;
+}

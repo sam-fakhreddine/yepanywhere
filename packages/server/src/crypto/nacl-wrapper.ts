@@ -1,13 +1,16 @@
+import { gunzipSync, gzipSync } from "node:zlib";
 /**
  * NaCl secretbox encryption helpers for relay protocol.
  *
  * Uses TweetNaCl for XSalsa20-Poly1305 authenticated encryption.
  * Supports both JSON envelope format (Phase 2) and binary envelope format (Phase 1).
+ * Phase 3 adds gzip compression support using Node.js zlib.
  */
 import {
   BinaryEnvelopeError,
   BinaryFormat,
   type BinaryFormatValue,
+  COMPRESSION_THRESHOLD,
   createBinaryEnvelope,
   extractFormatAndPayload,
   parseBinaryEnvelope,
@@ -229,4 +232,77 @@ export function decryptBinaryEnvelopeRaw(
 
   // Extract format byte and payload
   return extractFormatAndPayload(decrypted);
+}
+
+// =============================================================================
+// Phase 3: Compression Support
+// =============================================================================
+
+/**
+ * Compress a string using gzip (synchronous, Node.js).
+ *
+ * @param input - UTF-8 string to compress
+ * @returns Compressed bytes
+ */
+export function compressGzip(input: string): Uint8Array {
+  const inputBytes = Buffer.from(input, "utf-8");
+  const compressed = gzipSync(inputBytes);
+  return new Uint8Array(compressed);
+}
+
+/**
+ * Decompress gzip-compressed bytes to a string (synchronous, Node.js).
+ *
+ * @param input - Gzip-compressed bytes
+ * @returns Decompressed UTF-8 string
+ * @throws Error if decompression fails
+ */
+export function decompressGzip(input: Uint8Array): string {
+  const decompressed = gunzipSync(Buffer.from(input));
+  return decompressed.toString("utf-8");
+}
+
+/**
+ * Encrypt a message with optional compression to binary envelope format.
+ * Automatically compresses if payload exceeds threshold and client supports it.
+ *
+ * @param plaintext - UTF-8 string to encrypt
+ * @param key - 32-byte secret key
+ * @param supportsCompression - Whether client supports format 0x03
+ * @returns ArrayBuffer containing the binary envelope
+ */
+export function encryptToBinaryEnvelopeWithCompression(
+  plaintext: string,
+  key: Uint8Array,
+  supportsCompression: boolean,
+): ArrayBuffer {
+  if (key.length !== KEY_LENGTH) {
+    throw new Error(`Key must be ${KEY_LENGTH} bytes, got ${key.length}`);
+  }
+
+  const nonce = generateNonce();
+  const messageBytes = Buffer.from(plaintext, "utf-8");
+
+  // Check if we should compress
+  let innerPayload: Uint8Array;
+  if (supportsCompression && messageBytes.length > COMPRESSION_THRESHOLD) {
+    const compressed = compressGzip(plaintext);
+    // Only use compression if it actually reduces size
+    if (compressed.length < messageBytes.length) {
+      innerPayload = prependFormatByte(
+        BinaryFormat.COMPRESSED_JSON,
+        compressed,
+      );
+    } else {
+      innerPayload = prependFormatByte(BinaryFormat.JSON, messageBytes);
+    }
+  } else {
+    innerPayload = prependFormatByte(BinaryFormat.JSON, messageBytes);
+  }
+
+  // Encrypt the inner payload
+  const ciphertext = nacl.secretbox(innerPayload, nonce, key);
+
+  // Create the binary envelope
+  return createBinaryEnvelope(nonce, ciphertext);
 }

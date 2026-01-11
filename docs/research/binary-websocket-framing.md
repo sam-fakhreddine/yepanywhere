@@ -194,6 +194,12 @@ These could be added in a future version (0x02+) if needed.
 
 These optimizations can be implemented independently. The unencrypted WebSocket relay path is maintained for testing and architectural cleanliness.
 
+**Status:**
+- ✅ Phase 0: Binary Format for Unencrypted Relay - Implemented
+- ✅ Phase 1: Binary Encrypted Envelope - Implemented
+- ✅ Phase 2: Binary Upload Chunks - Implemented
+- ✅ Phase 3: Compression - Implemented
+
 ### Phase 0: Binary Format for Unencrypted Relay (Test Bed)
 - Add binary frame support to unencrypted `WebSocketConnection.ts` and server `ws-relay.ts`
 - Same inner format: `[format byte][payload]`

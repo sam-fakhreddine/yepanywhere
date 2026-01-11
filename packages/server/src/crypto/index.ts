@@ -12,6 +12,10 @@ export {
   encryptBytesToBinaryEnvelope,
   decryptBinaryEnvelope,
   decryptBinaryEnvelopeRaw,
+  // Compression support (Phase 3)
+  compressGzip,
+  decompressGzip,
+  encryptToBinaryEnvelopeWithCompression,
 } from "./nacl-wrapper.js";
 
 // SRP server helpers

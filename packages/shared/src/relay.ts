@@ -85,6 +85,37 @@ export interface RelayEvent {
 }
 
 // ============================================================================
+// Client Capabilities (Phase 3 - Compression negotiation)
+// ============================================================================
+
+import type { BinaryFormatValue } from "./binary-framing.js";
+
+/**
+ * Client -> Server: Declare supported binary formats.
+ *
+ * Sent immediately after SRP authentication completes (first encrypted message).
+ * Server records supported formats and uses them for outgoing messages.
+ * If no capabilities message is received, server assumes only format 0x01 (JSON).
+ */
+export interface ClientCapabilities {
+  type: "client_capabilities";
+  /** Supported format bytes (e.g., [0x01, 0x02, 0x03]) */
+  formats: BinaryFormatValue[];
+}
+
+/**
+ * Type guard for ClientCapabilities messages.
+ */
+export function isClientCapabilities(msg: unknown): msg is ClientCapabilities {
+  return (
+    typeof msg === "object" &&
+    msg !== null &&
+    (msg as { type?: unknown }).type === "client_capabilities" &&
+    Array.isArray((msg as { formats?: unknown }).formats)
+  );
+}
+
+// ============================================================================
 // File Upload
 // ============================================================================
 
@@ -161,7 +192,8 @@ export type RemoteClientMessage =
   | RelayUnsubscribe
   | RelayUploadStart
   | RelayUploadChunk
-  | RelayUploadEnd;
+  | RelayUploadEnd
+  | ClientCapabilities;
 
 /** All messages from yepanywhere server -> phone/browser */
 export type YepMessage =

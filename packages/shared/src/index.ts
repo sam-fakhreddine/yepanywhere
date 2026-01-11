@@ -291,6 +291,8 @@ export type {
   EncryptedEnvelope,
   // Connection state
   SecureConnectionState,
+  // Client capabilities (Phase 3)
+  ClientCapabilities,
 } from "./relay.js";
 
 export {
@@ -306,9 +308,11 @@ export {
   isSrpSessionInvalid,
   // Encryption type guard
   isEncryptedEnvelope,
+  // Client capabilities type guard
+  isClientCapabilities,
 } from "./relay.js";
 
-// Binary framing utilities (Phase 0/1/2 of binary WebSocket protocol)
+// Binary framing utilities (Phase 0/1/2/3 of binary WebSocket protocol)
 export {
   // Phase 0: Unencrypted binary frames
   BinaryFormat,
@@ -344,4 +348,20 @@ export {
   decodeUploadChunkFrame,
   encodeUploadChunkPayload,
   decodeUploadChunkPayload,
+  // Phase 3: Compressed JSON
+  encodeCompressedJsonFrame,
+  decodeCompressedJsonFrame,
 } from "./binary-framing.js";
+
+// Compression utilities (Phase 3)
+export {
+  COMPRESSION_THRESHOLD,
+  isCompressionSupported,
+  shouldCompress,
+  isGzipCompressed,
+  compressString,
+  compressBytes,
+  decompressToString,
+  decompressBytes,
+  compressJsonIfBeneficial,
+} from "./compression.js";

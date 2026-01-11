@@ -3,13 +3,16 @@
  *
  * Uses TweetNaCl for XSalsa20-Poly1305 authenticated encryption.
  * Supports both JSON envelope format (Phase 2) and binary envelope format (Phase 1).
+ * Phase 3 adds gzip compression support using native CompressionStream API.
  */
 import {
   BinaryEnvelopeError,
   BinaryFormat,
   type BinaryFormatValue,
   createBinaryEnvelope,
+  decompressToString,
   extractFormatAndPayload,
+  isCompressionSupported,
   parseBinaryEnvelope,
   prependFormatByte,
 } from "@yep-anywhere/shared";
@@ -256,4 +259,59 @@ export function decryptBinaryEnvelopeRaw(
 
   // Extract format byte and payload
   return extractFormatAndPayload(decrypted);
+}
+
+// =============================================================================
+// Phase 3: Compression Support
+// =============================================================================
+
+/**
+ * Check if the browser supports compression (native CompressionStream API).
+ * Re-exported from shared for convenience.
+ */
+export { isCompressionSupported };
+
+/**
+ * Decrypt a binary envelope and return the plaintext string.
+ * Automatically handles compressed JSON (format 0x03) if supported.
+ *
+ * @param data - Binary envelope (ArrayBuffer or Uint8Array)
+ * @param key - 32-byte secret key
+ * @returns Decrypted plaintext string, or null if decryption failed
+ * @throws BinaryEnvelopeError if envelope format is invalid
+ */
+export async function decryptBinaryEnvelopeWithDecompression(
+  data: ArrayBuffer | Uint8Array,
+  key: Uint8Array,
+): Promise<string | null> {
+  const result = decryptBinaryEnvelopeRaw(data, key);
+  if (!result) {
+    return null;
+  }
+
+  const { format, payload } = result;
+
+  if (format === BinaryFormat.COMPRESSED_JSON) {
+    // Decompress gzip payload (format 0x03)
+    const decompressed = await decompressToString(payload);
+    if (decompressed === null) {
+      // Decompression not supported - this shouldn't happen if client sent capabilities
+      throw new BinaryEnvelopeError(
+        "Received compressed payload but decompression not supported",
+        "INVALID_FORMAT",
+      );
+    }
+    return decompressed;
+  }
+
+  if (format === BinaryFormat.JSON) {
+    // Plain JSON (format 0x01)
+    return new TextDecoder().decode(payload);
+  }
+
+  // Unsupported format for string decryption
+  throw new BinaryEnvelopeError(
+    `Expected JSON format (0x01 or 0x03), got 0x${format.toString(16).padStart(2, "0")}`,
+    "INVALID_FORMAT",
+  );
 }

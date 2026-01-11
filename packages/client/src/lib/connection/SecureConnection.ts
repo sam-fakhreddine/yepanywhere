@@ -7,6 +7,7 @@
  * - NaCl secretbox (XSalsa20-Poly1305) for message encryption
  */
 import type {
+  ClientCapabilities,
   EncryptedEnvelope,
   RelayEvent,
   RelayRequest,
@@ -29,6 +30,7 @@ import {
   BinaryFormat,
   encodeUploadChunkPayload,
   isBinaryData,
+  isCompressionSupported,
   isEncryptedEnvelope,
   isSrpError,
   isSrpServerChallenge,
@@ -38,7 +40,7 @@ import {
 } from "@yep-anywhere/shared";
 import {
   decrypt,
-  decryptBinaryEnvelope,
+  decryptBinaryEnvelopeWithDecompression,
   deriveSecretboxKey,
   encrypt,
   encryptBytesToBinaryEnvelope,
@@ -257,6 +259,10 @@ export class SecureConnection implements Connection {
         );
         this.sessionId = msg.sessionId;
         this.connectionState = "authenticated";
+
+        // Send client capabilities (Phase 3) - first encrypted message after auth
+        this.sendCapabilities();
+
         resolve();
         return;
       }
@@ -588,6 +594,9 @@ export class SecureConnection implements Connection {
         });
       }
 
+      // Send client capabilities (Phase 3) - first encrypted message after auth
+      this.sendCapabilities();
+
       console.log("[SecureConnection] Authentication complete");
       resolve();
     } catch (err) {
@@ -600,9 +609,10 @@ export class SecureConnection implements Connection {
 
   /**
    * Handle incoming WebSocket messages (after authentication).
-   * Supports both binary envelope (Phase 1) and JSON envelope (legacy) formats.
+   * Supports both binary envelope (Phase 1/3) and JSON envelope (legacy) formats.
+   * Phase 3 adds support for compressed JSON (format 0x03).
    */
-  private handleMessage(data: unknown): void {
+  private async handleMessage(data: unknown): Promise<void> {
     // Decrypt the message
     if (!this.sessionKey) {
       console.warn("[SecureConnection] No session key for decryption");
@@ -611,10 +621,14 @@ export class SecureConnection implements Connection {
 
     let decrypted: string | null = null;
 
-    // Handle binary data (Phase 1 binary envelope)
+    // Handle binary data (Phase 1/3 binary envelope)
     if (isBinaryData(data)) {
       try {
-        decrypted = decryptBinaryEnvelope(data, this.sessionKey);
+        // Use async decryption with decompression support (Phase 3)
+        decrypted = await decryptBinaryEnvelopeWithDecompression(
+          data,
+          this.sessionKey,
+        );
         if (!decrypted) {
           console.warn("[SecureConnection] Failed to decrypt binary envelope");
           return;
@@ -781,6 +795,36 @@ export class SecureConnection implements Connection {
     // where ciphertext decrypts to [format byte][payload]
     const envelope = encryptToBinaryEnvelope(plaintext, this.sessionKey);
     this.ws.send(envelope);
+  }
+
+  /**
+   * Send client capabilities to the server (Phase 3).
+   * Called immediately after SRP authentication completes.
+   * Tells server which binary formats this client supports.
+   */
+  private sendCapabilities(): void {
+    // Build list of supported formats
+    const formats: number[] = [BinaryFormat.JSON, BinaryFormat.BINARY_UPLOAD];
+
+    // Add compressed JSON if browser supports CompressionStream
+    if (isCompressionSupported()) {
+      formats.push(BinaryFormat.COMPRESSED_JSON);
+    }
+
+    const msg: ClientCapabilities = {
+      type: "client_capabilities",
+      formats: formats as ClientCapabilities["formats"],
+    };
+
+    console.log(
+      `[SecureConnection] Sending capabilities: formats=${formats.map((f) => `0x${f.toString(16).padStart(2, "0")}`).join(", ")}`,
+    );
+
+    try {
+      this.send(msg);
+    } catch (err) {
+      console.warn("[SecureConnection] Failed to send capabilities:", err);
+    }
   }
 
   /**

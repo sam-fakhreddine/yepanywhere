@@ -15,9 +15,11 @@ import {
   bytesToUuid,
   createBinaryEnvelope,
   decodeBinaryFrame,
+  decodeCompressedJsonFrame,
   decodeJsonFrame,
   decodeUploadChunkFrame,
   decodeUploadChunkPayload,
+  encodeCompressedJsonFrame,
   encodeJsonFrame,
   encodeUploadChunkFrame,
   encodeUploadChunkPayload,
@@ -1118,6 +1120,153 @@ describe("binary-upload-chunks (Phase 2)", () => {
       expect(decoded.uploadId).toBe(TEST_UUID);
       expect(decoded.offset).toBe(4096);
       expect(decoded.data).toEqual(chunkData);
+    });
+  });
+});
+
+// =============================================================================
+// Phase 3: Compressed JSON Tests
+// =============================================================================
+
+describe("compressed-json-frames (Phase 3)", () => {
+  describe("encodeCompressedJsonFrame", () => {
+    it("prepends format byte 0x03", () => {
+      // Simulate gzip-compressed payload (starts with gzip magic)
+      const compressed = new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0x01, 0x02]);
+      const frame = encodeCompressedJsonFrame(compressed);
+      const view = new Uint8Array(frame);
+
+      expect(view[0]).toBe(BinaryFormat.COMPRESSED_JSON);
+      expect(view.slice(1)).toEqual(compressed);
+    });
+
+    it("returns ArrayBuffer", () => {
+      const compressed = new Uint8Array([0x1f, 0x8b]);
+      const frame = encodeCompressedJsonFrame(compressed);
+      expect(frame).toBeInstanceOf(ArrayBuffer);
+    });
+
+    it("calculates correct size", () => {
+      const compressed = new Uint8Array(1000);
+      const frame = encodeCompressedJsonFrame(compressed);
+      expect(frame.byteLength).toBe(1001); // 1 format byte + 1000 data
+    });
+
+    it("handles empty payload", () => {
+      const compressed = new Uint8Array(0);
+      const frame = encodeCompressedJsonFrame(compressed);
+      const view = new Uint8Array(frame);
+      expect(view.length).toBe(1);
+      expect(view[0]).toBe(BinaryFormat.COMPRESSED_JSON);
+    });
+  });
+
+  describe("decodeCompressedJsonFrame", () => {
+    it("extracts payload from compressed frame", () => {
+      const compressed = new Uint8Array([0x1f, 0x8b, 0x08, 0x00]);
+      const frame = encodeCompressedJsonFrame(compressed);
+
+      const payload = decodeCompressedJsonFrame(frame);
+      expect(payload).toEqual(compressed);
+    });
+
+    it("works with Uint8Array input", () => {
+      const compressed = new Uint8Array([0x1f, 0x8b]);
+      const frame = encodeCompressedJsonFrame(compressed);
+
+      const payload = decodeCompressedJsonFrame(new Uint8Array(frame));
+      expect(payload).toEqual(compressed);
+    });
+
+    it("throws BinaryFrameError for wrong format byte", () => {
+      // Create a JSON frame (format 0x01)
+      const jsonFrame = encodeJsonFrame({ test: true });
+      expect(() => decodeCompressedJsonFrame(jsonFrame)).toThrow(
+        BinaryFrameError,
+      );
+      try {
+        decodeCompressedJsonFrame(jsonFrame);
+      } catch (err) {
+        expect(err).toBeInstanceOf(BinaryFrameError);
+        expect((err as BinaryFrameError).code).toBe("UNKNOWN_FORMAT");
+        expect((err as BinaryFrameError).message).toContain(
+          "Expected compressed JSON format",
+        );
+      }
+    });
+
+    it("throws for binary upload format", () => {
+      const uploadFrame = new Uint8Array([
+        BinaryFormat.BINARY_UPLOAD,
+        0x01,
+        0x02,
+      ]);
+      expect(() => decodeCompressedJsonFrame(uploadFrame)).toThrow(
+        BinaryFrameError,
+      );
+    });
+
+    it("round-trips various payloads", () => {
+      const testCases = [
+        new Uint8Array([0x1f, 0x8b, 0x08, 0x00]), // gzip magic
+        new Uint8Array([0x01, 0x02, 0x03, 0x04, 0x05]), // arbitrary data
+        new Uint8Array(100).fill(0xab), // repeated bytes
+        new Uint8Array(0), // empty
+      ];
+
+      for (const compressed of testCases) {
+        const frame = encodeCompressedJsonFrame(compressed);
+        const decoded = decodeCompressedJsonFrame(frame);
+        expect(decoded).toEqual(compressed);
+      }
+    });
+  });
+
+  describe("integration with decodeBinaryFrame", () => {
+    it("decodeBinaryFrame accepts format 0x03", () => {
+      const compressed = new Uint8Array([0x1f, 0x8b, 0x08]);
+      const frame = encodeCompressedJsonFrame(compressed);
+
+      const { format, payload } = decodeBinaryFrame(frame);
+      expect(format).toBe(BinaryFormat.COMPRESSED_JSON);
+      expect(payload).toEqual(compressed);
+    });
+  });
+
+  describe("integration with extractFormatAndPayload", () => {
+    it("extractFormatAndPayload works with compressed format", () => {
+      const compressed = new Uint8Array([0x1f, 0x8b, 0x08, 0x00]);
+      const withFormat = prependFormatByte(
+        BinaryFormat.COMPRESSED_JSON,
+        compressed,
+      );
+
+      const { format, payload } = extractFormatAndPayload(withFormat);
+      expect(format).toBe(BinaryFormat.COMPRESSED_JSON);
+      expect(payload).toEqual(compressed);
+    });
+
+    it("can be used in encrypted envelope flow for compressed JSON", () => {
+      // Simulate the compression + encryption flow:
+      // 1. Compress JSON (simulated - just use placeholder bytes)
+      const compressedJson = new Uint8Array([
+        0x1f, 0x8b, 0x08, 0x00, 0xde, 0xad, 0xbe, 0xef,
+      ]);
+
+      // 2. Prepend format byte (done before encryption)
+      const withFormat = prependFormatByte(
+        BinaryFormat.COMPRESSED_JSON,
+        compressedJson,
+      );
+
+      // 3. (encryption would happen here - we just simulate)
+      // 4. Simulate decryption - extract format and payload
+      const { format, payload } = extractFormatAndPayload(withFormat);
+
+      // 5. Verify format and payload
+      expect(format).toBe(BinaryFormat.COMPRESSED_JSON);
+      expect(payload).toEqual(compressedJson);
+      // In real code, we would now decompress `payload` to get the original JSON
     });
   });
 });
