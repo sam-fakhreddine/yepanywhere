@@ -10,7 +10,6 @@
  */
 
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { serve } from "@hono/node-server";
 import { RESPONSE_ALREADY_SENT } from "@hono/node-server/utils/response";
@@ -22,7 +21,12 @@ import {
   createFrontendProxy,
   createStaticRoutes,
 } from "./frontend/index.js";
+import {
+  setDebugContext,
+  startMaintenanceServer,
+} from "./maintenance/index.js";
 import { ProjectScanner } from "./projects/scanner.js";
+import { RemoteAccessService } from "./remote-access/index.js";
 import { createUploadRoutes } from "./routes/upload.js";
 import { createWsRelayRoutes } from "./routes/ws-relay.js";
 import {
@@ -39,6 +43,7 @@ import {
   type MockScenario,
 } from "./sdk/providers/__mocks__/index.js";
 import type { ProviderName } from "./sdk/providers/types.js";
+import { ClaudeSessionReader } from "./sessions/reader.js";
 import { setupMockProjects } from "./testing/mockProjectData.js";
 import { UploadManager } from "./uploads/manager.js";
 import { EventBus, FileWatcher } from "./watcher/index.js";
@@ -184,6 +189,11 @@ createWatcherIfExists(config.claudeSessionsDir, "claude");
 createWatcherIfExists(config.geminiSessionsDir, "gemini");
 createWatcherIfExists(config.codexSessionsDir, "codex");
 
+// Create RemoteAccessService for secure WebSocket testing
+const remoteAccessService = new RemoteAccessService({
+  dataDir: config.dataDir,
+});
+
 // Create frontend proxy or static routes depending on configuration
 // If VITE_PORT=0 and CLIENT_DIST_PATH exists, serve static files
 // Otherwise, proxy to Vite dev server
@@ -213,11 +223,28 @@ if (config.serveFrontend) {
 
 // Create the main app first (without WebSocket support or frontend proxy)
 // We'll add those after setting up WebSocket support to ensure correct route order
-const { app, supervisor } = createApp({
+const {
+  app,
+  supervisor,
+  scanner: appScanner,
+} = createApp({
   sdk: mockSdk,
   idleTimeoutMs: 60000, // 1 minute for testing
   eventBus,
+  remoteAccessService,
   // Note: upgradeWebSocket and frontendProxy not passed - will be added below
+});
+
+// Set up debug context for maintenance server
+setDebugContext({
+  supervisor,
+  claudeSessionsDir: config.claudeSessionsDir,
+  getSessionReader: async (projectPath: string) => {
+    const projects = await appScanner.listProjects();
+    const project = projects.find((p) => p.path === projectPath);
+    if (!project || project.provider !== "claude") return null;
+    return new ClaudeSessionReader({ sessionDir: project.sessionDir });
+  },
 });
 
 // Set up WebSocket support with the main app
@@ -241,6 +268,7 @@ const wsRelayHandler = createWsRelayRoutes({
   supervisor,
   eventBus,
   uploadManager: wsRelayUploadManager,
+  remoteAccessService,
 });
 app.get("/api/ws", wsRelayHandler);
 
@@ -302,26 +330,46 @@ if (useStaticFiles) {
   });
 }
 
-const port = config.port;
-const server = serve({ fetch: app.fetch, port }, () => {
-  // Get actual port (important when binding to port 0)
-  const addr = server.address();
-  const actualPort = typeof addr === "object" && addr ? addr.port : port;
-  console.log(`Mock server running at http://localhost:${actualPort}`);
-  console.log(`Default provider: ${DEFAULT_PROVIDER}`);
-  console.log(`Message delay: ${DELAY_MS}ms`);
-  console.log("Available mock providers: claude, codex, gemini, local");
-});
+// Start the server (async to allow service initialization)
+async function startServer() {
+  // Initialize remote access service (loads state from disk)
+  await remoteAccessService.initialize();
 
-// Attach unified WebSocket upgrade handler
-// This replaces both attachFrontendProxyUpgrade and injectWebSocket to avoid
-// conflicts where both would try to handle the same upgrade request
-attachUnifiedUpgradeHandler(server, {
-  frontendProxy,
-  isApiPath: (urlPath) => urlPath.startsWith("/api"),
-  app,
-  wss,
+  const port = config.port;
+  const server = serve({ fetch: app.fetch, port }, () => {
+    // Get actual port (important when binding to port 0)
+    const addr = server.address();
+    const actualPort = typeof addr === "object" && addr ? addr.port : port;
+    console.log(`Mock server running at http://localhost:${actualPort}`);
+    console.log(`Default provider: ${DEFAULT_PROVIDER}`);
+    console.log(`Message delay: ${DELAY_MS}ms`);
+    console.log("Available mock providers: claude, codex, gemini, local");
+
+    // Start maintenance server on separate port (for out-of-band diagnostics)
+    // In dev-mock, always start maintenance server (port 0 = auto-assign)
+    // This enables E2E tests to use the debug API
+    startMaintenanceServer({
+      port: 0, // Auto-assign port
+      host: config.host,
+      mainServerPort: actualPort,
+    });
+  });
+
+  // Attach unified WebSocket upgrade handler
+  // This replaces both attachFrontendProxyUpgrade and injectWebSocket to avoid
+  // conflicts where both would try to handle the same upgrade request
+  attachUnifiedUpgradeHandler(server, {
+    frontendProxy,
+    isApiPath: (urlPath) => urlPath.startsWith("/api"),
+    app,
+    wss,
+  });
+}
+
+startServer().catch((error) => {
+  console.error("Failed to start mock server:", error);
+  process.exit(1);
 });
 
 // Export for testing
-export { mockProviders, mockSdk, DEFAULT_PROVIDER };
+export { mockProviders, mockSdk, DEFAULT_PROVIDER, remoteAccessService };

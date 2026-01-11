@@ -112,6 +112,33 @@ interface RelayUploadState {
 /** Progress report interval in bytes (64KB) */
 const PROGRESS_INTERVAL = 64 * 1024;
 
+/**
+ * Encryption-aware send function type.
+ * Created per-connection, captures connection state for automatic encryption.
+ */
+type SendFn = (msg: YepMessage) => void;
+
+/**
+ * Create an encryption-aware send function for a connection.
+ * Automatically encrypts messages when the connection is authenticated with a session key.
+ */
+const createSendFn = (ws: WSContext, connState: ConnectionState): SendFn => {
+  return (msg: YepMessage) => {
+    if (connState.authState === "authenticated" && connState.sessionKey) {
+      const plaintext = JSON.stringify(msg);
+      const { nonce, ciphertext } = encrypt(plaintext, connState.sessionKey);
+      const envelope: EncryptedEnvelope = {
+        type: "encrypted",
+        nonce,
+        ciphertext,
+      };
+      ws.send(JSON.stringify(envelope));
+    } else {
+      ws.send(JSON.stringify(msg));
+    }
+  };
+};
+
 export function createWsRelayRoutes(
   deps: WsRelayDeps,
 ): ReturnType<typeof deps.upgradeWebSocket> {
@@ -126,37 +153,6 @@ export function createWsRelayRoutes(
   } = deps;
 
   /**
-   * Send a plaintext message (used by all internal handlers).
-   * Encryption is handled at the handler boundary.
-   */
-  const sendMessage = (ws: WSContext, msg: YepMessage) => {
-    ws.send(JSON.stringify(msg));
-  };
-
-  /**
-   * Send a message with optional encryption based on connection state.
-   * Used at the handler boundary.
-   */
-  const sendEncrypted = (
-    ws: WSContext,
-    msg: YepMessage,
-    connState: ConnectionState,
-  ) => {
-    if (connState.authState === "authenticated" && connState.sessionKey) {
-      const plaintext = JSON.stringify(msg);
-      const { nonce, ciphertext } = encrypt(plaintext, connState.sessionKey);
-      const envelope: EncryptedEnvelope = {
-        type: "encrypted",
-        nonce,
-        ciphertext,
-      };
-      ws.send(JSON.stringify(envelope));
-    } else {
-      ws.send(JSON.stringify(msg));
-    }
-  };
-
-  /**
    * Send a plaintext SRP message (always unencrypted during handshake).
    */
   const sendSrpMessage = (
@@ -166,62 +162,12 @@ export function createWsRelayRoutes(
     ws.send(JSON.stringify(msg));
   };
 
-  const sendError = (
-    ws: WSContext,
-    requestId: string,
-    status: number,
-    message: string,
-  ) => {
-    const response: RelayResponse = {
-      type: "response",
-      id: requestId,
-      status,
-      body: { error: message },
-    };
-    sendMessage(ws, response);
-  };
-
-  const sendUploadProgress = (
-    ws: WSContext,
-    uploadId: string,
-    bytesReceived: number,
-  ) => {
-    const msg: RelayUploadProgress = {
-      type: "upload_progress",
-      uploadId,
-      bytesReceived,
-    };
-    sendMessage(ws, msg);
-  };
-
-  const sendUploadComplete = (
-    ws: WSContext,
-    uploadId: string,
-    file: RelayUploadComplete["file"],
-  ) => {
-    const msg: RelayUploadComplete = {
-      type: "upload_complete",
-      uploadId,
-      file,
-    };
-    sendMessage(ws, msg);
-  };
-
-  const sendUploadError = (ws: WSContext, uploadId: string, error: string) => {
-    const msg: RelayUploadError = {
-      type: "upload_error",
-      uploadId,
-      error,
-    };
-    sendMessage(ws, msg);
-  };
-
   /**
    * Handle a RelayRequest by routing it through the Hono app.
    */
   const handleRequest = async (
-    ws: WSContext,
     request: RelayRequest,
+    send: SendFn,
   ): Promise<void> => {
     try {
       // Build the full URL
@@ -287,18 +233,22 @@ export function createWsRelayRoutes(
       }
 
       // Send response
-      const relayResponse: RelayResponse = {
+      send({
         type: "response",
         id: request.id,
         status: response.status,
         headers:
           Object.keys(responseHeaders).length > 0 ? responseHeaders : undefined,
         body,
-      };
-      sendMessage(ws, relayResponse);
+      });
     } catch (err) {
       console.error("[WS Relay] Request error:", err);
-      sendError(ws, request.id, 500, "Internal server error");
+      send({
+        type: "response",
+        id: request.id,
+        status: 500,
+        body: { error: "Internal server error" },
+      });
     }
   };
 
@@ -307,25 +257,30 @@ export function createWsRelayRoutes(
    * Subscribes to process events, computes augments, and forwards them as RelayEvent messages.
    */
   const handleSessionSubscribe = (
-    ws: WSContext,
     subscriptions: Map<string, () => void>,
     msg: RelaySubscribe,
+    send: SendFn,
   ): void => {
     const { subscriptionId, sessionId } = msg;
 
     if (!sessionId) {
-      sendError(
-        ws,
-        subscriptionId,
-        400,
-        "sessionId required for session channel",
-      );
+      send({
+        type: "response",
+        id: subscriptionId,
+        status: 400,
+        body: { error: "sessionId required for session channel" },
+      });
       return;
     }
 
     const process = supervisor.getProcessForSession(sessionId);
     if (!process) {
-      sendError(ws, subscriptionId, 404, "No active process for session");
+      send({
+        type: "response",
+        id: subscriptionId,
+        status: 404,
+        body: { error: "No active process for session" },
+      });
       return;
     }
 
@@ -336,14 +291,13 @@ export function createWsRelayRoutes(
 
     // Helper to send a relay event
     const sendEvent = (eventType: string, data: unknown) => {
-      const relayEvent: RelayEvent = {
+      send({
         type: "event",
         subscriptionId,
         eventType,
         eventId: String(eventId++),
         data,
-      };
-      sendMessage(ws, relayEvent);
+      });
     };
 
     // Create stream augmenter lazily with WebSocket-specific emitters
@@ -371,7 +325,7 @@ export function createWsRelayRoutes(
 
     // Send initial connected event with current state
     const currentState = process.state;
-    const connectedEvent: RelayEvent = {
+    send({
       type: "event",
       subscriptionId,
       eventType: "connected",
@@ -388,19 +342,17 @@ export function createWsRelayRoutes(
           ? { request: currentState.request }
           : {}),
       },
-    };
-    sendMessage(ws, connectedEvent);
+    });
 
     // Replay buffered messages
     for (const message of process.getMessageHistory()) {
-      const messageEvent: RelayEvent = {
+      send({
         type: "event",
         subscriptionId,
         eventType: "message",
         eventId: String(eventId++),
         data: markSubagent(message),
-      };
-      sendMessage(ws, messageEvent);
+      });
     }
 
     // Catch-up: send accumulated streaming text as pending HTML for late-joining clients
@@ -537,35 +489,33 @@ export function createWsRelayRoutes(
    * Subscribes to event bus and forwards events as RelayEvent messages.
    */
   const handleActivitySubscribe = (
-    ws: WSContext,
     subscriptions: Map<string, () => void>,
     msg: RelaySubscribe,
+    send: SendFn,
   ): void => {
     const { subscriptionId } = msg;
 
     let eventId = 0;
 
     // Send initial connected event
-    const connectedEvent: RelayEvent = {
+    send({
       type: "event",
       subscriptionId,
       eventType: "connected",
       eventId: String(eventId++),
       data: { timestamp: new Date().toISOString() },
-    };
-    sendMessage(ws, connectedEvent);
+    });
 
     // Set up heartbeat
     const heartbeatInterval = setInterval(() => {
       try {
-        const heartbeatEvent: RelayEvent = {
+        send({
           type: "event",
           subscriptionId,
           eventType: "heartbeat",
           eventId: String(eventId++),
           data: { timestamp: new Date().toISOString() },
-        };
-        sendMessage(ws, heartbeatEvent);
+        });
       } catch {
         clearInterval(heartbeatInterval);
       }
@@ -574,14 +524,13 @@ export function createWsRelayRoutes(
     // Subscribe to event bus
     const unsubscribe = eventBus.subscribe((event) => {
       try {
-        const relayEvent: RelayEvent = {
+        send({
           type: "event",
           subscriptionId,
           eventType: event.type,
           eventId: String(eventId++),
           data: event,
-        };
-        sendMessage(ws, relayEvent);
+        });
       } catch (err) {
         console.error("[WS Relay] Error sending activity event:", err);
       }
@@ -600,29 +549,39 @@ export function createWsRelayRoutes(
    * Handle a subscribe message.
    */
   const handleSubscribe = (
-    ws: WSContext,
     subscriptions: Map<string, () => void>,
     msg: RelaySubscribe,
+    send: SendFn,
   ): void => {
     const { subscriptionId, channel } = msg;
 
     // Check if already subscribed with this ID
     if (subscriptions.has(subscriptionId)) {
-      sendError(ws, subscriptionId, 400, "Subscription ID already in use");
+      send({
+        type: "response",
+        id: subscriptionId,
+        status: 400,
+        body: { error: "Subscription ID already in use" },
+      });
       return;
     }
 
     switch (channel) {
       case "session":
-        handleSessionSubscribe(ws, subscriptions, msg);
+        handleSessionSubscribe(subscriptions, msg, send);
         break;
 
       case "activity":
-        handleActivitySubscribe(ws, subscriptions, msg);
+        handleActivitySubscribe(subscriptions, msg, send);
         break;
 
       default:
-        sendError(ws, subscriptionId, 400, `Unknown channel: ${channel}`);
+        send({
+          type: "response",
+          id: subscriptionId,
+          status: 400,
+          body: { error: `Unknown channel: ${channel}` },
+        });
     }
   };
 
@@ -646,15 +605,19 @@ export function createWsRelayRoutes(
    * Handle upload_start message.
    */
   const handleUploadStart = async (
-    ws: WSContext,
     uploads: Map<string, RelayUploadState>,
     msg: RelayUploadStart,
+    send: SendFn,
   ): Promise<void> => {
     const { uploadId, projectId, sessionId, filename, size, mimeType } = msg;
 
     // Check for duplicate upload ID
     if (uploads.has(uploadId)) {
-      sendUploadError(ws, uploadId, "Upload ID already in use");
+      send({
+        type: "upload_error",
+        uploadId,
+        error: "Upload ID already in use",
+      });
       return;
     }
 
@@ -678,7 +641,7 @@ export function createWsRelayRoutes(
       });
 
       // Send initial progress (0 bytes)
-      sendUploadProgress(ws, uploadId, 0);
+      send({ type: "upload_progress", uploadId, bytesReceived: 0 });
 
       console.log(
         `[WS Relay] Upload started: ${uploadId} (${filename}, ${size} bytes)`,
@@ -686,7 +649,7 @@ export function createWsRelayRoutes(
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to start upload";
-      sendUploadError(ws, uploadId, message);
+      send({ type: "upload_error", uploadId, error: message });
     }
   };
 
@@ -694,25 +657,25 @@ export function createWsRelayRoutes(
    * Handle upload_chunk message.
    */
   const handleUploadChunk = async (
-    ws: WSContext,
     uploads: Map<string, RelayUploadState>,
     msg: RelayUploadChunk,
+    send: SendFn,
   ): Promise<void> => {
     const { uploadId, offset, data } = msg;
 
     const state = uploads.get(uploadId);
     if (!state) {
-      sendUploadError(ws, uploadId, "Upload not found");
+      send({ type: "upload_error", uploadId, error: "Upload not found" });
       return;
     }
 
     // Validate offset matches expected position
     if (offset !== state.bytesReceived) {
-      sendUploadError(
-        ws,
+      send({
+        type: "upload_error",
         uploadId,
-        `Invalid offset: expected ${state.bytesReceived}, got ${offset}`,
-      );
+        error: `Invalid offset: expected ${state.bytesReceived}, got ${offset}`,
+      });
       return;
     }
 
@@ -733,13 +696,13 @@ export function createWsRelayRoutes(
         bytesReceived - state.lastProgressReport >= PROGRESS_INTERVAL ||
         bytesReceived === state.expectedSize
       ) {
-        sendUploadProgress(ws, uploadId, bytesReceived);
+        send({ type: "upload_progress", uploadId, bytesReceived });
         state.lastProgressReport = bytesReceived;
       }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to write chunk";
-      sendUploadError(ws, uploadId, message);
+      send({ type: "upload_error", uploadId, error: message });
       // Clean up failed upload
       uploads.delete(uploadId);
       try {
@@ -754,15 +717,15 @@ export function createWsRelayRoutes(
    * Handle upload_end message.
    */
   const handleUploadEnd = async (
-    ws: WSContext,
     uploads: Map<string, RelayUploadState>,
     msg: RelayUploadEnd,
+    send: SendFn,
   ): Promise<void> => {
     const { uploadId } = msg;
 
     const state = uploads.get(uploadId);
     if (!state) {
-      sendUploadError(ws, uploadId, "Upload not found");
+      send({ type: "upload_error", uploadId, error: "Upload not found" });
       return;
     }
 
@@ -774,7 +737,7 @@ export function createWsRelayRoutes(
       uploads.delete(uploadId);
 
       // Send completion message
-      sendUploadComplete(ws, uploadId, file);
+      send({ type: "upload_complete", uploadId, file });
 
       console.log(
         `[WS Relay] Upload complete: ${uploadId} (${file.size} bytes)`,
@@ -782,7 +745,7 @@ export function createWsRelayRoutes(
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to complete upload";
-      sendUploadError(ws, uploadId, message);
+      send({ type: "upload_error", uploadId, error: message });
       // Clean up failed upload
       uploads.delete(uploadId);
       try {
@@ -953,6 +916,7 @@ export function createWsRelayRoutes(
     subscriptions: Map<string, () => void>,
     uploads: Map<string, RelayUploadState>,
     connState: ConnectionState,
+    send: SendFn,
     data: unknown,
   ): Promise<void> => {
     // Parse message
@@ -1020,11 +984,11 @@ export function createWsRelayRoutes(
     // Route by message type
     switch (msg.type) {
       case "request":
-        await handleRequest(ws, msg);
+        await handleRequest(msg, send);
         break;
 
       case "subscribe":
-        handleSubscribe(ws, subscriptions, msg);
+        handleSubscribe(subscriptions, msg, send);
         break;
 
       case "unsubscribe":
@@ -1032,15 +996,15 @@ export function createWsRelayRoutes(
         break;
 
       case "upload_start":
-        await handleUploadStart(ws, uploads, msg);
+        await handleUploadStart(uploads, msg, send);
         break;
 
       case "upload_chunk":
-        await handleUploadChunk(ws, uploads, msg);
+        await handleUploadChunk(uploads, msg, send);
         break;
 
       case "upload_end":
-        await handleUploadEnd(ws, uploads, msg);
+        await handleUploadEnd(uploads, msg, send);
         break;
 
       default:
@@ -1066,10 +1030,14 @@ export function createWsRelayRoutes(
       authState: "unauthenticated",
       username: null,
     };
+    // Encryption-aware send function (created on open, captures connState)
+    let send: SendFn;
 
     return {
       onOpen(_evt, ws) {
         console.log("[WS Relay] Client connected");
+        // Create the send function that captures this connection's state
+        send = createSendFn(ws, connState);
         // If remote access is not enabled, allow unauthenticated connections
         if (!remoteAccessService?.isEnabled()) {
           // In local mode, connections are implicitly authenticated
@@ -1080,11 +1048,16 @@ export function createWsRelayRoutes(
       onMessage(evt, ws) {
         // Queue messages for sequential processing
         messageQueue = messageQueue.then(() =>
-          handleMessage(ws, subscriptions, uploads, connState, evt.data).catch(
-            (err) => {
-              console.error("[WS Relay] Unexpected error:", err);
-            },
-          ),
+          handleMessage(
+            ws,
+            subscriptions,
+            uploads,
+            connState,
+            send,
+            evt.data,
+          ).catch((err) => {
+            console.error("[WS Relay] Unexpected error:", err);
+          }),
         );
       },
 

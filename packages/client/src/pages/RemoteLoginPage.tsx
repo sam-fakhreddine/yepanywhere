@@ -1,0 +1,138 @@
+/**
+ * RemoteLoginPage - Login form for remote access via SecureConnection.
+ *
+ * Collects server URL, username, and password for SRP authentication.
+ * On successful auth, the app switches to the main view.
+ */
+
+import { useState } from "react";
+import { YepAnywhereLogo } from "../components/YepAnywhereLogo";
+import { useRemoteConnection } from "../contexts/RemoteConnectionContext";
+
+export function RemoteLoginPage() {
+  const { connect, isConnecting, error, storedUrl, storedUsername } =
+    useRemoteConnection();
+
+  // Form state - pre-fill from stored credentials
+  const [serverUrl, setServerUrl] = useState(
+    storedUrl ?? "ws://localhost:3400/ws",
+  );
+  const [username, setUsername] = useState(storedUsername ?? "");
+  const [password, setPassword] = useState("");
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+
+    // Validate inputs
+    if (!serverUrl.trim()) {
+      setLocalError("Server URL is required");
+      return;
+    }
+
+    if (!username.trim()) {
+      setLocalError("Username is required");
+      return;
+    }
+
+    if (!password) {
+      setLocalError("Password is required");
+      return;
+    }
+
+    // Normalize URL - ensure it's a WebSocket URL
+    let wsUrl = serverUrl.trim();
+    if (wsUrl.startsWith("http://")) {
+      wsUrl = wsUrl.replace("http://", "ws://");
+    } else if (wsUrl.startsWith("https://")) {
+      wsUrl = wsUrl.replace("https://", "wss://");
+    } else if (!wsUrl.startsWith("ws://") && !wsUrl.startsWith("wss://")) {
+      wsUrl = `ws://${wsUrl}`;
+    }
+
+    // Ensure /ws path
+    if (!wsUrl.endsWith("/ws")) {
+      wsUrl = `${wsUrl.replace(/\/$/, "")}/ws`;
+    }
+
+    try {
+      await connect(wsUrl, username.trim(), password);
+      // On success, the RemoteApp will render the main app instead of login
+    } catch {
+      // Error is already set in context
+    }
+  };
+
+  const displayError = localError ?? error;
+
+  return (
+    <div className="login-page">
+      <div className="login-container">
+        <div className="login-logo">
+          <YepAnywhereLogo />
+        </div>
+        <p className="login-subtitle">Connect to your Yep Anywhere server</p>
+
+        <form onSubmit={handleSubmit} className="login-form">
+          <div className="login-field">
+            <label htmlFor="serverUrl">Server URL</label>
+            <input
+              id="serverUrl"
+              type="text"
+              value={serverUrl}
+              onChange={(e) => setServerUrl(e.target.value)}
+              placeholder="ws://localhost:3400/ws"
+              disabled={isConnecting}
+              autoComplete="url"
+            />
+            <p className="login-field-hint">
+              Your server's address (e.g., ws://192.168.1.50:3400/ws)
+            </p>
+          </div>
+
+          <div className="login-field">
+            <label htmlFor="username">Username</label>
+            <input
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter username"
+              disabled={isConnecting}
+              autoComplete="username"
+            />
+          </div>
+
+          <div className="login-field">
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password"
+              disabled={isConnecting}
+              autoComplete="current-password"
+            />
+          </div>
+
+          {displayError && <div className="login-error">{displayError}</div>}
+
+          <button
+            type="submit"
+            className="login-button"
+            disabled={isConnecting}
+          >
+            {isConnecting ? "Connecting..." : "Connect"}
+          </button>
+        </form>
+
+        <p className="login-hint">
+          Remote access must be enabled in your server's Settings. The username
+          and password are set there.
+        </p>
+      </div>
+    </div>
+  );
+}

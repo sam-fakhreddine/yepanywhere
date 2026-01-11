@@ -5,6 +5,7 @@ import type {
 } from "@yep-anywhere/shared";
 import { getWebsocketTransportEnabled } from "../hooks/useDeveloperMode";
 import type { SessionStatus, SessionSummary } from "../types";
+import { getGlobalConnection } from "./connection";
 import type { Subscription } from "./connection/types";
 
 // Event types matching what the server emits
@@ -144,11 +145,18 @@ class ActivityBus {
 
   /**
    * Connect to the activity stream. Safe to call multiple times.
-   * Uses WebSocket transport when enabled, otherwise SSE.
+   * Uses global connection (remote mode), WebSocket transport when enabled, otherwise SSE.
    */
   connect(): void {
     // Check if already connected
     if (this.eventSource || this.wsSubscription) return;
+
+    // Check for global connection (remote mode with SecureConnection)
+    const globalConn = getGlobalConnection();
+    if (globalConn) {
+      this.connectWithConnection(globalConn);
+      return;
+    }
 
     // Check if WebSocket transport is enabled
     this.useWebSocket = getWebsocketTransportEnabled();
@@ -158,6 +166,47 @@ class ActivityBus {
     } else {
       this.connectSSE();
     }
+  }
+
+  /**
+   * Connect using a provided connection (for remote mode).
+   */
+  private connectWithConnection(connection: {
+    subscribeActivity: (handlers: {
+      onEvent: (
+        eventType: string,
+        eventId: string | undefined,
+        data: unknown,
+      ) => void;
+      onOpen?: () => void;
+      onError?: (err: Error) => void;
+    }) => Subscription;
+  }): void {
+    this.wsSubscription = connection.subscribeActivity({
+      onEvent: (eventType, _eventId, data) => {
+        this.handleWsEvent(eventType, data);
+      },
+      onOpen: () => {
+        const isReconnect = this.hasConnected;
+        this.hasConnected = true;
+        this._connected = true;
+
+        if (isReconnect) {
+          this.emit("reconnect", undefined);
+        }
+      },
+      onError: (err) => {
+        console.error("[ActivityBus] Connection error:", err);
+        this._connected = false;
+        this.wsSubscription = null;
+
+        // Auto-reconnect
+        this.reconnectTimeout = setTimeout(
+          () => this.connect(),
+          RECONNECT_DELAY_MS,
+        );
+      },
+    });
   }
 
   /**

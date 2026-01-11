@@ -15,6 +15,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const PORT_FILE = join(tmpdir(), "claude-e2e-port");
+const MAINTENANCE_PORT_FILE = join(tmpdir(), "claude-e2e-maintenance-port");
 const PID_FILE = join(tmpdir(), "claude-e2e-pid");
 
 // Isolated test directories to avoid polluting real ~/.claude, ~/.codex, ~/.gemini
@@ -35,7 +36,7 @@ export {
 
 export default async function globalSetup() {
   // Clean up any stale files
-  for (const file of [PORT_FILE, PID_FILE]) {
+  for (const file of [PORT_FILE, MAINTENANCE_PORT_FILE, PID_FILE]) {
     if (existsSync(file)) {
       unlinkSync(file);
     }
@@ -86,6 +87,7 @@ export default async function globalSetup() {
 
   // Start server with PORT=0 for auto-assignment, serving built assets
   // Pass isolated session directories via env vars
+  // Enable maintenance server for test configuration (also auto-assign port)
   const serverProcess = spawn(
     "pnpm",
     ["exec", "tsx", "--conditions", "source", "src/dev-mock.ts"],
@@ -94,6 +96,7 @@ export default async function globalSetup() {
       env: {
         ...process.env,
         PORT: "0",
+        // Note: dev-mock.ts always starts maintenance server with auto-assign port
         SERVE_FRONTEND: "true",
         CLIENT_DIST_PATH: clientDist,
         LOG_FILE: "e2e-server.log",
@@ -114,52 +117,100 @@ export default async function globalSetup() {
     writeFileSync(PID_FILE, String(serverProcess.pid));
   }
 
-  // Wait for server to output its port
-  const port = await new Promise<number>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(new Error("Timeout waiting for server to start (30s)"));
-    }, 30000);
+  // Wait for both main server and maintenance server to output their ports
+  const ports = await new Promise<{ main: number; maintenance: number }>(
+    (resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error("Timeout waiting for server to start (30s)"));
+      }, 30000);
 
-    let output = "";
+      let output = "";
+      let mainPort: number | null = null;
+      let maintenancePort: number | null = null;
 
-    serverProcess.stdout?.on("data", (data: Buffer) => {
-      output += data.toString();
-      // Look for "Mock server running at http://localhost:XXXX"
-      const match = output.match(
-        /Mock server running at http:\/\/localhost:(\d+)/,
-      );
-      if (match) {
+      const checkComplete = () => {
+        if (mainPort !== null && maintenancePort !== null) {
+          clearTimeout(timeout);
+          resolve({ main: mainPort, maintenance: maintenancePort });
+        }
+      };
+
+      serverProcess.stdout?.on("data", (data: Buffer) => {
+        output += data.toString();
+
+        // Look for "Mock server running at http://localhost:XXXX"
+        if (mainPort === null) {
+          const mainMatch = output.match(
+            /Mock server running at http:\/\/localhost:(\d+)/,
+          );
+          if (mainMatch) {
+            mainPort = Number.parseInt(mainMatch[1], 10);
+            checkComplete();
+          }
+        }
+
+        // Look for "[Maintenance] Server running at http://..."
+        if (maintenancePort === null) {
+          const maintenanceMatch = output.match(
+            /\[Maintenance\] Server running at http:\/\/[^:]+:(\d+)/,
+          );
+          if (maintenanceMatch) {
+            maintenancePort = Number.parseInt(maintenanceMatch[1], 10);
+            checkComplete();
+          }
+        }
+      });
+
+      serverProcess.stderr?.on("data", (data: Buffer) => {
+        const msg = data.toString();
+        if (!msg.includes("ExperimentalWarning")) {
+          console.error("[E2E Server]", msg);
+        }
+      });
+
+      serverProcess.on("error", (err) => {
         clearTimeout(timeout);
-        resolve(Number.parseInt(match[1], 10));
+        reject(err);
+      });
+
+      serverProcess.on("exit", (code) => {
+        if (code !== 0 && code !== null) {
+          clearTimeout(timeout);
+          reject(new Error(`Server exited with code ${code}`));
+        }
+      });
+    },
+  );
+
+  // Write ports to files for tests to read
+  writeFileSync(PORT_FILE, String(ports.main));
+  writeFileSync(MAINTENANCE_PORT_FILE, String(ports.maintenance));
+  console.log(`[E2E] Server started on port ${ports.main}`);
+  console.log(`[E2E] Maintenance server on port ${ports.maintenance}`);
+
+  // Health check: wait for server to be ready
+  const healthCheckUrl = `http://localhost:${ports.main}/health`;
+  let attempts = 0;
+  const maxAttempts = 30;
+  while (attempts < maxAttempts) {
+    try {
+      const response = await fetch(healthCheckUrl);
+      if (response.ok) {
+        console.log("[E2E] Server health check passed");
+        break;
       }
-    });
-
-    serverProcess.stderr?.on("data", (data: Buffer) => {
-      const msg = data.toString();
-      if (!msg.includes("ExperimentalWarning")) {
-        console.error("[E2E Server]", msg);
-      }
-    });
-
-    serverProcess.on("error", (err) => {
-      clearTimeout(timeout);
-      reject(err);
-    });
-
-    serverProcess.on("exit", (code) => {
-      if (code !== 0 && code !== null) {
-        clearTimeout(timeout);
-        reject(new Error(`Server exited with code ${code}`));
-      }
-    });
-  });
-
-  // Write port to file for tests to read
-  writeFileSync(PORT_FILE, String(port));
-  console.log(`[E2E] Server started on port ${port}`);
+    } catch {
+      // Server not ready yet
+    }
+    attempts++;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  if (attempts >= maxAttempts) {
+    throw new Error("Server health check failed after 30 attempts");
+  }
 
   // Unref so the process doesn't block node exit
   serverProcess.unref();
 }
 
-export { PORT_FILE, PID_FILE };
+export { PORT_FILE, MAINTENANCE_PORT_FILE, PID_FILE };

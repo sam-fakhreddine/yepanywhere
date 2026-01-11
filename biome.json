@@ -10,6 +10,7 @@
     "ignore": [
       "node_modules",
       "dist",
+      "dist-*",
       "*.d.ts",
       "claude-vscode-extension",
       "docs/tasks",

@@ -9,7 +9,7 @@ import type {
   UploadedFile,
 } from "@yep-anywhere/shared";
 import { getWebsocketTransportEnabled } from "../hooks/useDeveloperMode";
-import { getWebSocketConnection } from "../lib/connection";
+import { getGlobalConnection, getWebSocketConnection } from "../lib/connection";
 import type {
   AgentSession,
   InputRequest,
@@ -138,6 +138,12 @@ export async function fetchJSON<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
+  // Route through global connection in remote mode (SecureConnection)
+  const globalConn = getGlobalConnection();
+  if (globalConn) {
+    return globalConn.fetch<T>(path, options);
+  }
+
   // Route through WebSocket if enabled (Phase 2b)
   if (getWebsocketTransportEnabled()) {
     return getWebSocketConnection().fetch<T>(path, options);

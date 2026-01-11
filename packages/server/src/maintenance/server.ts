@@ -190,7 +190,10 @@ export function startMaintenanceServer(options: MaintenanceServerOptions): {
   });
 
   server.listen(port, host, () => {
-    console.log(`[Maintenance] Server running at http://${host}:${port}`);
+    // Get actual port (important when binding to port 0)
+    const addr = server.address();
+    const actualPort = typeof addr === "object" && addr ? addr.port : port;
+    console.log(`[Maintenance] Server running at http://${host}:${actualPort}`);
   });
 
   // Handle errors gracefully

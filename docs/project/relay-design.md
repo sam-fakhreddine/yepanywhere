@@ -396,6 +396,47 @@ Tasks:
 - [x] SRP verifier storage in data dir
 - [x] Settings UI for remote access (username/password setup)
 
+### Phase 3.5: Static Site for Direct Secure Testing
+
+Before adding relay complexity, validate the full secure connection flow using a GitHub Pages-hosted client that connects directly to the yepanywhere server.
+
+**Static Site Build** (in `packages/client/`)
+- [x] Add `remote.html` entrypoint and `remote-main.tsx`
+- [x] Add `vite.config.remote.ts` for static site build
+- [x] Add `pnpm build:remote` and `pnpm dev:remote` scripts
+- [x] GitHub Actions workflow to deploy `dist-remote/` to GitHub Pages on push to main
+
+**Login Entrypoint**
+- [x] Standalone login page (RemoteLoginPage.tsx)
+- [x] Form: WebSocket URL input (default: `ws://localhost:3400/ws`)
+- [x] Form: Username and password fields
+- [x] "Remember URL" option (stores URL/username in localStorage)
+- [x] SRP handshake via SecureConnection
+- [x] On success, render main app with SecureConnection
+
+**Connection Flow**
+- [x] Remote client uses SecureConnection exclusively (no DirectConnection)
+- [x] All API calls go through encrypted WebSocket (global connection routing)
+- [x] URL/username stored in localStorage for reconnection (password not stored)
+- [x] Handle connection errors gracefully (shows error in login form)
+
+**Testing Scenarios**
+- [ ] Localhost dev server → localhost yepanywhere (primary development flow)
+- [ ] E2E test with Playwright: full login flow (enter URL/credentials → SRP → app loads)
+- [ ] E2E test: verify API calls work through SecureConnection (list sessions, etc.)
+- [ ] E2E test: verify SSE streaming works (send message, see response)
+- [ ] LAN testing once localhost works (e.g., `ws://192.168.1.50:3400/ws`)
+
+**Nice to Have**
+- [ ] QR code generation on server settings page (encodes WS URL + username)
+- [ ] QR scanner on static site login (phone camera → quick connect)
+
+This phase validates:
+1. SRP authentication works from external origin
+2. SecureConnection handles all app traffic correctly
+3. Encryption/decryption is seamless
+4. The protocol is ready for relay passthrough
+
 ### Phase 4: Relay
 - [ ] Separate relay package/service
 - [ ] Accept yepanywhere server connections (authenticated)
