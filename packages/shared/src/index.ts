@@ -365,3 +365,31 @@ export {
   decompressBytes,
   compressJsonIfBeneficial,
 } from "./compression.js";
+
+// Relay server routing protocol (for relay server <-> yepanywhere/phone)
+export type {
+  RelayServerRegister,
+  RelayServerRegistered,
+  RelayServerRejectedReason,
+  RelayServerRejected,
+  RelayClientConnect,
+  RelayClientConnected,
+  RelayClientErrorReason,
+  RelayClientError,
+  RelayServerMessage,
+  RelayServerResponse,
+  RelayClientMessage,
+  RelayClientResponse,
+  RelayRoutingMessage,
+} from "./relay-protocol.js";
+
+export {
+  isRelayServerRegister,
+  isRelayServerRegistered,
+  isRelayServerRejected,
+  isRelayClientConnect,
+  isRelayClientConnected,
+  isRelayClientError,
+  USERNAME_REGEX,
+  isValidRelayUsername,
+} from "./relay-protocol.js";
