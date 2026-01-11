@@ -4,6 +4,7 @@ import {
   buildDag,
   collectAllToolResultIds,
   findOrphanedToolUses,
+  findSiblingToolResults,
 } from "../../src/sessions/dag.js";
 
 describe("buildDag", () => {
@@ -429,5 +430,192 @@ describe("buildDag with compaction", () => {
     expect(result.activeBranch[1]?.lineIndex).toBe(1);
     expect(result.activeBranch[2]?.lineIndex).toBe(2); // compact_boundary
     expect(result.activeBranch[3]?.lineIndex).toBe(3);
+  });
+});
+
+describe("findSiblingToolResults", () => {
+  it("finds tool_result on sibling branch for parallel tool calls", () => {
+    // This simulates the parallel tool call pattern:
+    // tool_use #1 (Read file A)
+    // ├── tool_use #2 (Read file B) ← active branch continues here
+    // │   └── tool_result for file B
+    // └── tool_result for file A (sibling branch)
+    const messages: RawSessionMessage[] = [
+      {
+        type: "assistant",
+        uuid: "tool-1",
+        parentUuid: null,
+        message: {
+          content: [{ type: "tool_use", id: "read-1" }],
+        },
+      },
+      {
+        type: "assistant",
+        uuid: "tool-2",
+        parentUuid: "tool-1", // continues from tool-1
+        message: {
+          content: [{ type: "tool_use", id: "read-2" }],
+        },
+      },
+      {
+        type: "user",
+        uuid: "result-2",
+        parentUuid: "tool-2", // result for tool-2, on active branch
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "read-2" }],
+        },
+      },
+      {
+        type: "user",
+        uuid: "result-1",
+        parentUuid: "tool-1", // result for tool-1, sibling of tool-2
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "read-1" }],
+        },
+      },
+    ];
+
+    const { activeBranch } = buildDag(messages);
+    const siblingResults = findSiblingToolResults(activeBranch, messages);
+
+    // Active branch should be: tool-1 → tool-2 → result-2
+    expect(activeBranch.map((n) => n.uuid)).toEqual([
+      "tool-1",
+      "tool-2",
+      "result-2",
+    ]);
+
+    // Sibling result should be found for read-1
+    expect(siblingResults.length).toBe(1);
+    expect(siblingResults[0]?.toolUseIds).toContain("read-1");
+    expect(siblingResults[0]?.parentUuid).toBe("tool-1");
+  });
+
+  it("returns empty array when all tool_results are on active branch", () => {
+    const messages: RawSessionMessage[] = [
+      {
+        type: "assistant",
+        uuid: "a",
+        parentUuid: null,
+        message: {
+          content: [{ type: "tool_use", id: "tool-1" }],
+        },
+      },
+      {
+        type: "user",
+        uuid: "b",
+        parentUuid: "a",
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "tool-1" }],
+        },
+      },
+    ];
+
+    const { activeBranch } = buildDag(messages);
+    const siblingResults = findSiblingToolResults(activeBranch, messages);
+
+    expect(siblingResults.length).toBe(0);
+  });
+
+  it("ignores tool_results for tools not on active branch", () => {
+    // tool_result exists but its tool_use is on a dead branch
+    const messages: RawSessionMessage[] = [
+      { type: "user", uuid: "root", parentUuid: null },
+      {
+        type: "assistant",
+        uuid: "dead-tool",
+        parentUuid: "root",
+        message: {
+          content: [{ type: "tool_use", id: "dead-tool-use" }],
+        },
+      },
+      {
+        type: "user",
+        uuid: "dead-result",
+        parentUuid: "dead-tool",
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "dead-tool-use" }],
+        },
+      },
+      // Active branch continues differently
+      {
+        type: "assistant",
+        uuid: "active",
+        parentUuid: "root",
+        message: {
+          content: [{ type: "text", text: "Active message" }],
+        },
+      },
+      {
+        type: "user",
+        uuid: "tip",
+        parentUuid: "active",
+      },
+    ];
+
+    const { activeBranch } = buildDag(messages);
+    const siblingResults = findSiblingToolResults(activeBranch, messages);
+
+    // Active branch should be: root → active → tip
+    expect(activeBranch.map((n) => n.uuid)).toEqual(["root", "active", "tip"]);
+
+    // No sibling results because dead-tool-use is not on active branch
+    expect(siblingResults.length).toBe(0);
+  });
+
+  it("handles multiple tool_results in same sibling message", () => {
+    // When multiple parallel tools complete, their results may be in one message
+    const messages: RawSessionMessage[] = [
+      {
+        type: "assistant",
+        uuid: "tools",
+        parentUuid: null,
+        message: {
+          content: [
+            { type: "tool_use", id: "tool-1" },
+            { type: "tool_use", id: "tool-2" },
+          ],
+        },
+      },
+      {
+        type: "assistant",
+        uuid: "continues",
+        parentUuid: "tools",
+        message: {
+          content: [{ type: "text", text: "Continuing..." }],
+        },
+      },
+      {
+        type: "user",
+        uuid: "tip",
+        parentUuid: "continues", // extends the active branch
+      },
+      {
+        type: "user",
+        uuid: "sibling-results",
+        parentUuid: "tools", // sibling of "continues"
+        message: {
+          content: [
+            { type: "tool_result", tool_use_id: "tool-1" },
+            { type: "tool_result", tool_use_id: "tool-2" },
+          ],
+        },
+      },
+    ];
+
+    const { activeBranch } = buildDag(messages);
+    const siblingResults = findSiblingToolResults(activeBranch, messages);
+
+    // Active branch should be: tools → continues → tip (length 3)
+    // sibling-results is a dead branch (length 2)
+    expect(activeBranch.map((n) => n.uuid)).toEqual([
+      "tools",
+      "continues",
+      "tip",
+    ]);
+
+    expect(siblingResults.length).toBe(1);
+    expect(siblingResults[0]?.toolUseIds).toContain("tool-1");
+    expect(siblingResults[0]?.toolUseIds).toContain("tool-2");
   });
 });

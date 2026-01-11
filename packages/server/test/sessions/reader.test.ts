@@ -466,20 +466,21 @@ describe("SessionReader", () => {
       const session = loadedSession ? normalizeSession(loadedSession) : null;
 
       // Active branch: tool-use-1 -> tool-use-2 -> result-b -> response
-      // (result-a is on a sibling branch, not in active branch)
-      expect(session?.messages).toHaveLength(4);
+      // result-a is on a sibling branch but is now INCLUDED in the output
+      // (inserted after its parent tool-use-1) so the client can pair it
+      expect(session?.messages).toHaveLength(5);
       expect(session?.messages.map((m) => m.uuid)).toEqual([
         "tool-use-1",
+        "result-a", // sibling tool result, inserted after parent
         "tool-use-2",
         "result-b",
         "response",
       ]);
 
       // CRITICAL: Both tool_uses should NOT be marked as orphaned
-      // even though result-a is on a dead branch, because we now scan
-      // ALL messages for tool_results, not just the active branch
+      // because we scan ALL messages for tool_results, not just the active branch
       expect(session?.messages[0]?.orphanedToolUseIds).toBeUndefined();
-      expect(session?.messages[1]?.orphanedToolUseIds).toBeUndefined();
+      expect(session?.messages[2]?.orphanedToolUseIds).toBeUndefined(); // tool-use-2 is now at index 2
     });
   });
 

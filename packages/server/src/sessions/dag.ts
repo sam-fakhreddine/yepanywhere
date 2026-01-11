@@ -278,3 +278,92 @@ export function findOrphanedToolUses(
 
   return orphaned;
 }
+
+/**
+ * Sibling tool result info with the message and tool_use IDs it contains.
+ */
+export interface SiblingToolResult {
+  /** The raw message containing the tool_result(s) */
+  raw: ClaudeSessionEntry;
+  /** Tool use IDs that this message has results for */
+  toolUseIds: string[];
+  /** UUID of the parent message (the tool_use message) */
+  parentUuid: string;
+}
+
+/**
+ * Find tool_result messages that are on sibling branches (not active branch).
+ *
+ * When Claude makes parallel tool calls, the JSONL structure can result in
+ * tool_results being on sibling branches. For example:
+ *
+ *   tool_use #1 (Read file A)
+ *   ├── tool_use #2 (Read file B)
+ *   │   └── tool_result for file B → continues to conversation tip
+ *   └── tool_result for file A (sibling branch, no children)
+ *
+ * This function finds those sibling tool_result messages so they can be
+ * included in the output for the client to pair with their tool_uses.
+ *
+ * @param activeBranch - The active conversation branch
+ * @param allMessages - All raw messages from the session
+ * @returns Array of sibling tool_result messages with metadata
+ */
+export function findSiblingToolResults(
+  activeBranch: DagNode[],
+  allMessages: ClaudeSessionEntry[],
+): SiblingToolResult[] {
+  // Build set of UUIDs on the active branch
+  const activeBranchUuids = new Set(activeBranch.map((node) => node.uuid));
+
+  // Collect tool_use IDs from active branch
+  const activeToolUseIds = new Set<string>();
+  for (const node of activeBranch) {
+    const content = getMessageContent(node.raw);
+    if (!Array.isArray(content)) continue;
+
+    for (const block of content) {
+      if (typeof block === "string") continue;
+      if (block.type === "tool_use" && "id" in block && block.id) {
+        activeToolUseIds.add(block.id);
+      }
+    }
+  }
+
+  // Find tool_result messages not on active branch that match active tool_uses
+  const siblingResults: SiblingToolResult[] = [];
+
+  for (const msg of allMessages) {
+    // Skip messages on the active branch
+    const uuid = "uuid" in msg ? msg.uuid : undefined;
+    if (!uuid || activeBranchUuids.has(uuid)) continue;
+
+    // Check if this message has tool_results
+    const content = getMessageContent(msg);
+    if (!Array.isArray(content)) continue;
+
+    const matchingToolUseIds: string[] = [];
+    for (const block of content) {
+      if (typeof block === "string") continue;
+      if (
+        block.type === "tool_result" &&
+        "tool_use_id" in block &&
+        block.tool_use_id &&
+        activeToolUseIds.has(block.tool_use_id)
+      ) {
+        matchingToolUseIds.push(block.tool_use_id);
+      }
+    }
+
+    if (matchingToolUseIds.length > 0) {
+      const parentUuid = "parentUuid" in msg ? (msg.parentUuid ?? "") : "";
+      siblingResults.push({
+        raw: msg,
+        toolUseIds: matchingToolUseIds,
+        parentUuid,
+      });
+    }
+  }
+
+  return siblingResults;
+}

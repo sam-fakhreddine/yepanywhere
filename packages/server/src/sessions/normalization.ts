@@ -20,6 +20,7 @@ import {
   buildDag,
   collectAllToolResultIds,
   findOrphanedToolUses,
+  findSiblingToolResults,
 } from "./dag.js";
 import type { LoadedSession } from "./types.js";
 
@@ -54,10 +55,43 @@ export function normalizeSession(loaded: LoadedSession): Session {
         allToolResultIds,
       );
 
-      // Convert to Message objects (only active branch)
-      const messages: Message[] = activeBranch.map((node, index) =>
-        convertClaudeMessage(node.raw, index, orphanedToolUses),
+      // Find tool_result messages on sibling branches that match tool_uses on active branch
+      // These need to be included so the client can pair them with their tool_uses
+      const siblingToolResults = findSiblingToolResults(
+        activeBranch,
+        rawMessages,
       );
+
+      // Build a map of parentUuid -> sibling tool_results for efficient insertion
+      const siblingsByParent = new Map<string, Message[]>();
+      for (const sibling of siblingToolResults) {
+        const converted = convertClaudeMessage(
+          sibling.raw,
+          -1,
+          new Set<string>(),
+        );
+        const existing = siblingsByParent.get(sibling.parentUuid);
+        if (existing) {
+          existing.push(converted);
+        } else {
+          siblingsByParent.set(sibling.parentUuid, [converted]);
+        }
+      }
+
+      // Convert active branch to Message objects, inserting sibling tool_results after their parent
+      const messages: Message[] = [];
+      for (let i = 0; i < activeBranch.length; i++) {
+        const node = activeBranch[i];
+        if (!node) continue;
+        const msg = convertClaudeMessage(node.raw, i, orphanedToolUses);
+        messages.push(msg);
+
+        // Insert any sibling tool_results that have this node as their parent
+        const siblings = siblingsByParent.get(node.uuid);
+        if (siblings) {
+          messages.push(...siblings);
+        }
+      }
 
       return {
         ...summary,
