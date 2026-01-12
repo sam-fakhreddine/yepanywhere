@@ -424,23 +424,237 @@ Spin up relay + yepanywhere + simulated phone client:
 
 ---
 
+### Phase 7: Server Wiring ✅
+
+Wire up RelayClientService to actually run on the yepanywhere server.
+
+**Status: Complete**
+
+Implementation notes:
+- `RelayClientService` instantiated in `index.ts` before `createApp`
+- `relayConfigCallbackHolder` pattern used to pass callback to routes (avoids circular dependency)
+- `createAcceptRelayConnection` creates handler after app is created
+- `updateRelayConnection()` called on startup and wired to API routes via callback holder
+- Status endpoint at `GET /api/remote-access/relay/status` returns `{ status, error, reconnectAttempts }`
+
+**File: `packages/server/src/index.ts`**
+
+```typescript
+import { RelayClientService } from "./services/RelayClientService";
+
+// After InstallService initialization...
+const installService = new InstallService(config.dataDir);
+await installService.initialize();
+
+// Create relay client service
+const relayClientService = new RelayClientService();
+
+// Create the relay connection handler
+const acceptRelayConnection = createAcceptRelayConnection({
+  app,
+  baseUrl,
+  supervisor,
+  eventBus,
+  uploadManager,
+  remoteAccessService,
+  remoteSessionService,
+});
+
+// Function to start/restart relay client with current config
+async function updateRelayConnection() {
+  const relayConfig = remoteAccessService.getRelayConfig();
+  if (relayConfig?.url && relayConfig?.username) {
+    await relayClientService.start({
+      relayUrl: relayConfig.url,
+      username: relayConfig.username,
+      installId: installService.getInstallId(),
+      onRelayConnection: acceptRelayConnection,
+    });
+  } else {
+    relayClientService.stop();
+  }
+}
+
+// Start relay on boot if configured
+await updateRelayConnection();
+
+// Re-wire when config changes (called from PUT /api/remote-access/relay)
+// Add to routes or use an event emitter pattern
+```
+
+**File: `packages/server/src/remote-access/routes.ts`**
+
+Add callback or event when relay config changes:
+
+```typescript
+app.put("/api/remote-access/relay", async (c) => {
+  // ... existing validation and save ...
+
+  // Notify server to reconnect with new config
+  await onRelayConfigChanged?.();
+
+  return c.json({ success: true });
+});
+```
+
+**File: `packages/server/src/remote-access/routes.ts`** - Add status endpoint
+
+```typescript
+app.get("/api/remote-access/relay/status", (c) => {
+  return c.json({
+    status: relayClientService.getStatus(), // "disconnected" | "connecting" | "registering" | "waiting" | "rejected"
+    error: relayClientService.getLastError(), // null | "username_taken" | "invalid_username" | "connection_failed"
+  });
+});
+```
+
+**File: `packages/client/src/pages/SettingsPage.tsx`**
+
+Update UI to show live status:
+- Poll `/api/remote-access/relay/status` or use SSE
+- Show "Connected" (green) when status is "waiting"
+- Show "Connecting..." when status is "connecting" or "registering"
+- Show error message when status is "rejected"
+
+**Tests:** `packages/server/test/integration/relay-wiring.test.ts`
+- Server connects to relay on startup when configured
+- Server reconnects when config changes
+- Server disconnects when relay config cleared
+- Status endpoint returns correct state
+
+---
+
+### Phase 8: Remote Client Relay Support
+
+Add relay connection mode to the remote client while keeping direct connection.
+
+**Connection Modes:**
+
+1. **Direct mode** (existing): Enter devserver WebSocket URL + SRP credentials
+   - For LAN, Tailscale, future Android WebView
+   - URL like `wss://192.168.1.10:3400/ws-relay`
+
+2. **Relay mode** (new): Enter relay username + SRP credentials
+   - For NAT traversal, public internet access
+   - Default relay: `wss://remote.yepanywhere.com/ws`
+
+**File: `packages/client/src/remote-main.tsx`**
+
+Add routes for both modes:
+
+```typescript
+<Routes>
+  <Route path="/" element={<RemoteLoginPage />} />
+  <Route path="/direct" element={<DirectLoginPage />} />
+  <Route path="/relay" element={<RelayLoginPage />} />
+  {/* ... rest of app routes wrapped in RemoteApp ... */}
+</Routes>
+```
+
+**File: `packages/client/src/pages/RemoteLoginPage.tsx`** (new)
+
+Landing page with two options:
+- "Connect via Relay" → navigates to `/relay`
+- "Direct Connection" → navigates to `/direct`
+
+**File: `packages/client/src/pages/DirectLoginPage.tsx`** (rename from current login)
+
+Existing direct connection flow:
+- WebSocket URL input
+- Username input
+- Password input
+- Connect button → `SecureConnection.connect(wsUrl, username, password)`
+
+**File: `packages/client/src/pages/RelayLoginPage.tsx`** (new)
+
+Relay connection flow:
+- Relay username input (e.g., "crostini")
+- SRP username input
+- SRP password input
+- Optional: relay URL override (default: `wss://remote.yepanywhere.com/ws`)
+
+```typescript
+async function connectViaRelay(relayUsername: string, srpUsername: string, srpPassword: string) {
+  const relayUrl = customRelayUrl || "wss://remote.yepanywhere.com/ws";
+
+  // 1. Connect to relay
+  const ws = new WebSocket(relayUrl);
+
+  await new Promise((resolve, reject) => {
+    ws.onopen = () => {
+      // 2. Send client_connect
+      ws.send(JSON.stringify({ type: "client_connect", username: relayUsername }));
+    };
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "client_connected") {
+        resolve(ws);
+      } else if (msg.type === "client_error") {
+        reject(new Error(msg.reason)); // "server_offline" | "unknown_username"
+      }
+    };
+
+    ws.onerror = () => reject(new Error("connection_failed"));
+  });
+
+  // 3. Hand off to SecureConnection for SRP auth
+  // WebSocket is now a direct pipe to yepanywhere server
+  await secureConnection.connectWithExistingSocket(ws, srpUsername, srpPassword);
+}
+```
+
+**File: `packages/client/src/lib/SecureConnection.ts`**
+
+Add method to accept pre-connected WebSocket:
+
+```typescript
+async connectWithExistingSocket(ws: WebSocket, username: string, password: string): Promise<void> {
+  // Same SRP flow as connect(), but skip WebSocket creation
+  this.ws = ws;
+  this.setupMessageHandler();
+  await this.performSrpAuth(username, password);
+}
+```
+
+**UI States for Relay Login:**
+- Initial: form with inputs
+- Connecting: "Connecting to relay..."
+- Waiting: "Waiting for server..." (after client_connect sent)
+- Error: Show error message (server_offline, connection_failed, etc.)
+- Success: Redirect to app
+
+**Tests:** `packages/client/test/relay-login.test.ts`
+- Relay connection flow succeeds
+- Handles server_offline error
+- Handles connection_failed error
+- Falls back gracefully on relay issues
+
+---
+
 ## Critical Files
 
-| File | Action |
-|------|--------|
-| `packages/shared/src/relay-protocol.ts` | Create - protocol types |
-| `packages/relay/` | Create - new package |
-| `packages/relay/src/db.ts` | Create - SQLite setup |
-| `packages/relay/src/registry.ts` | Create - username registry |
-| `packages/relay/src/connections.ts` | Create - connection manager |
-| `packages/server/src/services/InstallService.ts` | Create - install ID |
-| `packages/server/src/services/RelayClientService.ts` | Create - relay client |
-| `packages/server/src/remote-access/RemoteAccessService.ts` | Modify - add relay config |
-| `packages/server/src/remote-access/routes.ts` | Modify - relay endpoints |
-| `packages/server/src/routes/ws-relay.ts` | Modify - accept relay connections |
-| `packages/server/src/index.ts` | Modify - wire up services |
-| `packages/client/src/pages/SettingsPage.tsx` | Modify - relay settings |
-| `packages/client/src/hooks/useRemoteAccess.ts` | Modify - relay config hook |
+| File | Action | Phase |
+|------|--------|-------|
+| `packages/shared/src/relay-protocol.ts` | Create - protocol types | 1 |
+| `packages/relay/` | Create - new package | 2 |
+| `packages/relay/src/db.ts` | Create - SQLite setup | 2 |
+| `packages/relay/src/registry.ts` | Create - username registry | 2 |
+| `packages/relay/src/connections.ts` | Create - connection manager | 2 |
+| `packages/server/src/services/InstallService.ts` | Create - install ID | 3 |
+| `packages/server/src/services/RelayClientService.ts` | Create - relay client | 4 |
+| `packages/server/src/remote-access/RemoteAccessService.ts` | Modify - add relay config | 5 |
+| `packages/server/src/remote-access/routes.ts` | Modify - relay endpoints | 5 |
+| `packages/server/src/routes/ws-relay.ts` | Modify - accept relay connections | 5 |
+| `packages/client/src/pages/SettingsPage.tsx` | Modify - relay settings | 5 |
+| `packages/client/src/hooks/useRemoteAccess.ts` | Modify - relay config hook | 5 |
+| `packages/server/src/index.ts` | Modify - wire up RelayClientService | 7 |
+| `packages/server/src/remote-access/routes.ts` | Modify - relay status endpoint | 7 |
+| `packages/client/src/pages/RemoteLoginPage.tsx` | Create - mode selection landing | 8 |
+| `packages/client/src/pages/DirectLoginPage.tsx` | Rename - existing login page | 8 |
+| `packages/client/src/pages/RelayLoginPage.tsx` | Create - relay login flow | 8 |
+| `packages/client/src/lib/SecureConnection.ts` | Modify - accept existing WebSocket | 8 |
+| `packages/client/src/remote-main.tsx` | Modify - add login routes | 8 |
 
 ## Configuration
 
@@ -479,14 +693,30 @@ This can be added later without changing the core relay protocol.
 
 ## Verification
 
-1. Start relay: `cd packages/relay && pnpm dev`
-2. Configure yepanywhere: Settings > Remote Access > Relay URL = `ws://localhost:3500/ws`
-3. Set relay username
-4. Enable remote access with password
-5. Connect from remote client to relay with same username
-6. Verify SRP auth completes and app works through relay
+### Local Testing (with local relay)
 
-Run tests:
+1. Start relay: `cd packages/relay && pnpm dev` (runs on port 3500)
+2. Start yepanywhere: `pnpm dev` (runs on port 3400)
+3. Configure relay in yepanywhere: Settings > Remote Access > Relay URL = `ws://localhost:3500/ws`
+4. Set relay username (e.g., "testuser")
+5. Enable remote access with SRP username/password
+6. Verify Settings shows relay status as "Connected" (green)
+7. Start remote client: `pnpm dev:remote` (runs on port 3402)
+8. Navigate to relay login, enter relay username + SRP credentials
+9. Verify SRP auth completes and app works through relay
+
+### Production Testing (with remote.yepanywhere.com)
+
+1. Start yepanywhere: `pnpm start`
+2. Configure relay: Settings > Remote Access > Relay URL = `wss://remote.yepanywhere.com/ws`
+3. Set relay username
+4. Enable remote access with SRP username/password
+5. Verify relay status shows "Connected"
+6. Open `https://remote.yepanywhere.com` on phone
+7. Use relay login with same relay username + SRP credentials
+8. Verify connection works through public relay
+
+### Run tests:
 ```bash
 pnpm --filter @yep-anywhere/relay test
 pnpm --filter @yep-anywhere/server test

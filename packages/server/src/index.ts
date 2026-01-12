@@ -35,10 +35,11 @@ import {
 } from "./remote-access/index.js";
 import { createUploadRoutes } from "./routes/upload.js";
 import { createWsRelayRoutes } from "./routes/ws-relay.js";
+import { createAcceptRelayConnection } from "./routes/ws-relay.js";
 import { detectClaudeCli } from "./sdk/cli-detection.js";
 import { initMessageLogger } from "./sdk/messageLogger.js";
 import { RealClaudeSDK } from "./sdk/real.js";
-import { InstallService } from "./services/index.js";
+import { InstallService, RelayClientService } from "./services/index.js";
 import { ClaudeSessionReader } from "./sessions/reader.js";
 import { UploadManager } from "./uploads/manager.js";
 import { EventBus, FileWatcher, SourceWatcher } from "./watcher/index.js";
@@ -150,6 +151,7 @@ const remoteSessionService = new RemoteSessionService({
 const installService = new InstallService({
   dataDir: config.dataDir,
 });
+const relayClientService = new RelayClientService();
 
 async function startServer() {
   // Initialize services (loads state from disk)
@@ -194,6 +196,9 @@ async function startServer() {
     );
   }
 
+  // Callback holder for relay config changes - will be set after app creation
+  const relayConfigCallbackHolder: { callback?: () => Promise<void> } = {};
+
   // Create the app first (without WebSocket support initially)
   // We'll add WebSocket routes after setting up WebSocket support
   const { app, supervisor, scanner } = createApp({
@@ -215,6 +220,8 @@ async function startServer() {
     authDisabled: config.authDisabled,
     remoteAccessService,
     remoteSessionService,
+    relayClientService,
+    relayConfigCallbackHolder,
     // Note: frontendProxy not passed - will be added below
   });
 
@@ -265,6 +272,42 @@ async function startServer() {
     remoteSessionService,
   });
   app.get("/api/ws", wsRelayHandler);
+
+  // Create relay connection handler for connections from relay server (Phase 7)
+  // This accepts WebSocket connections that have already been upgraded at the relay
+  const acceptRelayConnection = createAcceptRelayConnection({
+    app,
+    baseUrl,
+    supervisor,
+    eventBus,
+    uploadManager: wsRelayUploadManager,
+    remoteAccessService,
+    remoteSessionService,
+  });
+
+  // Function to start/restart relay client with current config
+  async function updateRelayConnection() {
+    const relayConfig = remoteAccessService.getRelayConfig();
+    if (relayConfig?.url && relayConfig?.username) {
+      relayClientService.start({
+        relayUrl: relayConfig.url,
+        username: relayConfig.username,
+        installId: installService.getInstallId(),
+        onRelayConnection: acceptRelayConnection,
+        onStatusChange: (status) => {
+          console.log(`[Relay] Status: ${status}`);
+        },
+      });
+    } else {
+      relayClientService.stop();
+    }
+  }
+
+  // Wire up the callback for relay config changes from API routes
+  relayConfigCallbackHolder.callback = updateRelayConnection;
+
+  // Start relay connection on boot if configured
+  await updateRelayConnection();
 
   // Serve stable (emergency) UI from /_stable/ path if available
   // This bypasses HMR and serves pre-built assets directly

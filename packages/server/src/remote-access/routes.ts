@@ -3,6 +3,7 @@
  */
 
 import { Hono } from "hono";
+import type { RelayClientService } from "../services/RelayClientService.js";
 import type { RemoteAccessService } from "./RemoteAccessService.js";
 import type { RemoteSessionService } from "./RemoteSessionService.js";
 
@@ -10,12 +11,21 @@ export interface RemoteAccessRoutesOptions {
   remoteAccessService: RemoteAccessService;
   /** Optional session service for invalidating sessions on password change */
   remoteSessionService?: RemoteSessionService;
+  /** Optional relay client service for status reporting */
+  relayClientService?: RelayClientService;
+  /** Callback to update relay connection when config changes */
+  onRelayConfigChanged?: () => Promise<void>;
 }
 
 export function createRemoteAccessRoutes(
   options: RemoteAccessRoutesOptions,
 ): Hono {
-  const { remoteAccessService, remoteSessionService } = options;
+  const {
+    remoteAccessService,
+    remoteSessionService,
+    relayClientService,
+    onRelayConfigChanged,
+  } = options;
   const app = new Hono();
 
   /**
@@ -164,6 +174,9 @@ export function createRemoteAccessRoutes(
         username: body.username,
       });
 
+      // Notify server to reconnect with new config
+      await onRelayConfigChanged?.();
+
       return c.json({ success: true });
     } catch (error) {
       const message =
@@ -179,12 +192,36 @@ export function createRemoteAccessRoutes(
   app.delete("/relay", async (c) => {
     try {
       await remoteAccessService.clearRelayConfig();
+
+      // Notify server to disconnect
+      await onRelayConfigChanged?.();
+
       return c.json({ success: true });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to clear relay config";
       return c.json({ error: message }, 400);
     }
+  });
+
+  /**
+   * GET /api/remote-access/relay/status
+   * Get relay client connection status.
+   */
+  app.get("/relay/status", (c) => {
+    if (!relayClientService) {
+      return c.json({
+        status: "disconnected" as const,
+        error: null,
+        reconnectAttempts: 0,
+      });
+    }
+    const state = relayClientService.getState();
+    return c.json({
+      status: state.status,
+      error: state.error ?? null,
+      reconnectAttempts: state.reconnectAttempts,
+    });
   });
 
   return app;

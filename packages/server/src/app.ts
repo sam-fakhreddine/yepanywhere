@@ -50,6 +50,7 @@ import type {
   PermissionMode,
   RealClaudeSDKInterface,
 } from "./sdk/types.js";
+import type { RelayClientService } from "./services/RelayClientService.js";
 import { CodexSessionReader } from "./sessions/codex-reader.js";
 import { GeminiSessionReader } from "./sessions/gemini-reader.js";
 import { OpenCodeSessionReader } from "./sessions/opencode-reader.js";
@@ -102,6 +103,13 @@ export interface AppOptions {
   remoteAccessService?: RemoteAccessService;
   /** RemoteSessionService for session persistence (optional) */
   remoteSessionService?: RemoteSessionService;
+  /** RelayClientService for relay connection status (optional) */
+  relayClientService?: RelayClientService;
+  /**
+   * Holder for relay config change callback.
+   * The `callback` property can be set after createApp returns.
+   */
+  relayConfigCallbackHolder?: { callback?: () => Promise<void> };
 }
 
 export interface AppResult {
@@ -147,11 +155,16 @@ export function createApp(options: AppOptions): AppResult {
 
   // Remote access routes (SRP authentication for relay)
   if (options.remoteAccessService) {
+    const callbackHolder = options.relayConfigCallbackHolder;
     app.route(
       "/api/remote-access",
       createRemoteAccessRoutes({
         remoteAccessService: options.remoteAccessService,
         remoteSessionService: options.remoteSessionService,
+        relayClientService: options.relayClientService,
+        onRelayConfigChanged: callbackHolder
+          ? () => callbackHolder.callback?.() ?? Promise.resolve()
+          : undefined,
       }),
     );
   }
