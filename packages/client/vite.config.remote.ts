@@ -71,5 +71,7 @@ export default defineConfig({
     strictPort: remoteDevPort !== 0,
     // Allow connections from any host (for LAN testing)
     host: true,
+    // Allow these hosts to connect
+    allowedHosts: ["localhost", ".yepanywhere.com"],
   },
 });
