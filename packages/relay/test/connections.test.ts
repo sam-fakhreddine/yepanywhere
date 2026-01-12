@@ -155,13 +155,19 @@ describe("ConnectionManager", () => {
       manager.registerServer(serverWs, "alice", "install-1");
       manager.connectClient(clientWs, "alice");
 
-      // Client sends to server
-      manager.forward(clientWs, "hello from client");
-      expect(serverWs.send).toHaveBeenCalledWith("hello from client");
+      // Client sends to server (isBinary: false for text)
+      manager.forward(clientWs, Buffer.from("hello from client"), false);
+      expect(serverWs.send).toHaveBeenCalledWith(
+        Buffer.from("hello from client"),
+        { binary: false },
+      );
 
       // Server sends to client
-      manager.forward(serverWs, "hello from server");
-      expect(clientWs.send).toHaveBeenCalledWith("hello from server");
+      manager.forward(serverWs, Buffer.from("hello from server"), false);
+      expect(clientWs.send).toHaveBeenCalledWith(
+        Buffer.from("hello from server"),
+        { binary: false },
+      );
     });
 
     it("forwards binary messages between pairs", () => {
@@ -171,14 +177,14 @@ describe("ConnectionManager", () => {
       manager.registerServer(serverWs, "alice", "install-1");
       manager.connectClient(clientWs, "alice");
 
-      const binaryData = new ArrayBuffer(4);
-      manager.forward(clientWs, binaryData);
-      expect(serverWs.send).toHaveBeenCalledWith(binaryData);
+      const binaryData = Buffer.from([0, 0, 0, 0]);
+      manager.forward(clientWs, binaryData, true);
+      expect(serverWs.send).toHaveBeenCalledWith(binaryData, { binary: true });
     });
 
     it("ignores forward from unpaired connection", () => {
       const ws = createMockWs();
-      manager.forward(ws, "ignored");
+      manager.forward(ws, Buffer.from("ignored"), false);
       // Should not throw and no message should be sent
     });
   });

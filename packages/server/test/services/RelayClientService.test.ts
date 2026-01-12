@@ -295,9 +295,9 @@ describe("RelayClientService", () => {
       });
       ws.simulateMessage(srpInit);
 
-      // Should have called onRelayConnection with the WebSocket and first message
+      // Should have called onRelayConnection with the WebSocket, first message, and isBinary flag
       expect(mockOnRelayConnection).toHaveBeenCalledTimes(1);
-      expect(mockOnRelayConnection).toHaveBeenCalledWith(ws, srpInit);
+      expect(mockOnRelayConnection).toHaveBeenCalledWith(ws, srpInit, false);
 
       // Should have opened a new waiting connection
       await vi.advanceTimersByTimeAsync(10);
@@ -321,7 +321,7 @@ describe("RelayClientService", () => {
       const unknownMsg = JSON.stringify({ type: "some_random_type" });
       ws.simulateMessage(unknownMsg);
 
-      expect(mockOnRelayConnection).toHaveBeenCalledWith(ws, unknownMsg);
+      expect(mockOnRelayConnection).toHaveBeenCalledWith(ws, unknownMsg, false);
     });
   });
 
