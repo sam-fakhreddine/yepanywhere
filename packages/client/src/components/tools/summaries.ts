@@ -97,7 +97,8 @@ function getDefaultResultSummary(
   }
 
   // Try to extract meaningful info from content
-  const content = result.content || "";
+  // Guard against non-string content (can happen with some tool results)
+  const content = typeof result.content === "string" ? result.content : "";
   const lineCount = content.split("\n").filter(Boolean).length;
 
   switch (toolName) {
