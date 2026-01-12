@@ -1121,6 +1121,12 @@ export function isBinaryEncryptedEnvelope(
 export interface HandleMessageOptions {
   /** Whether remote access is enabled (for auth requirements) */
   requireAuth: boolean;
+  /**
+   * Whether the message was received as a binary frame.
+   * If provided, this takes precedence over isBinaryData() check.
+   * Required for raw ws connections where all data arrives as Buffers.
+   */
+  isBinary?: boolean;
 }
 
 /**
@@ -1173,10 +1179,28 @@ export async function handleMessage(
             .map((b) => b.toString(16).padStart(2, "0"))
             .join(" ")}...]`
         : String(data).slice(0, 100);
-  console.log(`[WS Relay] handleMessage: type=${dataType}, preview=${preview}`);
+  console.log(
+    `[WS Relay] handleMessage: type=${dataType}, isBinary=${options.isBinary}, preview=${preview}`,
+  );
 
-  if (isBinaryData(data)) {
-    const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
+  // Determine if this is a binary frame.
+  // If options.isBinary is provided (raw ws connections), use it directly.
+  // Otherwise, fall back to checking if data is binary (Hono connections where
+  // text frames arrive as strings and binary frames as ArrayBuffer).
+  const isFrameBinary = options.isBinary ?? isBinaryData(data);
+
+  if (isFrameBinary) {
+    // For binary frames, data is ArrayBuffer (browser) or Buffer/Uint8Array (Node.js)
+    // When options.isBinary is provided, data is guaranteed to be Buffer from raw ws
+    let bytes: Uint8Array;
+    if (data instanceof ArrayBuffer) {
+      bytes = new Uint8Array(data);
+    } else if (data instanceof Uint8Array || Buffer.isBuffer(data)) {
+      bytes = data;
+    } else {
+      console.warn("[WS Relay] Binary frame has unexpected data type");
+      return;
+    }
 
     if (bytes.length === 0) {
       console.warn("[WS Relay] Empty binary frame");
@@ -1310,16 +1334,24 @@ export async function handleMessage(
       }
       return;
     }
-  } else if (typeof data === "string") {
-    try {
-      parsed = JSON.parse(data);
-    } catch {
-      console.warn("[WS Relay] Failed to parse message:", data);
+  } else {
+    // Text frame - could be string (Hono) or Buffer (raw ws with isBinary=false)
+    let textData: string;
+    if (typeof data === "string") {
+      textData = data;
+    } else if (data instanceof Uint8Array || Buffer.isBuffer(data)) {
+      // Raw ws delivers text frames as Buffers, convert to string
+      textData = Buffer.from(data).toString("utf-8");
+    } else {
+      console.warn("[WS Relay] Ignoring unknown message type");
       return;
     }
-  } else {
-    console.warn("[WS Relay] Ignoring unknown message type");
-    return;
+    try {
+      parsed = JSON.parse(textData);
+    } catch {
+      console.warn("[WS Relay] Failed to parse message:", textData);
+      return;
+    }
   }
 
   // Handle SRP messages first (always plaintext)

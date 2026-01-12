@@ -241,11 +241,11 @@ export function createWsRelayRoutes(
  * - Uses the same SRP authentication and message handling as direct connections
  *
  * @param deps - Dependencies (same as WsRelayDeps but without upgradeWebSocket)
- * @returns A function that accepts (ws, firstMessage) and handles the connection
+ * @returns A function that accepts (ws, firstMessage, isBinary) and handles the connection
  */
 export function createAcceptRelayConnection(
   deps: AcceptRelayConnectionDeps,
-): (ws: RawWebSocket, firstMessage: string | Buffer) => void {
+): (ws: RawWebSocket, firstMessage: Buffer, isBinary: boolean) => void {
   const {
     app,
     baseUrl,
@@ -268,7 +268,11 @@ export function createAcceptRelayConnection(
   };
 
   // Return the accept relay connection handler
-  return (rawWs: RawWebSocket, firstMessage: string | Buffer): void => {
+  return (
+    rawWs: RawWebSocket,
+    firstMessage: Buffer,
+    firstMessageIsBinary: boolean,
+  ): void => {
     console.log("[WS Relay] Accepting relay connection");
 
     // Track active subscriptions for this connection
@@ -286,7 +290,8 @@ export function createAcceptRelayConnection(
     const send = createSendFn(wsAdapter, connState);
 
     // Wire up message handling
-    rawWs.on("message", (data: Buffer | string) => {
+    // Note: ws library provides (data, isBinary) - isBinary tells us the frame type
+    rawWs.on("message", (data: Buffer, isBinary: boolean) => {
       messageQueue = messageQueue.then(() =>
         handleMessage(
           wsAdapter,
@@ -296,7 +301,7 @@ export function createAcceptRelayConnection(
           send,
           data,
           handlerDeps,
-          { requireAuth: true }, // Relay connections always require auth
+          { requireAuth: true, isBinary }, // Relay connections always require auth
         ).catch((err) => {
           console.error("[WS Relay] Unexpected error:", err);
         }),
@@ -319,9 +324,7 @@ export function createAcceptRelayConnection(
     });
 
     // Process the first message (SRP init from phone client)
-    // Convert Buffer to string if needed for consistent handling
-    const firstMessageData =
-      firstMessage instanceof Buffer ? firstMessage : firstMessage;
+    // Pass isBinary to correctly identify frame type
     messageQueue = messageQueue.then(() =>
       handleMessage(
         wsAdapter,
@@ -329,9 +332,9 @@ export function createAcceptRelayConnection(
         uploads,
         connState,
         send,
-        firstMessageData,
+        firstMessage,
         handlerDeps,
-        { requireAuth: true },
+        { requireAuth: true, isBinary: firstMessageIsBinary },
       ).catch((err) => {
         console.error("[WS Relay] Error processing first message:", err);
       }),

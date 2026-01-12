@@ -149,14 +149,15 @@ export class ConnectionManager {
    *
    * @param ws - The WebSocket that closed
    * @param username - Username associated with this connection (if known)
+   * @returns true if a pair was disconnected, false otherwise
    */
-  handleClose(ws: WebSocket, username?: string): void {
+  handleClose(ws: WebSocket, username?: string): boolean {
     // Check if this was a waiting connection
     if (username) {
       const waitingWs = this.waiting.get(username);
       if (waitingWs === ws) {
         this.waiting.delete(username);
-        return;
+        return false;
       }
     }
 
@@ -174,7 +175,9 @@ export class ConnectionManager {
       } catch {
         // Ignore close errors
       }
+      return true;
     }
+    return false;
   }
 
   /**

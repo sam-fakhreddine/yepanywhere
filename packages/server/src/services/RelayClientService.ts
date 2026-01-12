@@ -28,8 +28,15 @@ export interface RelayClientConfig {
   /**
    * Called when a connection is claimed by a phone client.
    * The first message (SRP init) is passed along with the WebSocket.
+   * @param ws - The WebSocket connection
+   * @param firstMessage - The first message from the phone client
+   * @param isBinary - Whether the first message was a binary frame
    */
-  onRelayConnection: (ws: WebSocket, firstMessage: string | Buffer) => void;
+  onRelayConnection: (
+    ws: WebSocket,
+    firstMessage: Buffer,
+    isBinary: boolean,
+  ) => void;
   /** Called when connection status changes (for UI updates) */
   onStatusChange?: (status: RelayClientStatus) => void;
 }
@@ -184,8 +191,8 @@ export class RelayClientService {
         this.handleOpen(ws);
       });
 
-      ws.on("message", (data: Buffer | string) => {
-        this.handleMessage(ws, data);
+      ws.on("message", (data: Buffer, isBinary: boolean) => {
+        this.handleMessage(ws, data, isBinary);
       });
 
       ws.on("close", () => {
@@ -216,20 +223,24 @@ export class RelayClientService {
     ws.send(JSON.stringify(register));
   }
 
-  private handleMessage(ws: WebSocket, data: Buffer | string): void {
-    // Convert Buffer to string for text frame processing
-    // Note: Binary frames (like encrypted envelopes) should be forwarded as-is
-    // but relay protocol and SRP messages are always text/JSON
-    const str = typeof data === "string" ? data : data.toString("utf-8");
+  private handleMessage(ws: WebSocket, data: Buffer, isBinary: boolean): void {
+    // If it's a binary frame, it's the first message from a phone client
+    // (after pairing, relay forwards messages with preserved frame types)
+    if (isBinary) {
+      this.handleClaimed(ws, data, true);
+      return;
+    }
+
+    // Text frame - could be relay protocol or first message from phone client
+    const str = data.toString("utf-8");
 
     // Try to parse as JSON for relay protocol messages
     let parsed: unknown;
     try {
       parsed = JSON.parse(str);
     } catch {
-      // Not JSON - this is the first message from a phone client (binary frame)
-      // Keep as Buffer for binary frame handling
-      this.handleClaimed(ws, data);
+      // Not valid JSON - shouldn't happen for relay protocol, log and ignore
+      console.warn("[RelayClient] Received non-JSON text frame:", str);
       return;
     }
 
@@ -252,9 +263,9 @@ export class RelayClientService {
     }
 
     // Unknown JSON message type - this is the first message from a phone client
-    // (e.g., SRP hello). Pass as string since it was successfully parsed as JSON.
+    // (e.g., SRP hello). Pass as Buffer with isBinary=false since it's a text frame.
     // Relay switches to passthrough mode after pairing.
-    this.handleClaimed(ws, str);
+    this.handleClaimed(ws, data, false);
   }
 
   private handleRejection(ws: WebSocket, msg: RelayServerRejected): void {
@@ -284,23 +295,16 @@ export class RelayClientService {
     }
   }
 
-  private handleClaimed(ws: WebSocket, firstMessage: Buffer | string): void {
+  private handleClaimed(
+    ws: WebSocket,
+    firstMessage: Buffer,
+    isBinary: boolean,
+  ): void {
     if (!this.config) return;
 
-    const msgType =
-      typeof firstMessage === "string"
-        ? `string(${firstMessage.length})`
-        : Buffer.isBuffer(firstMessage)
-          ? `Buffer(${firstMessage.length})`
-          : typeof firstMessage;
-    const preview =
-      typeof firstMessage === "string"
-        ? firstMessage.slice(0, 100)
-        : Buffer.isBuffer(firstMessage)
-          ? firstMessage.toString("utf-8").slice(0, 100)
-          : String(firstMessage);
+    const preview = firstMessage.toString("utf-8").slice(0, 100);
     console.log(
-      `[RelayClient] Connection claimed by phone client, firstMessage: ${msgType}, preview: ${preview}`,
+      `[RelayClient] Connection claimed by phone client, firstMessage: Buffer(${firstMessage.length}), isBinary: ${isBinary}, preview: ${preview}`,
     );
 
     // Remove from waiting state (it's now claimed)
@@ -310,8 +314,8 @@ export class RelayClientService {
     // This prevents duplicate message processing
     ws.removeAllListeners();
 
-    // Hand off to the WebSocket relay handler
-    this.config.onRelayConnection(ws, firstMessage);
+    // Hand off to the WebSocket relay handler with frame type info
+    this.config.onRelayConnection(ws, firstMessage, isBinary);
 
     // Immediately open a new waiting connection
     this.connect();

@@ -217,7 +217,7 @@ export function createWsHandler(
           const response: RelayClientConnected = { type: "client_connected" };
           sendJson(ws, response);
 
-          logger.info({ username: msg.username }, "Client connected");
+          logger.info({ username: msg.username }, "Pair connected");
         } else {
           const response: RelayClientError = {
             type: "client_error",
@@ -250,10 +250,18 @@ export function createWsHandler(
       const state = getState(ws);
 
       stopPingInterval(state);
-      connectionManager.handleClose(ws, state.username);
+      const wasPaired = state.paired;
+      const pairDisconnected = connectionManager.handleClose(
+        ws,
+        state.username,
+      );
+
+      if (pairDisconnected && wasPaired) {
+        logger.info({ username: state.username }, "Pair disconnected");
+      }
 
       if (state.username) {
-        logger.info(
+        logger.debug(
           {
             username: state.username,
             isServer: state.isServer,
