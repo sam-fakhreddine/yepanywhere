@@ -11,6 +11,7 @@ export type ProviderName =
   | "codex"
   | "codex-oss"
   | "gemini"
+  | "gemini-acp"
   | "opencode";
 
 /**
@@ -23,6 +24,7 @@ export const ALL_PROVIDERS: readonly ProviderName[] = [
   "codex",
   "codex-oss",
   "gemini",
+  "gemini-acp",
   "opencode",
 ] as const;
 

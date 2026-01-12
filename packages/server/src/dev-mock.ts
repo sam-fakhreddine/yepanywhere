@@ -41,6 +41,7 @@ import {
   MockClaudeProvider,
   MockCodexOSSProvider,
   MockCodexProvider,
+  MockGeminiACPProvider,
   MockGeminiProvider,
   MockOpenCodeProvider,
   type MockScenario,
@@ -152,6 +153,9 @@ const mockProviders: Record<ProviderName, MockAgentProvider> = {
     scenarios: createMockScenarios("codex-oss"),
   }),
   gemini: new MockGeminiProvider({ scenarios: createMockScenarios("gemini") }),
+  "gemini-acp": new MockGeminiACPProvider({
+    scenarios: createMockScenarios("gemini-acp"),
+  }),
   opencode: new MockOpenCodeProvider({
     scenarios: createMockScenarios("opencode"),
   }),

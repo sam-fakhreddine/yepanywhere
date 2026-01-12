@@ -11,6 +11,7 @@ export type ProviderName =
   | "codex"
   | "codex-oss"
   | "gemini"
+  | "gemini-acp"
   | "opencode";
 
 /**

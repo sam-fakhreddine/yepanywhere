@@ -25,6 +25,7 @@ const PROVIDER_COLORS: Record<ProviderName, string> = {
   codex: "#10a37f",
   "codex-oss": "#f97316",
   gemini: "#4285f4",
+  "gemini-acp": "#4285f4", // Same as gemini
   opencode: "#9333ea", // Purple for OpenCode
 };
 

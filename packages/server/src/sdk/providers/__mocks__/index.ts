@@ -40,6 +40,7 @@ export {
 } from "./codex.js";
 export {
   MockGeminiProvider,
+  MockGeminiACPProvider,
   createGeminiScenario,
   createGeminiToolScenario,
   createGeminiThoughtsScenario,

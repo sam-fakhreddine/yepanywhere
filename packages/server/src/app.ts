@@ -199,6 +199,7 @@ export function createApp(options: AppOptions): AppResult {
           projectPath: project.path,
         });
       case "gemini":
+      case "gemini-acp":
         return new GeminiSessionReader({
           sessionsDir: GEMINI_TMP_DIR,
           projectPath: project.path,

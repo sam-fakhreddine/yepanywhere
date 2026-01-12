@@ -6,6 +6,7 @@ const PROVIDER_COLORS: Record<ProviderName, string> = {
   codex: "var(--provider-codex)", // OpenAI green
   "codex-oss": "var(--provider-codex)", // OpenAI green (same as codex)
   gemini: "var(--provider-gemini)", // Google blue
+  "gemini-acp": "var(--provider-gemini)", // Google blue (same as gemini)
   opencode: "var(--provider-opencode)", // OpenCode purple
 };
 
@@ -14,6 +15,7 @@ const PROVIDER_LABELS: Record<ProviderName, string> = {
   codex: "Codex",
   "codex-oss": "CodexOSS",
   gemini: "Gemini",
+  "gemini-acp": "Gemini ACP",
   opencode: "OpenCode",
 };
 

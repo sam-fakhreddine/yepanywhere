@@ -24,6 +24,19 @@ export class MockGeminiProvider extends BaseMockProvider {
 }
 
 /**
+ * Mock Gemini ACP provider.
+ * Same as MockGeminiProvider but for ACP mode.
+ */
+export class MockGeminiACPProvider extends BaseMockProvider {
+  readonly name: ProviderName = "gemini-acp";
+  readonly displayName = "Gemini (ACP)";
+
+  constructor(config: MockProviderConfig = {}) {
+    super(config);
+  }
+}
+
+/**
  * Create a simple Gemini response scenario.
  * Messages are already normalized to SDKMessage format.
  */

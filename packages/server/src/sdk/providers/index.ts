@@ -34,6 +34,14 @@ export {
   type GeminiProviderConfig,
 } from "./gemini.js";
 
+// Gemini ACP provider (uses gemini CLI with --experimental-acp)
+import { geminiACPProvider } from "./gemini-acp.js";
+export {
+  GeminiACPProvider,
+  geminiACPProvider,
+  type GeminiACPProviderConfig,
+} from "./gemini-acp.js";
+
 // CodexOSS provider (uses codex CLI with --oss for local models)
 import { codexOSSProvider } from "./codex-oss.js";
 export {
@@ -60,6 +68,7 @@ export function getAllProviders(): AgentProvider[] {
     codexProvider,
     codexOSSProvider,
     geminiProvider,
+    geminiACPProvider,
     opencodeProvider,
   ];
 }
@@ -77,6 +86,8 @@ export function getProvider(name: ProviderName): AgentProvider | null {
       return codexOSSProvider;
     case "gemini":
       return geminiProvider;
+    case "gemini-acp":
+      return geminiACPProvider;
     case "opencode":
       return opencodeProvider;
     default:
