@@ -326,14 +326,14 @@ export default async function globalSetup() {
   serverProcess.unref();
 
   // Start remote client Vite dev server for E2E testing
+  // Uses a wrapper script that writes the port to a file (more reliable than parsing stdout)
   console.log("[E2E] Starting remote client dev server...");
-  const clientRoot = join(repoRoot, "packages", "client");
   const remoteClientProcess = spawn(
     "pnpm",
-    ["exec", "vite", "--config", "vite.config.remote.ts"],
+    ["exec", "tsx", "--conditions", "source", "e2e/start-vite-remote.ts"],
     {
-      cwd: clientRoot,
-      env: { ...process.env, REMOTE_PORT: "0" },
+      cwd: join(repoRoot, "packages", "client"),
+      env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
       detached: true,
     },
@@ -343,28 +343,35 @@ export default async function globalSetup() {
     writeFileSync(REMOTE_CLIENT_PID_FILE, String(remoteClientProcess.pid));
   }
 
-  // Parse port from Vite's "Local: http://localhost:XXXXX/" output
+  // Log stderr for debugging
+  remoteClientProcess.stderr?.on("data", (data: Buffer) => {
+    const msg = data.toString();
+    if (!msg.includes("ExperimentalWarning")) {
+      console.error("[E2E Remote Client]", msg);
+    }
+  });
+
+  // Wait for the port file to be written by the wrapper script
   const remotePort = await new Promise<number>((resolve, reject) => {
     const timeout = setTimeout(
       () => reject(new Error("Timeout waiting for remote client (30s)")),
       30000,
     );
-    let output = "";
-    remoteClientProcess.stdout?.on("data", (data: Buffer) => {
-      output += data.toString();
-      const match = output.match(/Local:\s+http:\/\/localhost:(\d+)/);
-      if (match) {
-        clearTimeout(timeout);
-        resolve(Number.parseInt(match[1], 10));
-      }
-    });
 
-    remoteClientProcess.stderr?.on("data", (data: Buffer) => {
-      const msg = data.toString();
-      if (!msg.includes("ExperimentalWarning")) {
-        console.error("[E2E Remote Client]", msg);
+    const checkFile = () => {
+      if (existsSync(REMOTE_CLIENT_PORT_FILE)) {
+        const port = Number.parseInt(
+          readFileSync(REMOTE_CLIENT_PORT_FILE, "utf-8"),
+          10,
+        );
+        if (port > 0) {
+          clearTimeout(timeout);
+          resolve(port);
+          return;
+        }
       }
-    });
+      setTimeout(checkFile, 100);
+    };
 
     remoteClientProcess.on("error", (err) => {
       clearTimeout(timeout);
@@ -377,9 +384,10 @@ export default async function globalSetup() {
         reject(new Error(`Remote client exited with code ${code}`));
       }
     });
+
+    checkFile();
   });
 
-  writeFileSync(REMOTE_CLIENT_PORT_FILE, String(remotePort));
   console.log(`[E2E] Remote client dev server on port ${remotePort}`);
   remoteClientProcess.unref();
 }
