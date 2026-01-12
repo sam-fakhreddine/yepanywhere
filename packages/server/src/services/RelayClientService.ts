@@ -217,13 +217,18 @@ export class RelayClientService {
   }
 
   private handleMessage(ws: WebSocket, data: Buffer | string): void {
+    // Convert Buffer to string for text frame processing
+    // Note: Binary frames (like encrypted envelopes) should be forwarded as-is
+    // but relay protocol and SRP messages are always text/JSON
+    const str = typeof data === "string" ? data : data.toString("utf-8");
+
     // Try to parse as JSON for relay protocol messages
     let parsed: unknown;
     try {
-      const str = typeof data === "string" ? data : data.toString("utf-8");
       parsed = JSON.parse(str);
     } catch {
-      // Not JSON - this is the first message from a phone client (SRP init)
+      // Not JSON - this is the first message from a phone client (binary frame)
+      // Keep as Buffer for binary frame handling
       this.handleClaimed(ws, data);
       return;
     }
@@ -246,10 +251,10 @@ export class RelayClientService {
       return;
     }
 
-    // Unknown message type - could be first message from client
-    // Relay switches to passthrough mode after pairing, so any non-protocol
-    // message indicates the connection has been claimed
-    this.handleClaimed(ws, data);
+    // Unknown JSON message type - this is the first message from a phone client
+    // (e.g., SRP hello). Pass as string since it was successfully parsed as JSON.
+    // Relay switches to passthrough mode after pairing.
+    this.handleClaimed(ws, str);
   }
 
   private handleRejection(ws: WebSocket, msg: RelayServerRejected): void {
@@ -282,10 +287,28 @@ export class RelayClientService {
   private handleClaimed(ws: WebSocket, firstMessage: Buffer | string): void {
     if (!this.config) return;
 
-    console.log("[RelayClient] Connection claimed by phone client");
+    const msgType =
+      typeof firstMessage === "string"
+        ? `string(${firstMessage.length})`
+        : Buffer.isBuffer(firstMessage)
+          ? `Buffer(${firstMessage.length})`
+          : typeof firstMessage;
+    const preview =
+      typeof firstMessage === "string"
+        ? firstMessage.slice(0, 100)
+        : Buffer.isBuffer(firstMessage)
+          ? firstMessage.toString("utf-8").slice(0, 100)
+          : String(firstMessage);
+    console.log(
+      `[RelayClient] Connection claimed by phone client, firstMessage: ${msgType}, preview: ${preview}`,
+    );
 
     // Remove from waiting state (it's now claimed)
     this.waitingWs = null;
+
+    // Remove all listeners before handoff - the new handler will attach its own
+    // This prevents duplicate message processing
+    ws.removeAllListeners();
 
     // Hand off to the WebSocket relay handler
     this.config.onRelayConnection(ws, firstMessage);

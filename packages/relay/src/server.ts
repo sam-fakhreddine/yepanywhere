@@ -5,28 +5,28 @@
  * server instance that can be started on any port.
  */
 
-import type { IncomingMessage } from "node:http";
-import type { Duplex } from "node:stream";
-import { type ServerType, serve } from "@hono/node-server";
-import { createNodeWebSocket } from "@hono/node-ws";
+import { type Server, createServer } from "node:http";
+import { getRequestListener } from "@hono/node-server";
 import type Database from "better-sqlite3";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import pino, { type Logger } from "pino";
+import { WebSocketServer } from "ws";
 import type { RelayConfig } from "./config.js";
 import { ConnectionManager } from "./connections.js";
 import { createDb, createTestDb } from "./db.js";
+import type { LogLevel } from "./logger.js";
 import { UsernameRegistry } from "./registry.js";
 import { createWsHandler } from "./ws-handler.js";
 
 export interface RelayServerOptions {
-  /** Port to listen on (default: 3500) */
+  /** Port to listen on (default: 0 for random available port) */
   port?: number;
   /** Data directory for SQLite database (default: in-memory for testing) */
   dataDir?: string;
   /** Use in-memory database for testing */
   inMemoryDb?: boolean;
-  /** Log level (default: info) */
+  /** Log level (default: warn) */
   logLevel?: string;
   /** Ping interval for waiting connections in ms (default: 60000) */
   pingIntervalMs?: number;
@@ -40,7 +40,9 @@ export interface RelayServerOptions {
 
 export interface RelayServer {
   /** The underlying HTTP server */
-  server: ServerType;
+  server: Server;
+  /** The WebSocket server */
+  wss: WebSocketServer;
   /** The port the server is listening on */
   port: number;
   /** The Hono app instance */
@@ -66,18 +68,28 @@ export interface RelayServer {
 export async function createRelayServer(
   options: RelayServerOptions = {},
 ): Promise<RelayServer> {
+  const logLevel = options.logLevel ?? "warn";
+
   const config: RelayConfig = {
     port: options.port ?? 0, // 0 = random available port
     dataDir: options.dataDir ?? "",
-    logLevel: options.logLevel ?? "warn",
     pingIntervalMs: options.pingIntervalMs ?? 60_000,
     pongTimeoutMs: options.pongTimeoutMs ?? 30_000,
     reclaimDays: options.reclaimDays ?? 90,
+    logging: {
+      logDir: "",
+      logFile: "relay.log",
+      consoleLevel: logLevel as LogLevel,
+      fileLevel: logLevel as LogLevel,
+      logToConsole: true,
+      logToFile: false, // Disable file logging in test mode by default
+      prettyPrint: !options.disablePrettyPrint,
+    },
   };
 
-  // Initialize logger
+  // Initialize logger (simple pino for server factory - no file logging in tests)
   const logger = pino({
-    level: config.logLevel,
+    level: logLevel,
     ...(options.disablePrettyPrint
       ? {}
       : {
@@ -105,7 +117,7 @@ export async function createRelayServer(
   // Create connection manager
   const connectionManager = new ConnectionManager(registry);
 
-  // Create Hono app
+  // Create Hono app for HTTP endpoints
   const app = new Hono();
 
   // Add CORS for browser clients
@@ -144,150 +156,94 @@ export async function createRelayServer(
   // Create WebSocket handler
   const wsHandler = createWsHandler(connectionManager, config, logger);
 
-  // Create WebSocket support
-  const { upgradeWebSocket, wss } = createNodeWebSocket({ app });
+  // Create HTTP server with Hono
+  const requestListener = getRequestListener(app.fetch);
+  const server = createServer(requestListener);
 
-  // WebSocket endpoint
-  app.get(
-    "/ws",
-    upgradeWebSocket(() => ({
-      onOpen(event, ws) {
-        wsHandler.onOpen(ws);
-      },
-      onMessage(event, ws) {
-        wsHandler.onMessage(ws, event.data);
-      },
-      onClose(event, ws) {
-        wsHandler.onClose(ws);
-      },
-      onError(event, ws) {
-        wsHandler.onError(ws, event);
-      },
-    })),
-  );
+  // Create WebSocket server with noServer mode
+  const wss = new WebSocketServer({ noServer: true });
 
-  // Start server and wait for it to be ready
-  return new Promise((resolve) => {
-    const server = serve(
-      {
-        fetch: app.fetch,
-        port: config.port,
-      },
-      (info) => {
-        logger.info(
-          { port: info.port },
-          `Relay server listening on http://localhost:${info.port}`,
-        );
+  // Handle WebSocket connections
+  wss.on("connection", (ws) => {
+    wsHandler.onOpen(ws);
 
-        // Attach WebSocket upgrade handler
-        // @hono/node-ws requires manual handling of WebSocket upgrades
-        attachWsUpgradeHandler(server, app, wss);
+    ws.on("message", (data, isBinary) => {
+      wsHandler.onMessage(ws, data, isBinary);
+    });
 
-        resolve({
-          server,
-          port: info.port,
-          app,
-          connectionManager,
-          registry,
-          db,
-          logger,
-          async close() {
-            db.close();
-            server.close();
-          },
-        });
-      },
-    );
+    ws.on("close", (code, reason) => {
+      wsHandler.onClose(ws, code, reason);
+    });
+
+    ws.on("error", (error) => {
+      wsHandler.onError(ws, error);
+    });
+
+    ws.on("pong", () => {
+      wsHandler.onPong(ws);
+    });
   });
-}
 
-/** WebSocketServer from @hono/node-ws */
-interface WebSocketServerLike {
-  handleUpgrade(
-    request: IncomingMessage,
-    socket: Duplex,
-    head: Buffer,
-    callback: (ws: unknown) => void,
-  ): void;
-  emit(event: string, ...args: unknown[]): boolean;
-}
-
-/** Hono app type for routing */
-interface HonoAppLike {
-  request(
-    url: URL,
-    init: { headers: Headers },
-    env: Record<string | symbol, unknown>,
-  ): Response | Promise<Response>;
-}
-
-/** Server type that supports the 'upgrade' event */
-interface UpgradeableServer {
-  on(
-    event: "upgrade",
-    listener: (req: IncomingMessage, socket: Duplex, head: Buffer) => void,
-  ): this;
-}
-
-/**
- * Attach WebSocket upgrade handler to the HTTP server.
- * This is required for @hono/node-ws to work properly.
- */
-function attachWsUpgradeHandler(
-  server: UpgradeableServer,
-  app: HonoAppLike,
-  wss: WebSocketServerLike,
-): void {
-  server.on("upgrade", (req, socket, head) => {
-    const urlPath = req.url || "/";
+  // Handle HTTP upgrade requests for WebSocket
+  server.on("upgrade", (request, socket, head) => {
+    const urlPath = request.url || "/";
 
     // Only handle /ws path
     if (!urlPath.startsWith("/ws")) {
-      socket.end("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
+      socket.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
+      socket.destroy();
       return;
     }
 
-    // Build URL and headers for Hono routing
-    const url = new URL(urlPath, "http://localhost");
-    const headers = new Headers();
-    for (const key in req.headers) {
-      const value = req.headers[key];
-      if (value !== undefined) {
-        const headerValue = Array.isArray(value) ? value[0] : value;
-        if (headerValue !== undefined) {
-          headers.append(key, headerValue);
-        }
-      }
-    }
+    // Upgrade to WebSocket
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit("connection", ws, request);
+    });
+  });
 
-    const env: Record<string | symbol, unknown> = {
-      incoming: req,
-      outgoing: undefined,
-    };
+  // Start server and wait for it to be ready
+  return new Promise((resolve) => {
+    server.listen(config.port, () => {
+      const address = server.address();
+      const port =
+        typeof address === "object" && address ? address.port : config.port;
 
-    // Track symbols before routing to detect if handler matched
-    const symbolsBefore = Object.getOwnPropertySymbols(env);
+      logger.info(
+        { port },
+        `Relay server listening on http://localhost:${port}`,
+      );
 
-    // Route through Hono
-    Promise.resolve(app.request(url, { headers }, env))
-      .then(() => {
-        const symbolsAfter = Object.getOwnPropertySymbols(env);
-        const hasNewSymbols = symbolsAfter.length > symbolsBefore.length;
+      resolve({
+        server,
+        wss,
+        port,
+        app,
+        connectionManager,
+        registry,
+        db,
+        logger,
+        async close() {
+          // Close all WebSocket connections first
+          for (const client of wss.clients) {
+            try {
+              client.close(1001, "Server shutting down");
+            } catch {
+              // Ignore errors
+            }
+          }
 
-        if (!hasNewSymbols) {
-          socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
-          return;
-        }
+          // Close the WebSocket server
+          wss.close();
 
-        // Handle the WebSocket upgrade
-        wss.handleUpgrade(req, socket, head, (ws) => {
-          wss.emit("connection", ws, req);
-        });
-      })
-      .catch(() => {
-        socket.end(
-          "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n",
-        );
+          // Close the database
+          db.close();
+
+          // Close the HTTP server
+          return new Promise<void>((resolveClose) => {
+            server.close(() => resolveClose());
+          });
+        },
       });
+    });
   });
 }

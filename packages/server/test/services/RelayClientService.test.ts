@@ -48,6 +48,10 @@ const { MockWebSocket, MockWebSocketInstances } = vi.hoisted(() => {
       this.callListeners("close");
     }
 
+    removeAllListeners(): void {
+      this.listeners.clear();
+    }
+
     // Test helpers
     simulateMessage(data: string | Buffer): void {
       this.callListeners("message", data);

@@ -1149,6 +1149,32 @@ export async function handleMessage(
 
   let parsed: unknown;
 
+  // Debug: log incoming data type and preview
+  // Check Buffer BEFORE Uint8Array since Buffer extends Uint8Array
+  const dataType =
+    data === null
+      ? "null"
+      : data === undefined
+        ? "undefined"
+        : typeof data === "string"
+          ? `string(${data.length})`
+          : Buffer.isBuffer(data)
+            ? `Buffer(${data.length})`
+            : data instanceof ArrayBuffer
+              ? `ArrayBuffer(${data.byteLength})`
+              : data instanceof Uint8Array
+                ? `Uint8Array(${data.length})`
+                : `unknown(${typeof data})`;
+  const preview =
+    typeof data === "string"
+      ? data.slice(0, 100)
+      : data instanceof Uint8Array || Buffer.isBuffer(data)
+        ? `[${Array.from(data.slice(0, 20))
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join(" ")}...]`
+        : String(data).slice(0, 100);
+  console.log(`[WS Relay] handleMessage: type=${dataType}, preview=${preview}`);
+
   if (isBinaryData(data)) {
     const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
 

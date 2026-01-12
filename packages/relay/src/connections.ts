@@ -1,5 +1,5 @@
 import { isValidRelayUsername } from "@yep-anywhere/shared";
-import type { WSContext } from "hono/ws";
+import type { WebSocket } from "ws";
 import type { UsernameRegistry } from "./registry.js";
 
 export type RegistrationResult =
@@ -8,13 +8,13 @@ export type RegistrationResult =
   | "invalid_username";
 
 export type ConnectionResult =
-  | { status: "connected"; serverWs: WSContext }
+  | { status: "connected"; serverWs: WebSocket }
   | { status: "server_offline" }
   | { status: "unknown_username" };
 
 interface Pair {
-  server: WSContext;
-  client: WSContext;
+  server: WebSocket;
+  client: WebSocket;
 }
 
 /**
@@ -28,11 +28,11 @@ interface Pair {
  */
 export class ConnectionManager {
   /** Waiting server connections by username */
-  private waiting = new Map<string, WSContext>();
+  private waiting = new Map<string, WebSocket>();
   /** Active server/client pairs */
   private pairs = new Set<Pair>();
   /** Lookup from WebSocket to its pair (for forwarding) */
-  private pairLookup = new Map<WSContext, Pair>();
+  private pairLookup = new Map<WebSocket, Pair>();
   /** Registry for username validation */
   private registry: UsernameRegistry;
 
@@ -49,7 +49,7 @@ export class ConnectionManager {
    * @returns Registration result
    */
   registerServer(
-    ws: WSContext,
+    ws: WebSocket,
     username: string,
     installId: string,
   ): RegistrationResult {
@@ -91,7 +91,7 @@ export class ConnectionManager {
    * @param username - Username to connect to
    * @returns Connection result with server WebSocket on success
    */
-  connectClient(ws: WSContext, username: string): ConnectionResult {
+  connectClient(ws: WebSocket, username: string): ConnectionResult {
     // Check if username is registered at all
     if (!this.registry.isRegistered(username)) {
       return { status: "unknown_username" };
@@ -120,11 +120,13 @@ export class ConnectionManager {
 
   /**
    * Forward data from one WebSocket to its pair.
+   * Preserves frame type (text vs binary) by using the isBinary flag.
    *
    * @param ws - Source WebSocket
-   * @param data - Data to forward (binary or string)
+   * @param data - Data to forward (Buffer from ws library)
+   * @param isBinary - Whether the data was received as a binary frame
    */
-  forward(ws: WSContext, data: ArrayBuffer | string): void {
+  forward(ws: WebSocket, data: Buffer, isBinary: boolean): void {
     const pair = this.pairLookup.get(ws);
     if (!pair) {
       return; // Not paired, ignore
@@ -134,13 +136,10 @@ export class ConnectionManager {
     const target = pair.server === ws ? pair.client : pair.server;
 
     try {
-      if (typeof data === "string") {
-        target.send(data);
-      } else {
-        target.send(data);
-      }
+      // Use the isBinary flag to preserve frame type
+      target.send(data, { binary: isBinary });
     } catch {
-      // Ignore send errors - connection may have closed
+      // Ignore send errors (connection may have closed)
     }
   }
 
@@ -151,7 +150,7 @@ export class ConnectionManager {
    * @param ws - The WebSocket that closed
    * @param username - Username associated with this connection (if known)
    */
-  handleClose(ws: WSContext, username?: string): void {
+  handleClose(ws: WebSocket, username?: string): void {
     // Check if this was a waiting connection
     if (username) {
       const waitingWs = this.waiting.get(username);
@@ -181,14 +180,14 @@ export class ConnectionManager {
   /**
    * Check if a WebSocket is currently paired.
    */
-  isPaired(ws: WSContext): boolean {
+  isPaired(ws: WebSocket): boolean {
     return this.pairLookup.has(ws);
   }
 
   /**
    * Check if a WebSocket is waiting for a client.
    */
-  isWaiting(ws: WSContext): boolean {
+  isWaiting(ws: WebSocket): boolean {
     for (const waitingWs of this.waiting.values()) {
       if (waitingWs === ws) {
         return true;

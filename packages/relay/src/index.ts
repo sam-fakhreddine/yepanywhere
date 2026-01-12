@@ -1,31 +1,28 @@
-import type { IncomingMessage } from "node:http";
-import type { Duplex } from "node:stream";
-import { serve } from "@hono/node-server";
-import { createNodeWebSocket } from "@hono/node-ws";
+import { createServer } from "node:http";
+import { getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import pino from "pino";
+import { WebSocketServer } from "ws";
 import { loadConfig } from "./config.js";
 import { ConnectionManager } from "./connections.js";
 import { createDb } from "./db.js";
+import { createLogger } from "./logger.js";
 import { UsernameRegistry } from "./registry.js";
 import { createWsHandler } from "./ws-handler.js";
 
 const config = loadConfig();
 
-// Initialize logger
-const logger = pino({
-  level: config.logLevel,
-  transport: {
-    target: "pino-pretty",
-    options: {
-      colorize: true,
-    },
-  },
-});
+// Initialize logger with file logging enabled by default
+const logger = createLogger(config.logging);
 
 logger.info(
-  { dataDir: config.dataDir, port: config.port },
+  {
+    dataDir: config.dataDir,
+    port: config.port,
+    logFile: config.logging.logToFile
+      ? `${config.logging.logDir}/${config.logging.logFile}`
+      : "disabled",
+  },
   "Starting relay server",
 );
 
@@ -42,7 +39,7 @@ if (reclaimed > 0) {
 // Create connection manager
 const connectionManager = new ConnectionManager(registry);
 
-// Create Hono app
+// Create Hono app for HTTP endpoints
 const app = new Hono();
 
 // Add CORS for browser clients
@@ -81,146 +78,89 @@ app.get("/status", (c) => {
 // Create WebSocket handler
 const wsHandler = createWsHandler(connectionManager, config, logger);
 
-// Create WebSocket support
-const { upgradeWebSocket, wss } = createNodeWebSocket({ app });
+// Create HTTP server with Hono
+const requestListener = getRequestListener(app.fetch);
+const server = createServer(requestListener);
 
-// WebSocket endpoint
-app.get(
-  "/ws",
-  upgradeWebSocket(() => ({
-    onOpen(event, ws) {
-      wsHandler.onOpen(ws);
-    },
-    onMessage(event, ws) {
-      wsHandler.onMessage(ws, event.data);
-    },
-    onClose(event, ws) {
-      wsHandler.onClose(ws);
-    },
-    onError(event, ws) {
-      wsHandler.onError(ws, event);
-    },
-  })),
-);
+// Create WebSocket server attached to the HTTP server, but with noServer
+// so we can manually handle upgrades for /ws path only
+const wss = new WebSocketServer({ noServer: true });
 
-/** WebSocketServer from @hono/node-ws */
-interface WebSocketServerLike {
-  handleUpgrade(
-    request: IncomingMessage,
-    socket: Duplex,
-    head: Buffer,
-    callback: (ws: unknown) => void,
-  ): void;
-  emit(event: string, ...args: unknown[]): boolean;
-}
+// Handle WebSocket connections
+wss.on("connection", (ws) => {
+  wsHandler.onOpen(ws);
 
-/** Hono app type for routing */
-interface HonoAppLike {
-  request(
-    url: URL,
-    init: { headers: Headers },
-    env: Record<string | symbol, unknown>,
-  ): Response | Promise<Response>;
-}
-
-/** Server type that supports the 'upgrade' event */
-interface UpgradeableServer {
-  on(
-    event: "upgrade",
-    listener: (req: IncomingMessage, socket: Duplex, head: Buffer) => void,
-  ): this;
-}
-
-/**
- * Attach WebSocket upgrade handler to the HTTP server.
- * This is required for @hono/node-ws to work properly.
- */
-function attachWsUpgradeHandler(
-  server: UpgradeableServer,
-  honoApp: HonoAppLike,
-  websocketServer: WebSocketServerLike,
-): void {
-  logger.info("Attaching WebSocket upgrade handler");
-  server.on("upgrade", (req, socket, head) => {
-    const urlPath = req.url || "/";
-    logger.debug({ urlPath, headers: req.headers }, "Received upgrade request");
-
-    // Only handle /ws path
-    if (!urlPath.startsWith("/ws")) {
-      socket.end("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
-      return;
-    }
-
-    // Build URL and headers for Hono routing
-    const url = new URL(urlPath, "http://localhost");
-    const headers = new Headers();
-    for (const key in req.headers) {
-      const value = req.headers[key];
-      if (value !== undefined) {
-        const headerValue = Array.isArray(value) ? value[0] : value;
-        if (headerValue !== undefined) {
-          headers.append(key, headerValue);
-        }
-      }
-    }
-
-    const env: Record<string | symbol, unknown> = {
-      incoming: req,
-      outgoing: undefined,
-    };
-
-    // Track symbols before routing to detect if handler matched
-    const symbolsBefore = Object.getOwnPropertySymbols(env);
-
-    // Route through Hono
-    Promise.resolve(honoApp.request(url, { headers }, env))
-      .then(() => {
-        const symbolsAfter = Object.getOwnPropertySymbols(env);
-        const hasNewSymbols = symbolsAfter.length > symbolsBefore.length;
-
-        if (!hasNewSymbols) {
-          socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
-          return;
-        }
-
-        // Handle the WebSocket upgrade
-        logger.debug({ urlPath }, "Handling WebSocket upgrade");
-        websocketServer.handleUpgrade(req, socket, head, (ws) => {
-          logger.info({ urlPath }, "WebSocket upgrade complete");
-          websocketServer.emit("connection", ws, req);
-        });
-      })
-      .catch(() => {
-        socket.end(
-          "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n",
-        );
-      });
+  ws.on("message", (data, isBinary) => {
+    wsHandler.onMessage(ws, data, isBinary);
   });
-}
 
-// Start server
-const server = serve(
-  {
-    fetch: app.fetch,
-    port: config.port,
-  },
-  (info) => {
-    logger.info(
-      { port: info.port },
-      `Relay server listening on http://localhost:${info.port}`,
-    );
-    logger.info(`WebSocket endpoint: ws://localhost:${info.port}/ws`);
+  ws.on("close", (code, reason) => {
+    wsHandler.onClose(ws, code, reason);
+  });
 
-    // Attach WebSocket upgrade handler - required for @hono/node-ws
-    attachWsUpgradeHandler(server, app, wss);
-  },
-);
+  ws.on("error", (error) => {
+    wsHandler.onError(ws, error);
+  });
+
+  ws.on("pong", () => {
+    wsHandler.onPong(ws);
+  });
+});
+
+// Handle HTTP upgrade requests for WebSocket
+server.on("upgrade", (request, socket, head) => {
+  const urlPath = request.url || "/";
+  logger.debug(
+    { urlPath, headers: request.headers },
+    "Received upgrade request",
+  );
+
+  // Only handle /ws path
+  if (!urlPath.startsWith("/ws")) {
+    socket.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
+    socket.destroy();
+    return;
+  }
+
+  // Upgrade to WebSocket
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    logger.info({ urlPath }, "WebSocket upgrade complete");
+    wss.emit("connection", ws, request);
+  });
+});
+
+// Start the server
+server.listen(config.port, () => {
+  logger.info(
+    { port: config.port },
+    `Relay server listening on http://localhost:${config.port}`,
+  );
+  logger.info(`WebSocket endpoint: ws://localhost:${config.port}/ws`);
+});
 
 // Graceful shutdown
 function shutdown() {
   logger.info("Shutting down relay server...");
+
+  // Close all WebSocket connections first
+  for (const client of wss.clients) {
+    try {
+      client.close(1001, "Server shutting down");
+    } catch {
+      // Ignore errors
+    }
+  }
+
   db.close();
+
+  // Give connections a moment to close gracefully, then force exit
+  const forceExitTimeout = setTimeout(() => {
+    logger.warn("Force exiting after timeout");
+    process.exit(0);
+  }, 2000);
+
   server.close(() => {
+    clearTimeout(forceExitTimeout);
     logger.info("Relay server stopped");
     process.exit(0);
   });

@@ -17,6 +17,14 @@ import {
 const TEST_USERNAME = "e2e-test-user";
 const TEST_PASSWORD = "test-password-123";
 
+/**
+ * Helper to navigate to the Direct Login page from the mode selection page.
+ */
+async function goToDirectLogin(page: import("@playwright/test").Page) {
+  await page.click('[data-testid="direct-mode-button"]');
+  await expect(page.locator('[data-testid="login-form"]')).toBeVisible();
+}
+
 test.describe("Remote Login Flow", () => {
   test.beforeEach(async ({ baseURL, page }) => {
     // Configure remote access with test credentials
@@ -37,9 +45,9 @@ test.describe("Remote Login Flow", () => {
 
   test("login page renders correctly", async ({ page, remoteClientURL }) => {
     await page.goto(remoteClientURL);
+    await goToDirectLogin(page);
 
-    // Verify login form is visible
-    await expect(page.locator('[data-testid="login-form"]')).toBeVisible();
+    // Verify login form is visible (already checked by goToDirectLogin)
     await expect(page.locator('[data-testid="ws-url-input"]')).toBeVisible();
     await expect(page.locator('[data-testid="username-input"]')).toBeVisible();
     await expect(page.locator('[data-testid="password-input"]')).toBeVisible();
@@ -52,6 +60,7 @@ test.describe("Remote Login Flow", () => {
     wsURL,
   }) => {
     await page.goto(remoteClientURL);
+    await goToDirectLogin(page);
 
     // Fill in login form
     await page.fill('[data-testid="ws-url-input"]', wsURL);
@@ -79,6 +88,7 @@ test.describe("Remote Login Flow", () => {
     wsURL,
   }) => {
     await page.goto(remoteClientURL);
+    await goToDirectLogin(page);
 
     // Fill in login form with wrong password
     await page.fill('[data-testid="ws-url-input"]', wsURL);
@@ -103,6 +113,7 @@ test.describe("Remote Login Flow", () => {
     wsURL,
   }) => {
     await page.goto(remoteClientURL);
+    await goToDirectLogin(page);
 
     // Fill in login form with unknown username
     await page.fill('[data-testid="ws-url-input"]', wsURL);
@@ -126,6 +137,7 @@ test.describe("Remote Login Flow", () => {
     remoteClientURL,
   }) => {
     await page.goto(remoteClientURL);
+    await goToDirectLogin(page);
 
     // Fill in login form with unreachable server
     await page.fill(
@@ -152,6 +164,7 @@ test.describe("Remote Login Flow", () => {
     remoteClientURL,
   }) => {
     await page.goto(remoteClientURL);
+    await goToDirectLogin(page);
 
     // Clear the server URL field (it has a default value)
     await page.fill('[data-testid="ws-url-input"]', "");
@@ -178,6 +191,7 @@ async function loginViaRemoteClient(
   password: string,
 ) {
   await page.goto(remoteClientURL);
+  await goToDirectLogin(page);
   await page.fill('[data-testid="ws-url-input"]', wsURL);
   await page.fill('[data-testid="username-input"]', username);
   await page.fill('[data-testid="password-input"]', password);
@@ -219,6 +233,7 @@ test.describe("Session Resumption", () => {
       sessionStorage.clear();
     });
     await page.reload();
+    await goToDirectLogin(page);
 
     // Fill in login form with "Remember me" checked
     await page.fill('[data-testid="ws-url-input"]', wsURL);
@@ -300,6 +315,7 @@ test.describe("Session Resumption", () => {
       sessionStorage.clear();
     });
     await page.reload();
+    await goToDirectLogin(page);
 
     // Login with "Remember me" checked
     await page.fill('[data-testid="ws-url-input"]', wsURL);
@@ -351,6 +367,7 @@ test.describe("Session Resumption", () => {
       sessionStorage.clear();
     });
     await page.reload();
+    await goToDirectLogin(page);
 
     // Login with "Remember me" checked
     await page.fill('[data-testid="ws-url-input"]', wsURL);

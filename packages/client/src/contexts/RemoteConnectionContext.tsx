@@ -148,17 +148,23 @@ interface Props {
 }
 
 export function RemoteConnectionProvider({ children }: Props) {
+  // Load stored credentials synchronously to determine initial state
+  const initialStored = loadStoredCredentials();
+
   const [connection, setConnection] = useState<SecureConnection | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [isAutoResuming, setIsAutoResuming] = useState(false);
+  // Initialize isAutoResuming to true if we have a stored session to resume
+  // This prevents a flash of the login form before auto-resume starts
+  const [isAutoResuming, setIsAutoResuming] = useState(
+    () => !!initialStored?.session,
+  );
   const [error, setError] = useState<string | null>(null);
   // Track if we've attempted auto-resume (to prevent repeated attempts)
   const [autoResumeAttempted, setAutoResumeAttempted] = useState(false);
 
-  // Load stored credentials for form pre-fill
-  const stored = loadStoredCredentials();
-  const storedRef = useRef(stored);
-  storedRef.current = stored;
+  // Keep stored credentials in ref for updates during the component lifecycle
+  const storedRef = useRef(initialStored);
+  storedRef.current = loadStoredCredentials();
 
   // Track whether we want to remember sessions
   const rememberMeRef = useRef(false);
@@ -467,9 +473,9 @@ export function RemoteConnectionProvider({ children }: Props) {
     connect,
     connectViaRelay,
     disconnect,
-    storedUrl: stored?.wsUrl ?? null,
-    storedUsername: stored?.username ?? null,
-    hasStoredSession: !!stored?.session,
+    storedUrl: storedRef.current?.wsUrl ?? null,
+    storedUsername: storedRef.current?.username ?? null,
+    hasStoredSession: !!storedRef.current?.session,
     resumeSession,
   };
 

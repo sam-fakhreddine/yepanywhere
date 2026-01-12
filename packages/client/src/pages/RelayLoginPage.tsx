@@ -11,7 +11,7 @@ import { YepAnywhereLogo } from "../components/YepAnywhereLogo";
 import { useRemoteConnection } from "../contexts/RemoteConnectionContext";
 
 /** Default relay URL */
-const DEFAULT_RELAY_URL = "wss://remote.yepanywhere.com/ws";
+const DEFAULT_RELAY_URL = "wss://relay.yepanywhere.com/ws";
 
 type ConnectionStatus =
   | "idle"

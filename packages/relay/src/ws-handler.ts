@@ -6,8 +6,8 @@ import {
   isRelayClientConnect,
   isRelayServerRegister,
 } from "@yep-anywhere/shared";
-import type { WSContext, WSMessageReceive } from "hono/ws";
 import type { Logger } from "pino";
+import type { RawData, WebSocket } from "ws";
 import type { RelayConfig } from "./config.js";
 import type { ConnectionManager } from "./connections.js";
 
@@ -28,9 +28,9 @@ interface ConnectionState {
 }
 
 /** Track connection state by WebSocket */
-const connectionStates = new WeakMap<WSContext, ConnectionState>();
+const connectionStates = new WeakMap<WebSocket, ConnectionState>();
 
-function getState(ws: WSContext): ConnectionState {
+function getState(ws: WebSocket): ConnectionState {
   let state = connectionStates.get(ws);
   if (!state) {
     state = { paired: false };
@@ -47,15 +47,16 @@ export function createWsHandler(
   config: RelayConfig,
   logger: Logger,
 ) {
-  function sendJson(ws: WSContext, data: object): void {
+  function sendJson(ws: WebSocket, data: object): void {
     try {
-      ws.send(JSON.stringify(data));
+      // Send as text frame (binary: false)
+      ws.send(JSON.stringify(data), { binary: false });
     } catch (err) {
       logger.debug({ err }, "Failed to send message");
     }
   }
 
-  function startPingInterval(ws: WSContext, state: ConnectionState): void {
+  function startPingInterval(ws: WebSocket, state: ConnectionState): void {
     // Only ping waiting connections (not paired)
     state.pingInterval = setInterval(() => {
       if (state.paired) {
@@ -67,10 +68,9 @@ export function createWsHandler(
         return;
       }
 
-      // Send ping via raw WebSocket if available
+      // Send WebSocket ping frame
       try {
-        const raw = ws.raw as { ping?: () => void } | null;
-        raw?.ping?.();
+        ws.ping();
       } catch {
         // Ignore ping errors
       }
@@ -110,40 +110,55 @@ export function createWsHandler(
   }
 
   return {
-    onOpen(ws: WSContext): void {
+    onOpen(ws: WebSocket): void {
       logger.debug("WebSocket connection opened");
       // State is initialized lazily on first message
     },
 
-    onMessage(ws: WSContext, event: WSMessageReceive): void {
+    onMessage(ws: WebSocket, data: RawData, isBinary: boolean): void {
       const state = getState(ws);
 
-      // If already paired, forward everything
+      // Debug logging
+      const dataType = isBinary ? "binary" : "text";
+      const size =
+        data instanceof Buffer
+          ? data.length
+          : Array.isArray(data)
+            ? data.reduce((sum, buf) => sum + buf.length, 0)
+            : (data as ArrayBuffer).byteLength;
+      logger.debug(
+        { paired: state.paired, dataType, size, isServer: state.isServer },
+        "onMessage received",
+      );
+
+      // Convert RawData to Buffer for consistent handling
+      let buffer: Buffer;
+      if (data instanceof Buffer) {
+        buffer = data;
+      } else if (Array.isArray(data)) {
+        // Array of Buffers - concatenate
+        buffer = Buffer.concat(data);
+      } else {
+        // ArrayBuffer - need to wrap in Uint8Array first
+        buffer = Buffer.from(new Uint8Array(data));
+      }
+
+      // If already paired, forward everything preserving frame type
       if (state.paired) {
-        if (typeof event === "string") {
-          connectionManager.forward(ws, event);
-        } else if (event instanceof ArrayBuffer) {
-          connectionManager.forward(ws, event);
-        } else if (ArrayBuffer.isView(event)) {
-          // Extract bytes from typed array view into a new ArrayBuffer
-          const bytes = new Uint8Array(
-            event.buffer,
-            event.byteOffset,
-            event.byteLength,
-          );
-          connectionManager.forward(ws, bytes.buffer as ArrayBuffer);
-        }
+        connectionManager.forward(ws, buffer, isBinary);
+        return;
+      }
+
+      // Before pairing, we only accept text frames with JSON protocol messages
+      if (isBinary) {
+        logger.debug("Received binary message before pairing, ignoring");
         return;
       }
 
       // Parse JSON message for protocol handling
       let msg: unknown;
       try {
-        if (typeof event !== "string") {
-          logger.debug("Received binary message before pairing");
-          return;
-        }
-        msg = JSON.parse(event);
+        msg = JSON.parse(buffer.toString("utf8"));
       } catch {
         logger.debug("Failed to parse message as JSON");
         return;
@@ -231,7 +246,7 @@ export function createWsHandler(
       }
     },
 
-    onClose(ws: WSContext): void {
+    onClose(ws: WebSocket, code: number, reason: Buffer): void {
       const state = getState(ws);
 
       stopPingInterval(state);
@@ -239,23 +254,30 @@ export function createWsHandler(
 
       if (state.username) {
         logger.info(
-          { username: state.username, isServer: state.isServer },
+          {
+            username: state.username,
+            isServer: state.isServer,
+            code,
+            reason: reason.toString("utf8"),
+          },
           "Connection closed",
         );
       } else {
-        logger.debug("Connection closed (no username)");
+        logger.debug(
+          { code, reason: reason.toString("utf8") },
+          "Connection closed (no username)",
+        );
       }
 
       connectionStates.delete(ws);
     },
 
-    onError(ws: WSContext, error: Event): void {
+    onError(ws: WebSocket, error: Error): void {
       const state = getState(ws);
       logger.error({ username: state.username, error }, "WebSocket error");
     },
 
-    // Custom handler for pong responses (called by raw WebSocket)
-    onPong(ws: WSContext): void {
+    onPong(ws: WebSocket): void {
       const state = getState(ws);
       handlePong(state);
     },
