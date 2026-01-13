@@ -1,33 +1,60 @@
 import { PushNotificationToggle } from "../../components/PushNotificationToggle";
+import { useConnectedDevices } from "../../hooks/useConnectedDevices";
 import { useNotificationSettings } from "../../hooks/useNotificationSettings";
 import { usePushNotifications } from "../../hooks/usePushNotifications";
-import { useSubscribedDevices } from "../../hooks/useSubscribedDevices";
+import {
+  type SubscribedDevice,
+  useSubscribedDevices,
+} from "../../hooks/useSubscribedDevices";
+
+/**
+ * Unified device that merges subscribed device info with connection status.
+ */
+interface UnifiedDevice {
+  browserProfileId: string;
+  /** Device name from push subscription, or truncated UUID */
+  displayName: string;
+  /** Browser type suffix (e.g., "(Android/Chrome)") */
+  browserType: string;
+  /** True if device has push subscription */
+  isSubscribed: boolean;
+  /** True if device is currently connected */
+  isConnected: boolean;
+  /** Number of connected tabs (0 if not connected) */
+  tabCount: number;
+  /** Subscription date (if subscribed) */
+  subscribedAt?: string;
+  /** True if this is the current device */
+  isCurrentDevice: boolean;
+}
 
 /**
  * Format a device name with its domain for display.
+ * Returns the display name and browser type separately.
  */
 function formatDeviceName(
   deviceName: string | undefined,
-  endpointDomain: string,
-): string {
+  endpointDomain: string | undefined,
+): { displayName: string; browserType: string } {
   const name = deviceName || "Unknown device";
+
   // Extract push service type from domain
-  if (endpointDomain.includes("google")) {
-    return `${name} (Android/Chrome)`;
+  if (endpointDomain?.includes("google")) {
+    return { displayName: name, browserType: "(Android/Chrome)" };
   }
   if (
-    endpointDomain.includes("apple") ||
-    endpointDomain.includes("push.apple")
+    endpointDomain?.includes("apple") ||
+    endpointDomain?.includes("push.apple")
   ) {
-    return `${name} (iOS/Safari)`;
+    return { displayName: name, browserType: "(iOS/Safari)" };
   }
   if (
-    endpointDomain.includes("mozilla") ||
-    endpointDomain.includes("push.services.mozilla")
+    endpointDomain?.includes("mozilla") ||
+    endpointDomain?.includes("push.services.mozilla")
   ) {
-    return `${name} (Firefox)`;
+    return { displayName: name, browserType: "(Firefox)" };
   }
-  return name;
+  return { displayName: name, browserType: "" };
 }
 
 /**
@@ -51,20 +78,108 @@ function formatDate(dateString: string): string {
   return date.toLocaleDateString();
 }
 
+/**
+ * Merge subscribed devices with connected devices into a unified list.
+ * Sorts: current device first, then connected devices, then offline subscribed.
+ */
+function mergeDevices(
+  subscribedDevices: SubscribedDevice[],
+  connectedDevices: Map<
+    string,
+    { connectionCount: number; deviceName?: string }
+  >,
+  currentBrowserProfileId: string | null,
+): UnifiedDevice[] {
+  const deviceMap = new Map<string, UnifiedDevice>();
+
+  // Add subscribed devices first
+  for (const device of subscribedDevices) {
+    const { displayName, browserType } = formatDeviceName(
+      device.deviceName,
+      device.endpointDomain,
+    );
+    const connection = connectedDevices.get(device.browserProfileId);
+
+    deviceMap.set(device.browserProfileId, {
+      browserProfileId: device.browserProfileId,
+      displayName,
+      browserType,
+      isSubscribed: true,
+      isConnected: !!connection,
+      tabCount: connection?.connectionCount ?? 0,
+      subscribedAt: device.createdAt,
+      isCurrentDevice: device.browserProfileId === currentBrowserProfileId,
+    });
+  }
+
+  // Add connected-but-not-subscribed devices
+  for (const [browserProfileId, connection] of connectedDevices) {
+    if (!deviceMap.has(browserProfileId)) {
+      // Not subscribed, show truncated UUID
+      const truncatedId = browserProfileId.slice(0, 8);
+      deviceMap.set(browserProfileId, {
+        browserProfileId,
+        displayName: truncatedId,
+        browserType: "",
+        isSubscribed: false,
+        isConnected: true,
+        tabCount: connection.connectionCount,
+        isCurrentDevice: browserProfileId === currentBrowserProfileId,
+      });
+    }
+  }
+
+  // Convert to array and sort
+  const devices = Array.from(deviceMap.values());
+
+  devices.sort((a, b) => {
+    // Current device first
+    if (a.isCurrentDevice && !b.isCurrentDevice) return -1;
+    if (!a.isCurrentDevice && b.isCurrentDevice) return 1;
+
+    // Then connected devices (sorted by tab count descending)
+    if (a.isConnected && !b.isConnected) return -1;
+    if (!a.isConnected && b.isConnected) return 1;
+    if (a.isConnected && b.isConnected) {
+      return b.tabCount - a.tabCount;
+    }
+
+    // Then offline subscribed (sorted by subscription date, newest first)
+    if (a.subscribedAt && b.subscribedAt) {
+      return (
+        new Date(b.subscribedAt).getTime() - new Date(a.subscribedAt).getTime()
+      );
+    }
+
+    return 0;
+  });
+
+  return devices;
+}
+
 export function NotificationsSettings() {
   const { browserProfileId } = usePushNotifications();
   const {
-    devices,
+    devices: subscribedDevices,
     isLoading: devicesLoading,
     removeDevice,
   } = useSubscribedDevices();
+  const { connections, isLoading: connectionsLoading } = useConnectedDevices();
   const {
     settings,
     isLoading: settingsLoading,
     updateSetting,
   } = useNotificationSettings();
 
-  const hasSubscriptions = devices.length > 0;
+  const hasSubscriptions = subscribedDevices.length > 0;
+  const isLoading = devicesLoading || connectionsLoading;
+
+  // Merge subscribed and connected devices
+  const unifiedDevices = mergeDevices(
+    subscribedDevices,
+    connections,
+    browserProfileId,
+  );
 
   return (
     <>
@@ -156,58 +271,76 @@ export function NotificationsSettings() {
         </div>
       </section>
 
-      {/* Subscribed devices list */}
+      {/* Unified devices list */}
       <section className="settings-section">
-        <h2>Subscribed Devices</h2>
+        <h2>Devices</h2>
         <p className="settings-section-description">
-          All devices receiving push notifications from this server.
+          All devices connected to or subscribed to this server.
         </p>
         <div className="settings-group">
-          {devicesLoading ? (
+          {isLoading ? (
             <p className="settings-hint">Loading devices...</p>
-          ) : devices.length === 0 ? (
+          ) : unifiedDevices.length === 0 ? (
             <p className="settings-hint">
-              No devices subscribed. Enable push notifications above.
+              No devices connected or subscribed. Enable push notifications
+              above.
             </p>
           ) : (
             <div className="device-list">
-              {devices.map((device) => {
-                const isCurrentDevice =
-                  device.browserProfileId === browserProfileId;
-                return (
-                  <div
-                    key={device.browserProfileId}
-                    className="device-list-item"
-                  >
-                    <div className="device-list-info">
-                      <strong>
-                        {formatDeviceName(
-                          device.deviceName,
-                          device.endpointDomain,
-                        )}
-                        {isCurrentDevice && (
-                          <span className="device-current-badge">
-                            This device
-                          </span>
-                        )}
-                      </strong>
-                      <p>Subscribed {formatDate(device.createdAt)}</p>
-                    </div>
+              {unifiedDevices.map((device) => (
+                <div key={device.browserProfileId} className="device-list-item">
+                  <div className="device-list-info">
+                    <strong>
+                      {device.displayName}
+                      {device.browserType && ` ${device.browserType}`}
+                      {device.isCurrentDevice && (
+                        <span className="device-current-badge">
+                          This device
+                        </span>
+                      )}
+                    </strong>
+                    <p>
+                      {/* Status indicator */}
+                      {device.isConnected ? (
+                        <span className="device-status device-status-online">
+                          {device.tabCount === 1
+                            ? "1 tab"
+                            : `${device.tabCount} tabs`}
+                        </span>
+                      ) : (
+                        <span className="device-status device-status-offline">
+                          Offline
+                        </span>
+                      )}
+                      {/* No push indicator for connected-only devices */}
+                      {!device.isSubscribed && (
+                        <span className="device-no-push">No push</span>
+                      )}
+                      {/* Subscription date for subscribed devices */}
+                      {device.subscribedAt && (
+                        <span className="device-subscribed-date">
+                          Subscribed {formatDate(device.subscribedAt)}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  {/* Only show remove button for subscribed devices */}
+                  {device.isSubscribed && (
                     <button
                       type="button"
                       className="settings-button settings-button-danger-subtle"
                       onClick={() => removeDevice(device.browserProfileId)}
                       title={
-                        isCurrentDevice
+                        device.isCurrentDevice
                           ? "Unsubscribe this device"
                           : "Remove this device"
                       }
                     >
                       Remove
                     </button>
-                  </div>
-                );
-              })}
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

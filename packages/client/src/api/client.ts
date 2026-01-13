@@ -1,4 +1,5 @@
 import type {
+  ConnectionsResponse,
   EnrichedRecentEntry,
   FileContentResponse,
   PendingInputType,
@@ -564,6 +565,9 @@ export const api = {
       `/push/subscriptions/${encodeURIComponent(browserProfileId)}`,
       { method: "DELETE" },
     ),
+
+  // Connected devices API
+  getConnections: () => fetchJSON<ConnectionsResponse>("/connections"),
 
   getNotificationSettings: () =>
     fetchJSON<{

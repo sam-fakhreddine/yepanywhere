@@ -7071,6 +7071,47 @@ a.sidebar-nav-item {
   border-radius: var(--radius-sm);
 }
 
+.device-status {
+  margin-right: var(--space-2);
+}
+
+.device-status-online::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success-color);
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.device-status-offline::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.device-no-push {
+  font-size: var(--font-size-xs);
+  padding: 1px 4px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  margin-left: var(--space-2);
+}
+
+.device-subscribed-date {
+  margin-left: var(--space-2);
+  color: var(--text-muted);
+}
+
 .settings-button-danger-subtle {
   background: transparent;
   border-color: var(--error-color);
