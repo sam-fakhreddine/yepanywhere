@@ -3,27 +3,27 @@ import { useCallback, useEffect, useState } from "react";
 const STORAGE_KEY = "yep-anywhere-recent-project";
 
 /**
- * Get the most recently visited project ID from sessionStorage.
+ * Get the most recently visited project ID from localStorage.
  * Returns null if none has been set.
  */
 export function getRecentProjectId(): string | null {
   if (typeof window === "undefined") return null;
-  return sessionStorage.getItem(STORAGE_KEY);
+  return localStorage.getItem(STORAGE_KEY);
 }
 
 /**
- * Set the most recently visited project ID in sessionStorage.
+ * Set the most recently visited project ID in localStorage.
  */
 export function setRecentProjectId(projectId: string): void {
   if (typeof window === "undefined") return;
-  sessionStorage.setItem(STORAGE_KEY, projectId);
+  localStorage.setItem(STORAGE_KEY, projectId);
 }
 
 /**
  * Hook that tracks the most recently visited project.
  * - Returns the current recent project ID
  * - Provides a setter to update it (call when navigating to a project)
- * - Uses sessionStorage (tab-local, clears on tab close)
+ * - Uses localStorage (persists across tabs and browser sessions)
  */
 export function useRecentProject(): [
   string | null,
