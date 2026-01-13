@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { UI_KEYS } from "../lib/storageKeys";
 
 export type FontSize = "small" | "default" | "large" | "larger";
-
-const FONT_SIZE_KEY = "yep-anywhere-font-size";
 
 const fontSizeScales: Record<FontSize, number> = {
   small: 0.85,
@@ -40,7 +39,7 @@ function applyFontSize(size: FontSize) {
 }
 
 function loadFontSize(): FontSize {
-  const stored = localStorage.getItem(FONT_SIZE_KEY);
+  const stored = localStorage.getItem(UI_KEYS.fontSize);
   if (stored && FONT_SIZES.includes(stored as FontSize)) {
     return stored as FontSize;
   }
@@ -48,7 +47,7 @@ function loadFontSize(): FontSize {
 }
 
 function saveFontSize(size: FontSize) {
-  localStorage.setItem(FONT_SIZE_KEY, size);
+  localStorage.setItem(UI_KEYS.fontSize, size);
 }
 
 /**

@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
-
-const DEVICE_ID_KEY = "yep-anywhere-device-id";
+import {
+  LEGACY_KEYS,
+  getServerScoped,
+  setServerScoped,
+} from "../lib/storageKeys";
 const SW_PATH = "/sw.js";
 
 // Service worker is disabled in dev mode by default to avoid page reload issues
@@ -51,10 +54,10 @@ export function usePushNotifications() {
 
   // Get or create device ID
   const getDeviceId = useCallback((): string => {
-    let deviceId = localStorage.getItem(DEVICE_ID_KEY);
+    let deviceId = getServerScoped("deviceId", LEGACY_KEYS.deviceId);
     if (!deviceId) {
       deviceId = crypto.randomUUID();
-      localStorage.setItem(DEVICE_ID_KEY, deviceId);
+      setServerScoped("deviceId", deviceId, LEGACY_KEYS.deviceId);
     }
     return deviceId;
   }, []);
@@ -66,7 +69,7 @@ export function usePushNotifications() {
         ? "Service worker disabled in dev mode (set VITE_ENABLE_SW=true to enable)"
         : "Push notifications not supported in this browser";
       // Still populate deviceId so we can identify this device in the subscribed list
-      const deviceId = localStorage.getItem(DEVICE_ID_KEY);
+      const deviceId = getServerScoped("deviceId", LEGACY_KEYS.deviceId);
       setState((s) => ({
         ...s,
         isSupported: false,

@@ -1,18 +1,17 @@
 import { useCallback, useState } from "react";
+import { UI_KEYS } from "../lib/storageKeys";
 
 export interface SchemaValidationSettings {
   enabled: boolean;
   ignoredTools: string[];
 }
-
-const SCHEMA_VALIDATION_KEY = "yep-anywhere-schema-validation";
 const DEFAULT_SETTINGS: SchemaValidationSettings = {
   enabled: false,
   ignoredTools: [],
 };
 
 function loadSettings(): SchemaValidationSettings {
-  const stored = localStorage.getItem(SCHEMA_VALIDATION_KEY);
+  const stored = localStorage.getItem(UI_KEYS.schemaValidation);
   if (!stored) return DEFAULT_SETTINGS;
   try {
     return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
@@ -22,7 +21,7 @@ function loadSettings(): SchemaValidationSettings {
 }
 
 function saveSettings(settings: SchemaValidationSettings) {
-  localStorage.setItem(SCHEMA_VALIDATION_KEY, JSON.stringify(settings));
+  localStorage.setItem(UI_KEYS.schemaValidation, JSON.stringify(settings));
 }
 
 /**

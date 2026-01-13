@@ -1,16 +1,15 @@
 import { useCallback, useState } from "react";
-
-const STREAMING_KEY = "yep-anywhere-streaming-enabled";
+import { UI_KEYS } from "../lib/storageKeys";
 
 function loadStreamingEnabled(): boolean {
-  const stored = localStorage.getItem(STREAMING_KEY);
+  const stored = localStorage.getItem(UI_KEYS.streamingEnabled);
   // Default to enabled
   if (stored === null) return true;
   return stored === "true";
 }
 
 function saveStreamingEnabled(enabled: boolean) {
-  localStorage.setItem(STREAMING_KEY, String(enabled));
+  localStorage.setItem(UI_KEYS.streamingEnabled, String(enabled));
 }
 
 /**

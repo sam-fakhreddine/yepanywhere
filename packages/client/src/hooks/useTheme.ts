@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { UI_KEYS } from "../lib/storageKeys";
 
 export type Theme = "auto" | "light" | "dark" | "verydark";
-
-const THEME_KEY = "yep-anywhere-theme";
 
 const themeLabels: Record<Theme, string> = {
   auto: "Auto",
@@ -23,7 +22,7 @@ function applyTheme(theme: Theme) {
 }
 
 function loadTheme(): Theme {
-  const stored = localStorage.getItem(THEME_KEY);
+  const stored = localStorage.getItem(UI_KEYS.theme);
   if (stored && THEMES.includes(stored as Theme)) {
     return stored as Theme;
   }
@@ -31,7 +30,7 @@ function loadTheme(): Theme {
 }
 
 function saveTheme(theme: Theme) {
-  localStorage.setItem(THEME_KEY, theme);
+  localStorage.setItem(UI_KEYS.theme, theme);
 }
 
 /**

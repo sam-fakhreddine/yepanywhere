@@ -249,6 +249,7 @@ async function startServer() {
     // Note: frontendProxy not passed - will be added below
     serverHost: "127.0.0.1", // Always report localhost as main binding
     serverPort: effectiveServerPort,
+    installId: installService.getInstallId(),
     dataDir: config.dataDir,
     networkBindingService,
     networkBindingCallbackHolder,

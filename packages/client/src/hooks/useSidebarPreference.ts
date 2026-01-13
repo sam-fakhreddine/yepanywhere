@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
-
-const STORAGE_KEY = "sidebar-expanded";
+import { UI_KEYS } from "../lib/storageKeys";
 
 /**
  * Hook to manage sidebar expanded/collapsed preference.
@@ -13,7 +12,7 @@ export function useSidebarPreference(): {
 } {
   const [isExpanded, setIsExpandedState] = useState(() => {
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(UI_KEYS.sidebarExpanded);
       // Default to expanded if no preference saved
       return stored === null ? true : stored === "true";
     }
@@ -22,7 +21,7 @@ export function useSidebarPreference(): {
 
   const setIsExpanded = useCallback((expanded: boolean) => {
     setIsExpandedState(expanded);
-    localStorage.setItem(STORAGE_KEY, String(expanded));
+    localStorage.setItem(UI_KEYS.sidebarExpanded, String(expanded));
   }, []);
 
   const toggleExpanded = useCallback(() => {

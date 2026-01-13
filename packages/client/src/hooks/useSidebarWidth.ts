@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
-
-const STORAGE_KEY = "yep-anywhere-sidebar-width";
+import { UI_KEYS } from "../lib/storageKeys";
 
 // ===== Configuration Constants (easy to tweak) =====
 export const SIDEBAR_MIN_WIDTH = 280; // Current default, minimum allowed
@@ -19,7 +18,7 @@ function clamp(value: number, min: number, max: number): number {
 
 function loadWidth(): number {
   if (typeof window === "undefined") return SIDEBAR_MIN_WIDTH;
-  const stored = localStorage.getItem(STORAGE_KEY);
+  const stored = localStorage.getItem(UI_KEYS.sidebarWidth);
   if (stored === null) return SIDEBAR_MIN_WIDTH;
   const parsed = Number.parseInt(stored, 10);
   if (Number.isNaN(parsed)) return SIDEBAR_MIN_WIDTH;
@@ -27,7 +26,7 @@ function loadWidth(): number {
 }
 
 function saveWidth(width: number): void {
-  localStorage.setItem(STORAGE_KEY, String(width));
+  localStorage.setItem(UI_KEYS.sidebarWidth, String(width));
 }
 
 export interface UseSidebarWidthResult {

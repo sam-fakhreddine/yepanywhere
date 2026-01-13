@@ -3,6 +3,7 @@ import { Hono } from "hono";
 export interface ServerInfoOptions {
   host: string;
   port: number;
+  installId?: string;
 }
 
 export interface ServerInfo {
@@ -14,6 +15,8 @@ export interface ServerInfo {
   boundToAllInterfaces: boolean;
   /** Whether the server is localhost-only */
   localhostOnly: boolean;
+  /** Unique installation identifier for this server instance */
+  installId?: string;
 }
 
 export function createServerInfoRoutes(options: ServerInfoOptions) {
@@ -28,6 +31,7 @@ export function createServerInfoRoutes(options: ServerInfoOptions) {
         options.host === "127.0.0.1" ||
         options.host === "localhost" ||
         options.host === "::1",
+      installId: options.installId,
     };
     return c.json(info);
   });

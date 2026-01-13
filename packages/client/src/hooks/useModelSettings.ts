@@ -1,9 +1,9 @@
 import { useCallback, useState } from "react";
-
-const MODEL_KEY = "yep-anywhere-model";
-const THINKING_LEVEL_KEY = "yep-anywhere-thinking-level";
-const THINKING_ENABLED_KEY = "yep-anywhere-thinking-enabled";
-const VOICE_INPUT_ENABLED_KEY = "yep-anywhere-voice-input-enabled";
+import {
+  LEGACY_KEYS,
+  getServerScoped,
+  setServerScoped,
+} from "../lib/storageKeys";
 
 /**
  * Available model options.
@@ -50,7 +50,7 @@ export const THINKING_LEVEL_OPTIONS: {
 ];
 
 function loadModel(): ModelOption {
-  const stored = localStorage.getItem(MODEL_KEY);
+  const stored = getServerScoped("model", LEGACY_KEYS.model);
   if (stored && ["default", "sonnet", "opus", "haiku"].includes(stored)) {
     return stored as ModelOption;
   }
@@ -58,11 +58,11 @@ function loadModel(): ModelOption {
 }
 
 function saveModel(model: ModelOption) {
-  localStorage.setItem(MODEL_KEY, model);
+  setServerScoped("model", model, LEGACY_KEYS.model);
 }
 
 function loadThinkingLevel(): ThinkingLevel {
-  const stored = localStorage.getItem(THINKING_LEVEL_KEY);
+  const stored = getServerScoped("thinkingLevel", LEGACY_KEYS.thinkingLevel);
   if (stored && ["light", "medium", "thorough"].includes(stored)) {
     return stored as ThinkingLevel;
   }
@@ -70,26 +70,40 @@ function loadThinkingLevel(): ThinkingLevel {
 }
 
 function saveThinkingLevel(level: ThinkingLevel) {
-  localStorage.setItem(THINKING_LEVEL_KEY, level);
+  setServerScoped("thinkingLevel", level, LEGACY_KEYS.thinkingLevel);
 }
 
 function loadThinkingEnabled(): boolean {
-  const stored = localStorage.getItem(THINKING_ENABLED_KEY);
+  const stored = getServerScoped(
+    "thinkingEnabled",
+    LEGACY_KEYS.thinkingEnabled,
+  );
   return stored === "true";
 }
 
 function saveThinkingEnabled(enabled: boolean) {
-  localStorage.setItem(THINKING_ENABLED_KEY, enabled ? "true" : "false");
+  setServerScoped(
+    "thinkingEnabled",
+    enabled ? "true" : "false",
+    LEGACY_KEYS.thinkingEnabled,
+  );
 }
 
 function loadVoiceInputEnabled(): boolean {
-  const stored = localStorage.getItem(VOICE_INPUT_ENABLED_KEY);
+  const stored = getServerScoped(
+    "voiceInputEnabled",
+    LEGACY_KEYS.voiceInputEnabled,
+  );
   // Default to true (enabled) if not set
   return stored !== "false";
 }
 
 function saveVoiceInputEnabled(enabled: boolean) {
-  localStorage.setItem(VOICE_INPUT_ENABLED_KEY, enabled ? "true" : "false");
+  setServerScoped(
+    "voiceInputEnabled",
+    enabled ? "true" : "false",
+    LEGACY_KEYS.voiceInputEnabled,
+  );
 }
 
 /**

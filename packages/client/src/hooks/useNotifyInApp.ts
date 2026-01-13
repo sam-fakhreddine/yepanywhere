@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
-
-const STORAGE_KEY = "yep-anywhere-notify-in-app";
+import {
+  LEGACY_KEYS,
+  getServerScoped,
+  setServerScoped,
+} from "../lib/storageKeys";
 
 /**
  * Read the notifyInApp setting from localStorage
  */
 function getNotifyInAppSetting(): boolean {
-  return localStorage.getItem(STORAGE_KEY) === "true";
+  return getServerScoped("notifyInApp", LEGACY_KEYS.notifyInApp) === "true";
 }
 
 /**
@@ -76,7 +79,7 @@ export function useNotifyInApp() {
   }, [notifyInApp]);
 
   const setNotifyInApp = useCallback((value: boolean) => {
-    localStorage.setItem(STORAGE_KEY, String(value));
+    setServerScoped("notifyInApp", String(value), LEGACY_KEYS.notifyInApp);
     setNotifyInAppState(value);
   }, []);
 

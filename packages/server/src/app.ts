@@ -118,6 +118,8 @@ export interface AppOptions {
   serverHost?: string;
   /** Server port (for server-info endpoint) */
   serverPort?: number;
+  /** Unique installation identifier (for server-info endpoint) */
+  installId?: string;
   /** Data directory for persistent state (for onboarding state) */
   dataDir?: string;
   /** NetworkBindingService for runtime binding configuration */
@@ -279,6 +281,7 @@ export function createApp(options: AppOptions): AppResult {
       createServerInfoRoutes({
         host: options.serverHost,
         port: options.serverPort,
+        installId: options.installId,
       }),
     );
   }

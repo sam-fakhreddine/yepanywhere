@@ -1,6 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react";
-
-const DEV_MODE_KEY = "yep-anywhere-developer-mode";
+import { UI_KEYS } from "../lib/storageKeys";
 
 interface DeveloperModeSettings {
   holdModeEnabled: boolean;
@@ -24,7 +23,7 @@ function loadSettings(): DeveloperModeSettings {
   ) {
     return DEFAULT_SETTINGS;
   }
-  const stored = localStorage.getItem(DEV_MODE_KEY);
+  const stored = localStorage.getItem(UI_KEYS.developerMode);
   if (!stored) return DEFAULT_SETTINGS;
   try {
     return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
@@ -41,7 +40,7 @@ function saveSettings(settings: DeveloperModeSettings) {
   ) {
     return;
   }
-  localStorage.setItem(DEV_MODE_KEY, JSON.stringify(settings));
+  localStorage.setItem(UI_KEYS.developerMode, JSON.stringify(settings));
 }
 
 // Simple external store for cross-component sync

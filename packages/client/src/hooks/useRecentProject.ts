@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-
-const STORAGE_KEY = "yep-anywhere-recent-project";
+import {
+  LEGACY_KEYS,
+  getServerScoped,
+  setServerScoped,
+} from "../lib/storageKeys";
 
 /**
  * Get the most recently visited project ID from localStorage.
@@ -8,7 +11,7 @@ const STORAGE_KEY = "yep-anywhere-recent-project";
  */
 export function getRecentProjectId(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(STORAGE_KEY);
+  return getServerScoped("recentProject", LEGACY_KEYS.recentProject);
 }
 
 /**
@@ -16,7 +19,7 @@ export function getRecentProjectId(): string | null {
  */
 export function setRecentProjectId(projectId: string): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, projectId);
+  setServerScoped("recentProject", projectId, LEGACY_KEYS.recentProject);
 }
 
 /**
