@@ -209,15 +209,25 @@ export class PushService {
 
   /**
    * Send a push notification to all subscribed browser profiles.
+   * @param payload - The notification payload
+   * @param options - Optional settings
+   * @param options.excludeBrowserProfileIds - Browser profile IDs to skip (e.g., already connected)
    */
-  async sendToAll(payload: PushPayload): Promise<SendResult[]> {
+  async sendToAll(
+    payload: PushPayload,
+    options?: { excludeBrowserProfileIds?: string[] },
+  ): Promise<SendResult[]> {
     this.ensureInitialized();
 
     if (!this.vapidKeys) {
       throw new Error("VAPID keys not configured");
     }
 
-    const browserProfileIds = Object.keys(this.state.subscriptions);
+    const excludeSet = new Set(options?.excludeBrowserProfileIds ?? []);
+    const browserProfileIds = Object.keys(this.state.subscriptions).filter(
+      (id) => !excludeSet.has(id),
+    );
+
     if (browserProfileIds.length === 0) {
       return [];
     }

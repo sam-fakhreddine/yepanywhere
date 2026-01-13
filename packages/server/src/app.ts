@@ -269,6 +269,7 @@ export function createApp(options: AppOptions): AppResult {
       eventBus: options.eventBus,
       pushService: options.pushService,
       supervisor,
+      connectedBrowsers: options.connectedBrowsers,
     });
   }
 
