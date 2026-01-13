@@ -33,9 +33,26 @@ export class WebSocketCloseError extends Error {
 }
 
 /**
+ * Error thrown when a relay connection needs to be re-established through the relay.
+ * This happens when the WebSocket drops and SecureConnection tries to auto-reconnect,
+ * but it was originally connected via relay (wsUrl = "relay://").
+ */
+export class RelayReconnectRequiredError extends Error {
+  constructor() {
+    super("Relay connection lost - reconnection requires going through relay");
+    this.name = "RelayReconnectRequiredError";
+  }
+}
+
+/**
  * Check if an error is a non-retryable WebSocket close error.
  */
 export function isNonRetryableError(error: unknown): boolean {
+  // Relay reconnect required is non-retryable at the SecureConnection level
+  // The RemoteConnectionContext handles relay reconnection
+  if (error instanceof RelayReconnectRequiredError) {
+    return true;
+  }
   return error instanceof WebSocketCloseError && error.isNonRetryable();
 }
 

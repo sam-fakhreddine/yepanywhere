@@ -5629,6 +5629,173 @@ a.sidebar-nav-item {
 }
 
 /* ==========================================================================
+   RemoteAccessSetup Component
+   ========================================================================== */
+
+.remote-access-setup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.remote-access-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.remote-access-header h3 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+.remote-access-header p {
+  margin: var(--space-1) 0 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.remote-access-loading {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.remote-access-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.remote-access-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.remote-access-status .status-label {
+  color: var(--text-muted);
+}
+
+.remote-access-status .status-indicator {
+  font-weight: 500;
+}
+
+.remote-access-status .status-indicator::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: var(--space-1);
+  vertical-align: middle;
+}
+
+.remote-access-status .status-success::before {
+  background-color: var(--success-color, var(--app-yep-green));
+}
+
+.remote-access-status .status-warning::before {
+  background-color: var(--warning-color, #f59e0b);
+}
+
+.remote-access-status .status-error::before {
+  background-color: var(--error-color, #ef4444);
+}
+
+.remote-access-status .status-pending::before {
+  background-color: var(--text-muted);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.remote-access-status .status-disabled::before {
+  background-color: var(--text-muted);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.remote-access-status .status-error-detail {
+  color: var(--error-color);
+  font-size: var(--font-size-xs);
+}
+
+.remote-access-connect {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+}
+
+.remote-access-connect .connect-label {
+  color: var(--text-muted);
+}
+
+.connect-url-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.connect-url {
+  background: var(--bg-secondary);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  word-break: break-all;
+}
+
+.copy-button {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.copy-button:hover {
+  background: var(--bg-secondary);
+}
+
+.remote-access-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.form-select {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+  cursor: pointer;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: var(--focus-border);
+}
+
+.form-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
    SessionListItem Component
    ========================================================================== */
 

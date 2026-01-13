@@ -51,6 +51,7 @@ import {
 import { SrpClientSession } from "./srp-client";
 import {
   type Connection,
+  RelayReconnectRequiredError,
   type StreamHandlers,
   type Subscription,
   type UploadOptions,
@@ -129,6 +130,9 @@ export class SecureConnection implements Connection {
   private username: string;
   private password: string | null;
   private wsUrl: string;
+
+  // Flag indicating this connection was established via relay and cannot auto-reconnect
+  private isRelayConnection = false;
 
   // Stored session for resumption (optional)
   private storedSession: StoredSession | null = null;
@@ -219,7 +223,7 @@ export class SecureConnection implements Connection {
     onSessionEstablished?: (session: StoredSession) => void,
   ): Promise<SecureConnection> {
     const conn = new SecureConnection(
-      "relay://", // Marker URL for relay connections
+      "", // No URL needed - socket already connected
       storedSession.username,
       "", // No password - resume only
       onSessionEstablished,
@@ -227,6 +231,7 @@ export class SecureConnection implements Connection {
     conn.ws = ws;
     conn.storedSession = storedSession;
     conn.password = null; // Mark as resume-only
+    conn.isRelayConnection = true; // Mark as relay - cannot auto-reconnect
 
     // Resume the session on the existing socket
     await conn.resumeOnExistingSocket();
@@ -446,6 +451,16 @@ export class SecureConnection implements Connection {
    */
   private connectAndAuthenticate(): Promise<void> {
     return new Promise((resolve, reject) => {
+      // Relay connections cannot auto-reconnect at the SecureConnection level;
+      // they need to go through the relay again
+      if (this.isRelayConnection) {
+        console.log(
+          "[SecureConnection] Cannot reconnect relay connection directly",
+        );
+        reject(new RelayReconnectRequiredError());
+        return;
+      }
+
       console.log("[SecureConnection] Connecting to", this.wsUrl);
       this.connectionState = "connecting";
 
@@ -1326,12 +1341,13 @@ export class SecureConnection implements Connection {
     onSessionEstablished?: (session: StoredSession) => void,
   ): Promise<SecureConnection> {
     const conn = new SecureConnection(
-      "relay://",
+      "", // No URL needed - socket already connected
       username,
       password,
       onSessionEstablished,
     );
     conn.ws = ws;
+    conn.isRelayConnection = true; // Mark as relay - cannot auto-reconnect
     ws.binaryType = "arraybuffer";
 
     await conn.authenticateOnExistingSocket();

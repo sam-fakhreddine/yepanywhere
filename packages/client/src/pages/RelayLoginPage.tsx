@@ -6,7 +6,7 @@
  */
 
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { YepAnywhereLogo } from "../components/YepAnywhereLogo";
 import { useRemoteConnection } from "../contexts/RemoteConnectionContext";
 
@@ -22,12 +22,17 @@ type ConnectionStatus =
 
 export function RelayLoginPage() {
   const { connectViaRelay, isAutoResuming } = useRemoteConnection();
+  const [searchParams] = useSearchParams();
 
   // Form state - relay username is also used as SRP identity
-  const [relayUsername, setRelayUsername] = useState("");
+  // Pre-fill from query parameters: ?u=username&r=relay-url
+  const initialRelayUrl = searchParams.get("r") ?? "";
+  const [relayUsername, setRelayUsername] = useState(
+    () => searchParams.get("u") ?? "",
+  );
   const [srpPassword, setSrpPassword] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [customRelayUrl, setCustomRelayUrl] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(!!initialRelayUrl);
+  const [customRelayUrl, setCustomRelayUrl] = useState(initialRelayUrl);
   const [rememberMe, setRememberMe] = useState(true);
 
   // Connection state

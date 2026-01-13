@@ -15,6 +15,19 @@ export interface RelayConfig {
   username: string;
 }
 
+export type RelayStatus =
+  | "disconnected"
+  | "connecting"
+  | "registering"
+  | "waiting"
+  | "rejected";
+
+export interface RelayStatusInfo {
+  status: RelayStatus;
+  error: string | null;
+  reconnectAttempts: number;
+}
+
 export interface RemoteAccessConfig {
   /** Whether remote access is enabled */
   enabled: boolean;
@@ -29,12 +42,16 @@ interface UseRemoteAccessResult {
   config: RemoteAccessConfig | null;
   /** Current relay configuration */
   relayConfig: RelayConfig | null;
+  /** Current relay connection status */
+  relayStatus: RelayStatusInfo | null;
   /** Whether the config is loading */
   loading: boolean;
   /** Error message if any */
   error: string | null;
-  /** Enable remote access with password (relay must be configured first) */
-  enable: (password: string) => Promise<void>;
+  /** Configure remote access with password (relay must be configured first) */
+  configure: (password: string) => Promise<void>;
+  /** Enable remote access (must be configured first) */
+  enable: () => Promise<void>;
   /** Disable remote access */
   disable: () => Promise<void>;
   /** Clear credentials without disabling */
@@ -50,17 +67,22 @@ interface UseRemoteAccessResult {
 export function useRemoteAccess(): UseRemoteAccessResult {
   const [config, setConfig] = useState<RemoteAccessConfig | null>(null);
   const [relayConfig, setRelayConfig] = useState<RelayConfig | null>(null);
+  const [relayStatus, setRelayStatus] = useState<RelayStatusInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [configResponse, relayResponse] = await Promise.all([
-        fetchJSON<RemoteAccessConfig>("/remote-access/config"),
-        fetchJSON<{ relay: RelayConfig | null }>("/remote-access/relay"),
-      ]);
+      const [configResponse, relayResponse, statusResponse] = await Promise.all(
+        [
+          fetchJSON<RemoteAccessConfig>("/remote-access/config"),
+          fetchJSON<{ relay: RelayConfig | null }>("/remote-access/relay"),
+          fetchJSON<RelayStatusInfo>("/remote-access/relay/status"),
+        ],
+      );
       setConfig(configResponse);
       setRelayConfig(relayResponse.relay);
+      setRelayStatus(statusResponse);
       setError(null);
     } catch (err) {
       console.error("[useRemoteAccess] Failed to fetch config:", err);
@@ -73,7 +95,7 @@ export function useRemoteAccess(): UseRemoteAccessResult {
     refresh().finally(() => setLoading(false));
   }, [refresh]);
 
-  const enable = useCallback(
+  const configure = useCallback(
     async (password: string) => {
       try {
         await fetchJSON("/remote-access/configure", {
@@ -83,13 +105,29 @@ export function useRemoteAccess(): UseRemoteAccessResult {
         await refresh();
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "Failed to enable remote access";
+          err instanceof Error
+            ? err.message
+            : "Failed to configure remote access";
         setError(message);
         throw new Error(message);
       }
     },
     [refresh],
   );
+
+  const enable = useCallback(async () => {
+    try {
+      await fetchJSON("/remote-access/enable", {
+        method: "POST",
+      });
+      await refresh();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to enable remote access";
+      setError(message);
+      throw new Error(message);
+    }
+  }, [refresh]);
 
   const disable = useCallback(async () => {
     try {
@@ -160,8 +198,10 @@ export function useRemoteAccess(): UseRemoteAccessResult {
   return {
     config,
     relayConfig,
+    relayStatus,
     loading,
     error,
+    configure,
     enable,
     disable,
     clearCredentials,

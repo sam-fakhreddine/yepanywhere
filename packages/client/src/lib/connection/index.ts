@@ -6,6 +6,7 @@ export type {
 } from "./types";
 export {
   WebSocketCloseError,
+  RelayReconnectRequiredError,
   isNonRetryableError,
   NON_RETRYABLE_CLOSE_CODES,
 } from "./types";
