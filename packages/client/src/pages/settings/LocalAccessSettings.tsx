@@ -76,8 +76,8 @@ export function LocalAccessSettings() {
     // Validate password if enabling auth
     const enablingAuth = requirePassword && !auth.authEnabled;
     if (enablingAuth) {
-      if (authPassword.length < 8) {
-        setFormError("Password must be at least 8 characters");
+      if (authPassword.length < 6) {
+        setFormError("Password must be at least 6 characters");
         return;
       }
       if (authPassword !== authPasswordConfirm) {
@@ -232,6 +232,7 @@ export function LocalAccessSettings() {
                 }}
                 min={1}
                 max={65535}
+                autoComplete="off"
               />
             )}
           </div>
@@ -353,10 +354,18 @@ export function LocalAccessSettings() {
           {/* Password fields - shown when enabling auth */}
           {showPasswordFields && (
             <>
+              {/* Hidden username field to prevent Chrome from using port as username */}
+              <input
+                type="text"
+                name="username"
+                autoComplete="username"
+                style={{ display: "none" }}
+                tabIndex={-1}
+              />
               <div className="settings-item">
                 <div className="settings-item-info">
                   <strong>Password</strong>
-                  <p>At least 8 characters</p>
+                  <p>At least 6 characters</p>
                 </div>
                 <input
                   type="password"
@@ -453,9 +462,9 @@ export function LocalAccessSettings() {
                       return;
                     }
 
-                    if (newPassword.length < 8) {
+                    if (newPassword.length < 6) {
                       setPasswordError(
-                        "Password must be at least 8 characters",
+                        "Password must be at least 6 characters",
                       );
                       return;
                     }

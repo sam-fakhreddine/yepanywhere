@@ -139,6 +139,9 @@ export {
   isSystemMessage,
   isSummaryMessage,
   isConversationMessage,
+  // Context window utilities
+  DEFAULT_CONTEXT_WINDOW,
+  getModelContextWindow,
 } from "./app-types.js";
 
 // Session utilities

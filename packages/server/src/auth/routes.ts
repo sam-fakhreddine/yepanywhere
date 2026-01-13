@@ -116,8 +116,8 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
       return c.json({ error: "Password is required" }, 400);
     }
 
-    if (body.password.length < 8) {
-      return c.json({ error: "Password must be at least 8 characters" }, 400);
+    if (body.password.length < 6) {
+      return c.json({ error: "Password must be at least 6 characters" }, 400);
     }
 
     const success = await authService.enableAuth(body.password);
@@ -166,8 +166,8 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
       return c.json({ error: "Password is required" }, 400);
     }
 
-    if (body.password.length < 8) {
-      return c.json({ error: "Password must be at least 8 characters" }, 400);
+    if (body.password.length < 6) {
+      return c.json({ error: "Password must be at least 6 characters" }, 400);
     }
 
     // Use enableAuth to also set the enabled flag
@@ -264,9 +264,9 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
       return c.json({ error: "New password is required" }, 400);
     }
 
-    if (body.newPassword.length < 8) {
+    if (body.newPassword.length < 6) {
       return c.json(
-        { error: "New password must be at least 8 characters" },
+        { error: "New password must be at least 6 characters" },
         400,
       );
     }

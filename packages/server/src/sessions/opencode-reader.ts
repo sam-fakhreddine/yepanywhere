@@ -7,6 +7,7 @@ import {
   type OpenCodeStoredPart,
   SESSION_TITLE_MAX_LENGTH,
   type UrlProjectId,
+  getModelContextWindow,
 } from "@yep-anywhere/shared";
 import type {
   ContextUsage,
@@ -18,9 +19,6 @@ import type {
   ISessionReader,
   LoadedSession,
 } from "./types.js";
-
-// OpenCode context window size (200K tokens, same as Claude)
-const CONTEXT_WINDOW_SIZE = 200_000;
 
 /** Default OpenCode storage directory */
 export const OPENCODE_STORAGE_DIR = join(
@@ -257,7 +255,7 @@ export class OpenCodeSessionReader implements ISessionReader {
       }
 
       const stats = await stat(sessionPath);
-      const contextUsage = await this.extractContextUsage(sessionId);
+      const contextUsage = await this.extractContextUsage(sessionId, model);
 
       // Use session title if available, otherwise first user message
       const fullTitle = session.title || firstUserMessageText?.trim() || null;
@@ -475,10 +473,15 @@ export class OpenCodeSessionReader implements ISessionReader {
 
   /**
    * Extract context usage from the last assistant message's tokens.
+   *
+   * @param sessionId - Session ID to extract usage from
+   * @param model - Model ID for determining context window size
    */
   private async extractContextUsage(
     sessionId: string,
+    model: string | undefined,
   ): Promise<ContextUsage | undefined> {
+    const contextWindowSize = getModelContextWindow(model);
     const messageDir = join(this.storageDir, "message", sessionId);
 
     try {
@@ -501,7 +504,7 @@ export class OpenCodeSessionReader implements ISessionReader {
             if (inputTokens === 0) continue;
 
             const percentage = Math.round(
-              (inputTokens / CONTEXT_WINDOW_SIZE) * 100,
+              (inputTokens / contextWindowSize) * 100,
             );
 
             const result: ContextUsage = { inputTokens, percentage };

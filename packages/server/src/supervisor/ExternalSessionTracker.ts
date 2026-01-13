@@ -18,7 +18,7 @@ import type {
   SessionUpdatedEvent,
 } from "../watcher/EventBus.js";
 import type { Supervisor } from "./Supervisor.js";
-import type { SessionStatus, SessionSummary } from "./types.js";
+import type { ContextUsage, SessionStatus, SessionSummary } from "./types.js";
 
 interface ExternalSessionInfo {
   detectedAt: Date;
@@ -78,7 +78,12 @@ export class ExternalSessionTracker {
   /** Cache of last known session state for change detection */
   private sessionStateCache: Map<
     string,
-    { title: string | null; messageCount: number; projectId: UrlProjectId }
+    {
+      title: string | null;
+      messageCount: number;
+      projectId: UrlProjectId;
+      contextUsage?: ContextUsage;
+    }
   > = new Map();
 
   constructor(options: ExternalSessionTrackerOptions) {
@@ -118,12 +123,17 @@ export class ExternalSessionTracker {
               title: summary.title,
               messageCount: summary.messageCount,
               projectId,
+              contextUsage: summary.contextUsage,
             });
             this.createdSessions.add(sessionId);
 
-            // Emit session-updated if title or messageCount has real values
+            // Emit session-updated if title, messageCount, or contextUsage has real values
             // (supervisor emits session-created with title: null, messageCount: 0)
-            if (summary.title || summary.messageCount > 0) {
+            if (
+              summary.title ||
+              summary.messageCount > 0 ||
+              summary.contextUsage
+            ) {
               const event: SessionUpdatedEvent = {
                 type: "session-updated",
                 sessionId,
@@ -131,6 +141,7 @@ export class ExternalSessionTracker {
                 title: summary.title,
                 messageCount: summary.messageCount,
                 updatedAt: summary.updatedAt,
+                contextUsage: summary.contextUsage,
                 timestamp: now,
               };
               this.eventBus.emit(event);
@@ -152,6 +163,7 @@ export class ExternalSessionTracker {
               title: summary.title,
               messageCount: summary.messageCount,
               projectId,
+              contextUsage: summary.contextUsage,
             });
           }
         } else {
@@ -160,8 +172,12 @@ export class ExternalSessionTracker {
           const titleChanged = cached?.title !== summary.title;
           const messageCountChanged =
             cached?.messageCount !== summary.messageCount;
+          // Compare context usage by input tokens (percentage can be derived)
+          const contextUsageChanged =
+            cached?.contextUsage?.inputTokens !==
+            summary.contextUsage?.inputTokens;
 
-          if (titleChanged || messageCountChanged) {
+          if (titleChanged || messageCountChanged || contextUsageChanged) {
             const event: SessionUpdatedEvent = {
               type: "session-updated",
               sessionId,
@@ -169,6 +185,7 @@ export class ExternalSessionTracker {
               title: summary.title,
               messageCount: summary.messageCount,
               updatedAt: summary.updatedAt,
+              contextUsage: summary.contextUsage,
               timestamp: now,
             };
             this.eventBus.emit(event);
@@ -178,6 +195,7 @@ export class ExternalSessionTracker {
               title: summary.title,
               messageCount: summary.messageCount,
               projectId,
+              contextUsage: summary.contextUsage,
             });
           }
         }

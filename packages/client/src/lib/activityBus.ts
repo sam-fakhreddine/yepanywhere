@@ -1,4 +1,5 @@
 import type {
+  ContextUsage,
   PendingInputType,
   ProcessStateType,
   UrlProjectId,
@@ -83,6 +84,8 @@ export interface SessionUpdatedEvent {
   messageCount?: number;
   /** Updated timestamp */
   updatedAt?: string;
+  /** Context window usage from the last assistant message */
+  contextUsage?: ContextUsage;
   timestamp: string;
 }
 

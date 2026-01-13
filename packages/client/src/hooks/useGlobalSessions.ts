@@ -318,7 +318,7 @@ export function useGlobalSessions(options: UseGlobalSessionsOptions = {}) {
     );
   }, []);
 
-  // Handle session content updates (auto-generated title, messageCount)
+  // Handle session content updates (auto-generated title, messageCount, contextUsage)
   const handleSessionUpdated = useCallback((event: SessionUpdatedEvent) => {
     setSessions((prev) =>
       prev.map((session) => {
@@ -331,6 +331,9 @@ export function useGlobalSessions(options: UseGlobalSessionsOptions = {}) {
             messageCount: event.messageCount,
           }),
           ...(event.updatedAt !== undefined && { updatedAt: event.updatedAt }),
+          ...(event.contextUsage !== undefined && {
+            contextUsage: event.contextUsage,
+          }),
         };
       }),
     );

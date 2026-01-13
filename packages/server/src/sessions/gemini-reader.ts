@@ -20,6 +20,7 @@ import {
   SESSION_TITLE_MAX_LENGTH,
   type UnifiedSession,
   type UrlProjectId,
+  getModelContextWindow,
   parseGeminiSessionFile,
 } from "@yep-anywhere/shared";
 import type {
@@ -34,9 +35,6 @@ import type {
   ISessionReader,
   LoadedSession,
 } from "./types.js";
-
-// Gemini model context window size (1M tokens for Gemini 2.0)
-const CONTEXT_WINDOW_SIZE = 1_000_000;
 
 export interface GeminiSessionReaderOptions {
   /**
@@ -139,8 +137,8 @@ export class GeminiSessionReader implements ISessionReader {
       const stats = await stat(sessionCache.filePath);
       const { title, fullTitle } = this.extractTitle(session.messages);
       const messageCount = session.messages.length;
-      const contextUsage = this.extractContextUsage(session.messages);
       const model = this.extractModel(session.messages);
+      const contextUsage = this.extractContextUsage(session.messages, model);
 
       // Skip sessions with no actual conversation messages
       if (messageCount === 0) return null;
@@ -410,10 +408,16 @@ export class GeminiSessionReader implements ISessionReader {
 
   /**
    * Extract context usage from token counts in messages.
+   *
+   * @param messages - Gemini session messages
+   * @param model - Model ID for determining context window size
    */
   private extractContextUsage(
     messages: GeminiSessionMessage[],
+    model: string | undefined,
   ): ContextUsage | undefined {
+    const contextWindowSize = getModelContextWindow(model);
+
     // Find last assistant message with token info
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
@@ -422,8 +426,9 @@ export class GeminiSessionReader implements ISessionReader {
         if (assistantMsg.tokens?.input) {
           const inputTokens =
             assistantMsg.tokens.input + (assistantMsg.tokens.cached ?? 0);
-          const contextWindow = CONTEXT_WINDOW_SIZE;
-          const percentage = Math.round((inputTokens / contextWindow) * 100);
+          const percentage = Math.round(
+            (inputTokens / contextWindowSize) * 100,
+          );
 
           return { inputTokens, percentage };
         }

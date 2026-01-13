@@ -2,7 +2,7 @@
  * Simple in-memory pub/sub event bus for file change and session status events.
  */
 
-import type { UrlProjectId } from "@yep-anywhere/shared";
+import type { ContextUsage, UrlProjectId } from "@yep-anywhere/shared";
 import type { SessionStatus, SessionSummary } from "../supervisor/types.js";
 
 export type FileChangeType = "create" | "modify" | "delete";
@@ -158,6 +158,8 @@ export interface SessionUpdatedEvent {
   messageCount?: number;
   /** Updated timestamp */
   updatedAt?: string;
+  /** Context window usage from the last assistant message */
+  contextUsage?: ContextUsage;
   timestamp: string;
 }
 

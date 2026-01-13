@@ -4,6 +4,7 @@ import {
   type ProviderName,
   type ThinkingOption,
   type UploadedFile,
+  getModelContextWindow,
   isUrlProjectId,
   thinkingOptionToTokens,
 } from "@yep-anywhere/shared";
@@ -145,16 +146,19 @@ function sdkMessagesToClientMessages(sdkMessages: SDKMessage[]): Message[] {
   return messages;
 }
 
-// Claude model context window size (200K tokens)
-const CONTEXT_WINDOW_SIZE = 200_000;
-
 /**
  * Extract context usage from SDK messages.
  * Finds the last assistant message with usage data.
+ *
+ * @param sdkMessages - SDK messages to search
+ * @param model - Model ID for determining context window size
  */
 function extractContextUsageFromSDKMessages(
   sdkMessages: SDKMessage[],
+  model: string | undefined,
 ): ContextUsage | undefined {
+  const contextWindowSize = getModelContextWindow(model);
+
   // Find the last assistant message with usage data (iterate backwards)
   for (let i = sdkMessages.length - 1; i >= 0; i--) {
     const msg = sdkMessages[i];
@@ -177,7 +181,7 @@ function extractContextUsageFromSDKMessages(
         continue;
       }
 
-      const percentage = Math.round((inputTokens / CONTEXT_WINDOW_SIZE) * 100);
+      const percentage = Math.round((inputTokens / contextWindowSize) * 100);
 
       const result: ContextUsage = { inputTokens, percentage };
 
@@ -665,7 +669,10 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
         // Convert to client format
         const processMessages = sdkMessagesToClientMessages(sdkMessages);
         // Extract context usage from raw SDK messages (has usage field)
-        const contextUsage = extractContextUsageFromSDKMessages(sdkMessages);
+        const contextUsage = extractContextUsageFromSDKMessages(
+          sdkMessages,
+          process.model,
+        );
         // Get metadata even for new sessions (in case it was set before file was written)
         const metadata = deps.sessionMetadataService?.getMetadata(sessionId);
         // Get notification data for new sessions too

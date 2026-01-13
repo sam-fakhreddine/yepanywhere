@@ -4,6 +4,7 @@ import {
   type AgentStatus,
   SESSION_TITLE_MAX_LENGTH,
   type UrlProjectId,
+  getModelContextWindow,
   isIdeMetadata,
   stripIdeMetadata,
 } from "@yep-anywhere/shared";
@@ -21,9 +22,6 @@ import type {
 
 // Re-export interface types
 export type { GetSessionOptions, ISessionReader } from "./types.js";
-
-// Claude model context window size (200K tokens)
-const CONTEXT_WINDOW_SIZE = 200_000;
 
 import {
   type ClaudeSessionEntry,
@@ -150,8 +148,11 @@ export class ClaudeSessionReader implements ISessionReader {
       const stats = await stat(filePath);
       const firstUserMessage = this.findFirstUserMessage(messages);
       const fullTitle = firstUserMessage?.trim() || null;
-      const contextUsage = this.extractContextUsage(conversationMessages);
       const model = this.extractModel(conversationMessages);
+      const contextUsage = this.extractContextUsage(
+        conversationMessages,
+        model,
+      );
 
       return {
         id: sessionId,
@@ -383,10 +384,16 @@ export class ClaudeSessionReader implements ISessionReader {
   /**
    * Extract context usage from the last assistant message.
    * Usage data is stored in message.usage with input_tokens, cache_read_input_tokens, etc.
+   *
+   * @param messages - Conversation messages to search
+   * @param model - Model ID for determining context window size
    */
   private extractContextUsage(
     messages: ClaudeSessionEntry[],
+    model: string | undefined,
   ): ContextUsage | undefined {
+    const contextWindowSize = getModelContextWindow(model);
+
     // Find the last assistant message (iterate backwards)
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
@@ -413,7 +420,7 @@ export class ClaudeSessionReader implements ISessionReader {
           }
 
           const percentage = Math.round(
-            (inputTokens / CONTEXT_WINDOW_SIZE) * 100,
+            (inputTokens / contextWindowSize) * 100,
           );
 
           const result: ContextUsage = { inputTokens, percentage };

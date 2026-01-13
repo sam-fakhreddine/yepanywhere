@@ -393,7 +393,7 @@ export function useSession(
     [sessionId, status.state, throttledFetch],
   );
 
-  // Handle session content updates via SSE (title, messageCount, updatedAt)
+  // Handle session content updates via SSE (title, messageCount, updatedAt, contextUsage)
   const handleSessionUpdated = useCallback(
     (event: SessionUpdatedEvent) => {
       if (event.sessionId !== sessionId) return;
@@ -409,6 +409,9 @@ export function useSession(
           }),
           ...(event.updatedAt !== undefined && {
             updatedAt: event.updatedAt,
+          }),
+          ...(event.contextUsage !== undefined && {
+            contextUsage: event.contextUsage,
           }),
         };
       });

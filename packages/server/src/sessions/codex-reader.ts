@@ -25,6 +25,7 @@ import {
   SESSION_TITLE_MAX_LENGTH,
   type UnifiedSession,
   type UrlProjectId,
+  getModelContextWindow,
   parseCodexSessionEntry,
 } from "@yep-anywhere/shared";
 import type {
@@ -39,9 +40,6 @@ import type {
   ISessionReader,
   LoadedSession,
 } from "./types.js";
-
-// Codex model context window size (200K tokens for GPT-4)
-const CONTEXT_WINDOW_SIZE = 200_000;
 
 export interface CodexSessionReaderOptions {
   /**
@@ -144,8 +142,8 @@ export class CodexSessionReader implements ISessionReader {
       const stats = await stat(sessionFile.filePath);
       const { title, fullTitle } = this.extractTitle(entries);
       const messageCount = this.countMessages(entries);
-      const contextUsage = this.extractContextUsage(entries);
       const model = this.extractModel(entries);
+      const contextUsage = this.extractContextUsage(entries, model);
 
       // Skip sessions with no actual conversation messages
       if (messageCount === 0) return null;
@@ -446,9 +444,13 @@ export class CodexSessionReader implements ISessionReader {
 
   /**
    * Extract context usage from token_count events.
+   *
+   * @param entries - Codex session entries
+   * @param model - Model ID for determining context window size (fallback)
    */
   private extractContextUsage(
     entries: CodexSessionEntry[],
+    model: string | undefined,
   ): ContextUsage | undefined {
     // Find last token_count event
     for (let i = entries.length - 1; i >= 0; i--) {
@@ -467,10 +469,11 @@ export class CodexSessionReader implements ISessionReader {
 
           if (inputTokens === 0) continue;
 
+          // Prefer model_context_window from Codex if available, fall back to model-based lookup
           const contextWindow =
             info.model_context_window && info.model_context_window > 0
               ? info.model_context_window
-              : CONTEXT_WINDOW_SIZE;
+              : getModelContextWindow(model);
           const percentage = Math.min(
             100,
             Math.round((inputTokens / contextWindow) * 100),
