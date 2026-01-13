@@ -170,53 +170,51 @@ export function LocalAccessSettings() {
             <div className="settings-item-info">
               <strong>Status</strong>
               <p>
-                {serverInfo ? (
-                  (() => {
-                    const networkHost = binding?.network.host;
-                    const networkPort =
-                      binding?.network.port ?? serverInfo.port;
-                    const isAllInterfaces =
-                      networkHost === "0.0.0.0" || networkHost === "::";
-                    const samePort = networkPort === serverInfo.port;
+                {serverInfo
+                  ? (() => {
+                      const networkHost = binding?.network.host;
+                      const networkPort =
+                        binding?.network.port ?? serverInfo.port;
+                      const isAllInterfaces =
+                        networkHost === "0.0.0.0" || networkHost === "::";
+                      const samePort = networkPort === serverInfo.port;
 
-                    // If bound to all interfaces on same port, just show that
-                    if (
-                      binding?.network.enabled &&
-                      isAllInterfaces &&
-                      samePort
-                    ) {
-                      return (
-                        <>
-                          Listening on{" "}
-                          <code>
-                            {networkHost}:{networkPort}
-                          </code>
-                        </>
-                      );
-                    }
-
-                    // Otherwise show localhost, and optionally network
-                    return (
-                      <>
-                        Listening on{" "}
-                        <code>
-                          {serverInfo.host}:{serverInfo.port}
-                        </code>
-                        {binding?.network.enabled && networkHost && (
+                      // If bound to all interfaces on same port, just show that
+                      if (
+                        binding?.network.enabled &&
+                        isAllInterfaces &&
+                        samePort
+                      ) {
+                        return (
                           <>
-                            {" "}
-                            and{" "}
+                            Listening on{" "}
                             <code>
                               {networkHost}:{networkPort}
                             </code>
                           </>
-                        )}
-                      </>
-                    );
-                  })()
-                ) : (
-                  "Unable to fetch server info"
-                )}
+                        );
+                      }
+
+                      // Otherwise show localhost, and optionally network
+                      return (
+                        <>
+                          Listening on{" "}
+                          <code>
+                            {serverInfo.host}:{serverInfo.port}
+                          </code>
+                          {binding?.network.enabled && networkHost && (
+                            <>
+                              {" "}
+                              and{" "}
+                              <code>
+                                {networkHost}:{networkPort}
+                              </code>
+                            </>
+                          )}
+                        </>
+                      );
+                    })()
+                  : "Unable to fetch server info"}
               </p>
             </div>
             {serverInfo?.localhostOnly && !binding?.network.enabled && (
