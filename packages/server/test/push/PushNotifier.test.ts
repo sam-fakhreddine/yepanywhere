@@ -42,6 +42,7 @@ describe("PushNotifier", () => {
       sendToAll: vi.fn(() =>
         Promise.resolve([{ deviceId: "device-1", success: true }]),
       ),
+      isNotificationTypeEnabled: vi.fn(() => true),
     } as unknown as PushService;
 
     // Mock Supervisor
