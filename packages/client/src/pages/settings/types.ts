@@ -25,6 +25,12 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     description: "Push notification preferences",
   },
   {
+    id: "devices",
+    label: "Devices",
+    icon: "📱",
+    description: "Browser profiles and connection origins",
+  },
+  {
     id: "local-access",
     label: "Local Access",
     icon: "🔒",

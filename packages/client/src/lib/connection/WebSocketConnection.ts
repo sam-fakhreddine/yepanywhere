@@ -479,6 +479,17 @@ export class WebSocketConnection implements Connection {
     // Get or create browser profile ID for connection tracking
     const browserProfileId = getOrCreateBrowserProfileId();
 
+    // Collect origin metadata
+    const originMetadata = {
+      origin: window.location.origin,
+      scheme: window.location.protocol.replace(":", ""),
+      hostname: window.location.hostname,
+      port: window.location.port
+        ? Number.parseInt(window.location.port, 10)
+        : null,
+      userAgent: navigator.userAgent,
+    };
+
     // Store handlers for routing events
     this.subscriptions.set(subscriptionId, handlers);
 
@@ -490,6 +501,7 @@ export class WebSocketConnection implements Connection {
           subscriptionId,
           channel: "activity",
           browserProfileId,
+          originMetadata,
         };
         this.send(msg);
       })

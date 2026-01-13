@@ -23,3 +23,9 @@ export {
   type BrowserConnectionTransport,
   type BrowserTabConnection,
 } from "./ConnectedBrowsersService.js";
+
+export {
+  BrowserProfileService,
+  type BrowserProfileServiceOptions,
+  type OriginMetadata,
+} from "./BrowserProfileService.js";

@@ -6,7 +6,10 @@ import type {
   RemoteAccessService,
   RemoteSessionService,
 } from "../remote-access/index.js";
-import type { ConnectedBrowsersService } from "../services/index.js";
+import type {
+  BrowserProfileService,
+  ConnectedBrowsersService,
+} from "../services/index.js";
 import type { Supervisor } from "../supervisor/Supervisor.js";
 import type { UploadManager } from "../uploads/manager.js";
 import type { EventBus } from "../watcher/index.js";
@@ -43,6 +46,8 @@ export interface WsRelayDeps {
   remoteSessionService?: RemoteSessionService;
   /** Connected browsers service for tracking WS connections (optional) */
   connectedBrowsers?: ConnectedBrowsersService;
+  /** Browser profile service for tracking connection origins (optional) */
+  browserProfileService?: BrowserProfileService;
 }
 
 /**
@@ -66,6 +71,8 @@ export interface AcceptRelayConnectionDeps {
   remoteSessionService: RemoteSessionService;
   /** Connected browsers service for tracking WS connections (optional) */
   connectedBrowsers?: ConnectedBrowsersService;
+  /** Browser profile service for tracking connection origins (optional) */
+  browserProfileService?: BrowserProfileService;
 }
 
 /**
@@ -136,6 +143,7 @@ export function createWsRelayRoutes(
     remoteAccessService,
     remoteSessionService,
     connectedBrowsers,
+    browserProfileService,
   } = deps;
 
   // Build handler dependencies
@@ -148,6 +156,7 @@ export function createWsRelayRoutes(
     remoteAccessService,
     remoteSessionService,
     connectedBrowsers,
+    browserProfileService,
   };
 
   // Return the WebSocket handler with origin validation
@@ -262,6 +271,7 @@ export function createAcceptRelayConnection(
     remoteAccessService,
     remoteSessionService,
     connectedBrowsers,
+    browserProfileService,
   } = deps;
 
   // Build handler dependencies
@@ -274,6 +284,7 @@ export function createAcceptRelayConnection(
     remoteAccessService,
     remoteSessionService,
     connectedBrowsers,
+    browserProfileService,
   };
 
   // Return the accept relay connection handler

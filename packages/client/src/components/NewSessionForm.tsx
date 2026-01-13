@@ -30,6 +30,7 @@ import {
   getDefaultProvider,
   useProviders,
 } from "../hooks/useProviders";
+import { hasCoarsePointer } from "../lib/deviceDetection";
 import type { PermissionMode } from "../types";
 import { ClaudeLoginModal } from "./ClaudeLoginModal";
 import { FilterDropdown, type FilterOption } from "./FilterDropdown";
@@ -400,7 +401,7 @@ export function NewSessionForm({
     if (e.key === "Enter") {
       // On mobile (touch devices), Enter adds newline - must use send button
       // On desktop, Enter sends message, Shift/Ctrl+Enter adds newline
-      const isMobile = window.matchMedia("(pointer: coarse)").matches;
+      const isMobile = hasCoarsePointer();
 
       // If voice recording is active, Enter submits (on any device)
       if (voiceButtonRef.current?.isListening) {

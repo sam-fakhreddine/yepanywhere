@@ -51,6 +51,20 @@ export interface RelayResponse {
 /** Subscription channel types */
 export type RelaySubscriptionChannel = "session" | "activity";
 
+/** Origin metadata sent with connection for tracking */
+export interface OriginMetadata {
+  /** Full origin string (e.g., "https://localhost:3400") */
+  origin: string;
+  /** URL scheme (e.g., "https", "http") */
+  scheme: string;
+  /** Hostname without port */
+  hostname: string;
+  /** Port number, or null if default port */
+  port: number | null;
+  /** User agent string */
+  userAgent: string;
+}
+
 /** Client -> Server: Subscribe to events */
 export interface RelaySubscribe {
   type: "subscribe";
@@ -64,6 +78,8 @@ export interface RelaySubscribe {
   lastEventId?: string;
   /** Browser profile identifier for connection tracking (stored in localStorage, shared across tabs) */
   browserProfileId?: string;
+  /** Origin metadata for connection tracking */
+  originMetadata?: OriginMetadata;
 }
 
 /** Client -> Server: Unsubscribe from events */

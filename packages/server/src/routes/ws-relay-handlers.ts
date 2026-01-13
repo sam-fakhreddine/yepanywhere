@@ -69,7 +69,10 @@ import type {
   RemoteAccessService,
   RemoteSessionService,
 } from "../remote-access/index.js";
-import type { ConnectedBrowsersService } from "../services/index.js";
+import type {
+  BrowserProfileService,
+  ConnectedBrowsersService,
+} from "../services/index.js";
 import type { Supervisor } from "../supervisor/Supervisor.js";
 import type { UploadManager } from "../uploads/manager.js";
 import type { EventBus } from "../watcher/index.js";
@@ -153,6 +156,8 @@ export interface RelayHandlerDeps {
   remoteSessionService?: RemoteSessionService;
   /** Connected browsers service for tracking WS connections (optional) */
   connectedBrowsers?: ConnectedBrowsersService;
+  /** Browser profile service for tracking connection origins (optional) */
+  browserProfileService?: BrowserProfileService;
 }
 
 /**
@@ -597,13 +602,26 @@ export function handleActivitySubscribe(
   send: SendFn,
   eventBus: EventBus,
   connectedBrowsers?: ConnectedBrowsersService,
+  browserProfileService?: BrowserProfileService,
 ): void {
-  const { subscriptionId, browserProfileId } = msg;
+  const { subscriptionId, browserProfileId, originMetadata } = msg;
 
   // Track connection if we have the service and a browserProfileId
   let connectionId: number | undefined;
   if (connectedBrowsers && browserProfileId) {
     connectionId = connectedBrowsers.connect(browserProfileId, "ws");
+  }
+
+  // Record origin metadata if available
+  if (browserProfileService && browserProfileId && originMetadata) {
+    browserProfileService
+      .recordConnection(browserProfileId, originMetadata)
+      .catch((err) => {
+        console.warn(
+          "[WS Relay] Failed to record browser profile origin:",
+          err,
+        );
+      });
   }
 
   let eventId = 0;
@@ -666,6 +684,7 @@ export function handleSubscribe(
   supervisor: Supervisor,
   eventBus: EventBus,
   connectedBrowsers?: ConnectedBrowsersService,
+  browserProfileService?: BrowserProfileService,
 ): void {
   const { subscriptionId, channel } = msg;
 
@@ -691,6 +710,7 @@ export function handleSubscribe(
         send,
         eventBus,
         connectedBrowsers,
+        browserProfileService,
       );
       break;
 
@@ -1445,6 +1465,7 @@ async function routeMessage(
     eventBus,
     uploadManager,
     connectedBrowsers,
+    browserProfileService,
   } = deps;
 
   switch (msg.type) {
@@ -1460,6 +1481,7 @@ async function routeMessage(
         supervisor,
         eventBus,
         connectedBrowsers,
+        browserProfileService,
       );
       break;
 

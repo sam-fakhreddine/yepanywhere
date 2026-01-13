@@ -1,4 +1,5 @@
 import type {
+  BrowserProfilesResponse,
   ConnectionsResponse,
   EnrichedRecentEntry,
   FileContentResponse,
@@ -798,6 +799,16 @@ export const api = {
     fetchJSON<{ success: boolean }>("/onboarding/reset", {
       method: "POST",
     }),
+
+  // Browser profiles API (device origin tracking)
+  getBrowserProfiles: () =>
+    fetchJSON<BrowserProfilesResponse>("/browser-profiles"),
+
+  deleteBrowserProfile: (browserProfileId: string) =>
+    fetchJSON<{ deleted: boolean }>(
+      `/browser-profiles/${encodeURIComponent(browserProfileId)}`,
+      { method: "DELETE" },
+    ),
 };
 
 /**

@@ -3,10 +3,12 @@ import { useBrowserNotifications } from "../hooks/useBrowserNotifications";
 /**
  * Toggle component for browser notification permission.
  * Allows desktop users to enable notifications without full push subscription.
+ * Returns null on mobile devices (they should use push notifications instead).
  */
 export function BrowserNotificationToggle() {
   const {
     isSupported,
+    isMobile,
     isEnabled,
     isDenied,
     isRequesting,
@@ -14,7 +16,12 @@ export function BrowserNotificationToggle() {
     showNotification,
   } = useBrowserNotifications();
 
-  // Not supported in this browser
+  // Don't show on mobile - they should use push notifications
+  if (isMobile) {
+    return null;
+  }
+
+  // Not supported in this browser (desktop but old browser)
   if (!isSupported) {
     return (
       <div className="settings-item">

@@ -12,6 +12,7 @@ import {
   type DraftControls,
   useDraftPersistence,
 } from "../hooks/useDraftPersistence";
+import { hasCoarsePointer } from "../lib/deviceDetection";
 import type { ContextUsage, PermissionMode } from "../types";
 import { MessageInputToolbar } from "./MessageInputToolbar";
 import type { VoiceInputButtonRef } from "./VoiceInputButton";
@@ -176,7 +177,7 @@ export function MessageInput({
     if (e.key === "Enter") {
       // On mobile (touch devices), Enter adds newline - must use send button
       // On desktop, Enter sends message, Shift/Ctrl+Enter adds newline
-      const isMobile = window.matchMedia("(pointer: coarse)").matches;
+      const isMobile = hasCoarsePointer();
 
       // If voice recording is active, Enter submits (on any device)
       if (voiceButtonRef.current?.isListening) {

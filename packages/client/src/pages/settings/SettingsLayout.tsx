@@ -5,6 +5,7 @@ import { useNavigationLayout } from "../../layouts";
 import { AboutSettings } from "./AboutSettings";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { DevelopmentSettings } from "./DevelopmentSettings";
+import { DevicesSettings } from "./DevicesSettings";
 import { LocalAccessSettings } from "./LocalAccessSettings";
 import { ModelSettings } from "./ModelSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
@@ -21,6 +22,7 @@ const CATEGORY_COMPONENTS: Record<string, React.ComponentType> = {
   appearance: AppearanceSettings,
   model: ModelSettings,
   notifications: NotificationsSettings,
+  devices: DevicesSettings,
   "local-access": LocalAccessSettings,
   remote: RemoteAccessSettings,
   providers: ProvidersSettings,

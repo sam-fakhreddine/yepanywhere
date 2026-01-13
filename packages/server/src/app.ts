@@ -31,6 +31,7 @@ import type {
 import { createRemoteAccessRoutes } from "./remote-access/index.js";
 import { createActivityRoutes } from "./routes/activity.js";
 import { createBeadsRoutes } from "./routes/beads.js";
+import { createBrowserProfilesRoutes } from "./routes/browser-profiles.js";
 import { createConnectionsRoutes } from "./routes/connections.js";
 import { createDebugStreamingRoutes } from "./routes/debug-streaming.js";
 import { createDevRoutes } from "./routes/dev.js";
@@ -54,6 +55,7 @@ import type {
   PermissionMode,
   RealClaudeSDKInterface,
 } from "./sdk/types.js";
+import type { BrowserProfileService } from "./services/BrowserProfileService.js";
 import type { ConnectedBrowsersService } from "./services/ConnectedBrowsersService.js";
 import type { NetworkBindingService } from "./services/NetworkBindingService.js";
 import type { RelayClientService } from "./services/RelayClientService.js";
@@ -140,6 +142,8 @@ export interface AppOptions {
   };
   /** ConnectedBrowsersService for tracking active browser connections */
   connectedBrowsers?: ConnectedBrowsersService;
+  /** BrowserProfileService for tracking browser profile origins */
+  browserProfileService?: BrowserProfileService;
 }
 
 export interface AppResult {
@@ -439,6 +443,17 @@ export function createApp(options: AppOptions): AppResult {
     );
   }
 
+  // Browser profiles routes (list browser profiles with origins)
+  if (options.browserProfileService) {
+    app.route(
+      "/api/browser-profiles",
+      createBrowserProfilesRoutes({
+        browserProfileService: options.browserProfileService,
+        pushService: options.pushService,
+      }),
+    );
+  }
+
   // Upload routes (WebSocket file uploads)
   if (options.upgradeWebSocket) {
     app.route(
@@ -466,6 +481,7 @@ export function createApp(options: AppOptions): AppResult {
       createActivityRoutes({
         eventBus: options.eventBus,
         connectedBrowsers: options.connectedBrowsers,
+        browserProfileService: options.browserProfileService,
       }),
     );
 

@@ -135,6 +135,10 @@ export type {
   // Connected browser types
   ConnectionInfo,
   ConnectionsResponse,
+  // Browser profile types
+  BrowserProfileOrigin,
+  BrowserProfileInfo,
+  BrowserProfilesResponse,
 } from "./app-types.js";
 export {
   isUserMessage,

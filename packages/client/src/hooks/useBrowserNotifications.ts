@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
+import { isMobileDevice } from "../lib/deviceDetection";
 
 interface BrowserNotificationState {
-  /** Whether the browser supports notifications */
+  /** Whether the browser supports direct notifications (not mobile) */
   isSupported: boolean;
+  /** Whether this is a mobile device */
+  isMobile: boolean;
   /** Current notification permission status */
   permission: NotificationPermission;
   /** Whether permission is being requested */
@@ -21,14 +24,19 @@ interface BrowserNotificationState {
  * For notifications when the browser is closed, use push notifications instead.
  */
 export function useBrowserNotifications() {
-  const [state, setState] = useState<BrowserNotificationState>(() => ({
-    isSupported: typeof window !== "undefined" && "Notification" in window,
-    permission:
-      typeof window !== "undefined" && "Notification" in window
-        ? Notification.permission
-        : "denied",
-    isRequesting: false,
-  }));
+  const [state, setState] = useState<BrowserNotificationState>(() => {
+    const hasNotificationApi =
+      typeof window !== "undefined" && "Notification" in window;
+    const mobile = isMobileDevice();
+
+    return {
+      // Desktop notifications only work on non-mobile devices
+      isSupported: hasNotificationApi && !mobile,
+      isMobile: mobile,
+      permission: hasNotificationApi ? Notification.permission : "denied",
+      isRequesting: false,
+    };
+  });
 
   // Update permission if it changes (e.g., user changes in browser settings)
   useEffect(() => {

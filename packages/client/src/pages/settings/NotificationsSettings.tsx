@@ -1,5 +1,6 @@
 import { BrowserNotificationToggle } from "../../components/BrowserNotificationToggle";
 import { PushNotificationToggle } from "../../components/PushNotificationToggle";
+import { useBrowserNotifications } from "../../hooks/useBrowserNotifications";
 import { useConnectedDevices } from "../../hooks/useConnectedDevices";
 import { useNotificationSettings } from "../../hooks/useNotificationSettings";
 import { usePushNotifications } from "../../hooks/usePushNotifications";
@@ -160,6 +161,7 @@ function mergeDevices(
 
 export function NotificationsSettings() {
   const { browserProfileId } = usePushNotifications();
+  const { isMobile } = useBrowserNotifications();
   const {
     devices: subscribedDevices,
     isLoading: devicesLoading,
@@ -260,17 +262,19 @@ export function NotificationsSettings() {
         </div>
       </section>
 
-      {/* Desktop notifications - browser Notification API */}
-      <section className="settings-section">
-        <h2>Desktop Notifications</h2>
-        <p className="settings-section-description">
-          Get browser notifications when sessions need attention. Works while
-          the tab is open.
-        </p>
-        <div className="settings-group">
-          <BrowserNotificationToggle />
-        </div>
-      </section>
+      {/* Desktop notifications - browser Notification API (not available on mobile) */}
+      {!isMobile && (
+        <section className="settings-section">
+          <h2>Desktop Notifications</h2>
+          <p className="settings-section-description">
+            Get browser notifications when sessions need attention. Works while
+            the tab is open.
+          </p>
+          <div className="settings-group">
+            <BrowserNotificationToggle />
+          </div>
+        </section>
+      )}
 
       {/* Push notifications - service worker based */}
       <section className="settings-section">

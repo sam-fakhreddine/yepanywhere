@@ -347,7 +347,21 @@ class ActivityBus {
     // Get or create browser profile ID for connection tracking
     const browserProfileId = getOrCreateBrowserProfileId();
     const baseUrl = `${API_BASE}/activity/events`;
-    const url = `${baseUrl}?browserProfileId=${encodeURIComponent(browserProfileId)}`;
+
+    // Build URL with browser profile ID and origin metadata
+    const params = new URLSearchParams({
+      browserProfileId,
+      origin: window.location.origin,
+      scheme: window.location.protocol.replace(":", ""),
+      hostname: window.location.hostname,
+      userAgent: navigator.userAgent,
+    });
+    // Only add port if it's specified (not default)
+    if (window.location.port) {
+      params.set("port", window.location.port);
+    }
+
+    const url = `${baseUrl}?${params.toString()}`;
     const es = new EventSource(url);
 
     es.onopen = () => {

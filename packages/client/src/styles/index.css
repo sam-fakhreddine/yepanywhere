@@ -7112,6 +7112,38 @@ a.sidebar-nav-item {
   color: var(--text-muted);
 }
 
+.device-origins {
+  margin-top: var(--space-1);
+}
+
+.device-origin {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--space-2);
+}
+
+.device-origin-url {
+  font-size: var(--font-size-sm);
+  word-break: break-all;
+}
+
+.device-origin-details {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.device-origin-time {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.device-profile-meta {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin-top: var(--space-1);
+}
+
 .settings-button-danger-subtle {
   background: transparent;
   border-color: var(--error-color);

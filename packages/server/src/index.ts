@@ -40,6 +40,7 @@ import { detectClaudeCli } from "./sdk/cli-detection.js";
 import { initMessageLogger } from "./sdk/messageLogger.js";
 import { RealClaudeSDK } from "./sdk/real.js";
 import {
+  BrowserProfileService,
   ConnectedBrowsersService,
   InstallService,
   NetworkBindingService,
@@ -141,6 +142,9 @@ const sessionIndexService = new SessionIndexService({
   dataDir: path.join(config.dataDir, "indexes"),
 });
 const pushService = new PushService({ dataDir: config.dataDir });
+const browserProfileService = new BrowserProfileService({
+  dataDir: config.dataDir,
+});
 const recentsService = new RecentsService({ dataDir: config.dataDir });
 const authService = new AuthService({
   dataDir: config.dataDir,
@@ -174,6 +178,7 @@ async function startServer() {
   await projectMetadataService.initialize();
   await sessionIndexService.initialize();
   await pushService.initialize();
+  await browserProfileService.initialize();
   await recentsService.initialize();
   await authService.initialize();
   await remoteAccessService.initialize();
@@ -256,6 +261,7 @@ async function startServer() {
     networkBindingService,
     networkBindingCallbackHolder,
     connectedBrowsers: connectedBrowsersService,
+    browserProfileService,
   });
 
   // Set up debug context for maintenance server
@@ -304,6 +310,7 @@ async function startServer() {
     remoteAccessService,
     remoteSessionService,
     connectedBrowsers: connectedBrowsersService,
+    browserProfileService,
   });
   app.get("/api/ws", wsRelayHandler);
 
@@ -318,6 +325,7 @@ async function startServer() {
     remoteAccessService,
     remoteSessionService,
     connectedBrowsers: connectedBrowsersService,
+    browserProfileService,
   });
 
   // Function to start/restart relay client with current config
