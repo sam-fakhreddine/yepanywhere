@@ -59,16 +59,17 @@ export const exitPlanModeRenderer: ToolRenderer<
       planInput?._renderedHtml || planResult?._renderedHtml;
 
     if (isError) {
-      const errorResult = result as unknown as
-        | { content?: unknown }
-        | undefined;
-      return (
-        <div className="exitplan-error">
-          {typeof result === "object" && errorResult?.content
-            ? String(errorResult.content)
-            : "Exit plan mode failed"}
-        </div>
-      );
+      // Result can be a plain string or an object with message field
+      let errorMessage = "Exit plan mode failed";
+      if (typeof result === "string") {
+        errorMessage = result;
+      } else if (typeof result === "object" && result !== null) {
+        const errorResult = result as { message?: unknown };
+        if (errorResult.message) {
+          errorMessage = String(errorResult.message);
+        }
+      }
+      return <div className="exitplan-error">{errorMessage}</div>;
     }
 
     // Show "Planning..." only if we don't have plan content yet
