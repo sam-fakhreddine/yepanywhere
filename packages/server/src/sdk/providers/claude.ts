@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   type SDKMessage as AgentSDKMessage,
+  type Query,
   type CanUseTool as SDKCanUseTool,
   query,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -182,9 +183,9 @@ export class ClaudeProvider implements AgentProvider {
       : undefined;
 
     // Create the SDK query with our message generator
-    let iterator: AsyncGenerator<AgentSDKMessage>;
+    let sdkQuery: Query;
     try {
-      iterator = query({
+      sdkQuery = query({
         prompt: queue.generator(),
         options: {
           cwd: options.cwd,
@@ -224,12 +225,14 @@ export class ClaudeProvider implements AgentProvider {
     }
 
     // Wrap the iterator to convert SDK message types to our internal types
-    const wrappedIterator = this.wrapIterator(iterator);
+    const wrappedIterator = this.wrapIterator(sdkQuery);
 
     return {
       iterator: wrappedIterator,
       queue,
       abort: () => abortController.abort(),
+      setMaxThinkingTokens: (tokens: number | null) =>
+        sdkQuery.setMaxThinkingTokens(tokens),
     };
   }
 
@@ -238,7 +241,7 @@ export class ClaudeProvider implements AgentProvider {
    * The SDK emits its own message types which we convert to our SDKMessage type.
    */
   private async *wrapIterator(
-    iterator: AsyncGenerator<AgentSDKMessage>,
+    iterator: AsyncIterable<AgentSDKMessage>,
   ): AsyncIterableIterator<SDKMessage> {
     try {
       for await (const message of iterator) {

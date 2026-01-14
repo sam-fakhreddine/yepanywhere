@@ -55,6 +55,8 @@ export interface ProcessConstructorOptions extends ProcessOptions {
   queue?: MessageQueue;
   /** Abort function from real SDK */
   abortFn?: () => void;
+  /** Function to change max thinking tokens at runtime (SDK 0.2.7+) */
+  setMaxThinkingTokensFn?: (tokens: number | null) => Promise<void>;
 }
 
 export class Process {
@@ -107,6 +109,11 @@ export class Process {
   /** Max thinking tokens this process was created with (undefined = thinking disabled) */
   private _maxThinkingTokens: number | undefined;
 
+  /** Function to change max thinking tokens at runtime (SDK 0.2.7+) */
+  private setMaxThinkingTokensFn:
+    | ((tokens: number | null) => Promise<void>)
+    | null;
+
   /** Resolvers waiting for the real session ID */
   private sessionIdResolvers: Array<(id: string) => void> = [];
   private sessionIdResolved = false;
@@ -136,6 +143,7 @@ export class Process {
     this.provider = options.provider;
     this.model = options.model;
     this._maxThinkingTokens = options.maxThinkingTokens;
+    this.setMaxThinkingTokensFn = options.setMaxThinkingTokensFn ?? null;
 
     // Start bucket swap timer for bounded message history
     this.startBucketSwapTimer();
@@ -194,6 +202,44 @@ export class Process {
    */
   get maxThinkingTokens(): number | undefined {
     return this._maxThinkingTokens;
+  }
+
+  /**
+   * Whether this process supports dynamic thinking mode changes.
+   * Only Claude SDK 0.2.7+ supports this.
+   */
+  get supportsThinkingModeChange(): boolean {
+    return this.setMaxThinkingTokensFn !== null;
+  }
+
+  /**
+   * Change max thinking tokens at runtime without restarting the process.
+   * Only supported by Claude SDK 0.2.7+.
+   *
+   * @param tokens - New max thinking tokens, or undefined to disable thinking
+   * @returns true if the change was applied, false if not supported
+   */
+  async setMaxThinkingTokens(tokens: number | undefined): Promise<boolean> {
+    if (!this.setMaxThinkingTokensFn) {
+      return false;
+    }
+
+    const log = getLogger();
+    log.info(
+      {
+        event: "thinking_mode_change",
+        sessionId: this._sessionId,
+        processId: this.id,
+        oldThinking: this._maxThinkingTokens,
+        newThinking: tokens,
+      },
+      `Changing thinking mode: ${this._maxThinkingTokens} → ${tokens}`,
+    );
+
+    // SDK uses null to disable, we use undefined for consistency with our types
+    await this.setMaxThinkingTokensFn(tokens ?? null);
+    this._maxThinkingTokens = tokens;
+    return true;
   }
 
   /**

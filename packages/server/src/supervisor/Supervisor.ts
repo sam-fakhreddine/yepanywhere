@@ -293,7 +293,7 @@ export class Supervisor {
       },
     });
 
-    const { iterator, queue, abort } = result;
+    const { iterator, queue, abort, setMaxThinkingTokens } = result;
 
     const tempSessionId = randomUUID();
     const options: ProcessConstructorOptions = {
@@ -303,6 +303,7 @@ export class Supervisor {
       idleTimeoutMs: this.idleTimeoutMs,
       queue,
       abortFn: abort,
+      setMaxThinkingTokensFn: setMaxThinkingTokens,
       permissionMode: effectiveMode,
       provider: "claude", // Real SDK is always Claude
       model: modelSettings?.model,
@@ -369,7 +370,7 @@ export class Supervisor {
       },
     });
 
-    const { iterator, queue, abort } = result;
+    const { iterator, queue, abort, setMaxThinkingTokens } = result;
 
     const options: ProcessConstructorOptions = {
       projectPath,
@@ -378,6 +379,7 @@ export class Supervisor {
       idleTimeoutMs: this.idleTimeoutMs,
       queue,
       abortFn: abort,
+      setMaxThinkingTokensFn: setMaxThinkingTokens,
       permissionMode: effectiveMode,
       provider: "claude", // Real SDK is always Claude
       model: modelSettings?.model,
@@ -438,7 +440,7 @@ export class Supervisor {
       },
     });
 
-    const { iterator, queue, abort } = result;
+    const { iterator, queue, abort, setMaxThinkingTokens } = result;
 
     const tempSessionId = randomUUID();
     const options: ProcessConstructorOptions = {
@@ -448,6 +450,7 @@ export class Supervisor {
       idleTimeoutMs: this.idleTimeoutMs,
       queue,
       abortFn: abort,
+      setMaxThinkingTokensFn: setMaxThinkingTokens,
       permissionMode: effectiveMode,
       provider: activeProvider.name,
       model: modelSettings?.model,
@@ -510,7 +513,7 @@ export class Supervisor {
       },
     });
 
-    const { iterator, queue, abort } = result;
+    const { iterator, queue, abort, setMaxThinkingTokens } = result;
 
     const options: ProcessConstructorOptions = {
       projectPath,
@@ -519,6 +522,7 @@ export class Supervisor {
       idleTimeoutMs: this.idleTimeoutMs,
       queue,
       abortFn: abort,
+      setMaxThinkingTokensFn: setMaxThinkingTokens,
       permissionMode: effectiveMode,
       provider: activeProvider.name,
       model: modelSettings?.model,
@@ -600,30 +604,51 @@ export class Supervisor {
         if (existingProcess.isTerminated) {
           this.unregisterProcess(existingProcess);
         } else {
-          // Check if thinking settings changed - if so, abort and restart
+          // Check if thinking settings changed
           const requestedThinking = modelSettings?.maxThinkingTokens;
           if (existingProcess.maxThinkingTokens !== requestedThinking) {
-            const log = getLogger();
-            log.info(
-              {
-                event: "thinking_mode_changed",
-                sessionId,
-                processId: existingProcess.id,
-                oldThinking: existingProcess.maxThinkingTokens,
-                newThinking: requestedThinking,
-              },
-              `Thinking mode changed, restarting process: ${existingProcess.maxThinkingTokens} → ${requestedThinking}`,
-            );
-            // Abort the existing process and start fresh with new thinking settings
-            await existingProcess.abort();
-            this.unregisterProcess(existingProcess);
-            // Fall through to start a new session with the updated settings
-          } else {
-            // Update permission mode if specified
-            if (permissionMode) {
-              existingProcess.setPermissionMode(permissionMode);
+            // Try to change thinking mode dynamically (SDK 0.2.7+)
+            if (existingProcess.supportsThinkingModeChange) {
+              const changed =
+                await existingProcess.setMaxThinkingTokens(requestedThinking);
+              if (!changed) {
+                // Should not happen if supportsThinkingModeChange is true
+                const log = getLogger();
+                log.warn(
+                  {
+                    event: "thinking_mode_change_failed",
+                    sessionId,
+                    processId: existingProcess.id,
+                  },
+                  "Failed to change thinking mode dynamically",
+                );
+              }
+              // Continue with existing process
+            } else {
+              // Legacy behavior: abort and restart for older SDKs
+              const log = getLogger();
+              log.info(
+                {
+                  event: "thinking_mode_changed_restart",
+                  sessionId,
+                  processId: existingProcess.id,
+                  oldThinking: existingProcess.maxThinkingTokens,
+                  newThinking: requestedThinking,
+                },
+                `Thinking mode changed, restarting process (no dynamic support): ${existingProcess.maxThinkingTokens} → ${requestedThinking}`,
+              );
+              // Abort the existing process and start fresh with new thinking settings
+              await existingProcess.abort();
+              this.unregisterProcess(existingProcess);
+              // Fall through to start a new session with the updated settings
             }
-            // Queue message to existing process
+          }
+          // Update permission mode if specified
+          if (permissionMode) {
+            existingProcess.setPermissionMode(permissionMode);
+          }
+          // Queue message to existing process (if we didn't fall through to restart)
+          if (!existingProcess.isTerminated) {
             const result = existingProcess.queueMessage(message);
             if (result.success) {
               return existingProcess;
@@ -758,40 +783,58 @@ export class Supervisor {
     // Check if thinking settings changed
     const requestedThinking = modelSettings?.maxThinkingTokens;
     if (process.maxThinkingTokens !== requestedThinking) {
-      const log = getLogger();
-      log.info(
-        {
-          event: "thinking_mode_changed_queue",
+      // Try to change thinking mode dynamically (SDK 0.2.7+)
+      if (process.supportsThinkingModeChange) {
+        const changed = await process.setMaxThinkingTokens(requestedThinking);
+        if (!changed) {
+          const log = getLogger();
+          log.warn(
+            {
+              event: "thinking_mode_change_failed_queue",
+              sessionId,
+              processId: process.id,
+            },
+            "Failed to change thinking mode dynamically on queue",
+          );
+        }
+        // Continue with existing process below
+      } else {
+        // Legacy behavior: abort and restart for older SDKs
+        const log = getLogger();
+        log.info(
+          {
+            event: "thinking_mode_changed_queue_restart",
+            sessionId,
+            processId: process.id,
+            oldThinking: process.maxThinkingTokens,
+            newThinking: requestedThinking,
+          },
+          `Thinking mode changed on queue, restarting process (no dynamic support): ${process.maxThinkingTokens} → ${requestedThinking}`,
+        );
+
+        // Abort the existing process
+        await process.abort();
+        this.unregisterProcess(process);
+
+        // Start a new session with the message and new thinking settings
+        const result = await this.resumeSession(
           sessionId,
-          processId: process.id,
-          oldThinking: process.maxThinkingTokens,
-          newThinking: requestedThinking,
-        },
-        `Thinking mode changed on queue, restarting process: ${process.maxThinkingTokens} → ${requestedThinking}`,
-      );
+          projectPath,
+          message,
+          permissionMode,
+          modelSettings,
+        );
 
-      // Abort the existing process
-      await process.abort();
-      this.unregisterProcess(process);
-
-      // Start a new session with the message and new thinking settings
-      const result = await this.resumeSession(
-        sessionId,
-        projectPath,
-        message,
-        permissionMode,
-        modelSettings,
-      );
-
-      // Check if we got a process back
-      if ("id" in result) {
-        return { success: true, process: result, restarted: true };
+        // Check if we got a process back
+        if ("id" in result) {
+          return { success: true, process: result, restarted: true };
+        }
+        // Queued or error
+        return { success: false, error: "Request was queued or failed" };
       }
-      // Queued or error
-      return { success: false, error: "Request was queued or failed" };
     }
 
-    // No thinking change - just queue to existing process
+    // Queue to existing process (dynamic thinking change already applied if needed)
     if (permissionMode) {
       process.setPermissionMode(permissionMode);
     }

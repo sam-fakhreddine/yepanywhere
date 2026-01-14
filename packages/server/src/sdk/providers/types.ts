@@ -63,6 +63,12 @@ export interface AgentSession {
   abort: () => void;
   /** Session ID if available immediately (some providers provide later via messages) */
   sessionId?: string;
+  /**
+   * Change max thinking tokens without restarting the session.
+   * Pass null to disable thinking mode.
+   * Only supported by Claude SDK 0.2.7+.
+   */
+  setMaxThinkingTokens?: (tokens: number | null) => Promise<void>;
 }
 
 /**
