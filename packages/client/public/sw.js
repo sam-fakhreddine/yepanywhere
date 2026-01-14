@@ -16,7 +16,7 @@
 // Version constant for controlled updates
 // Increment this when making intentional SW changes
 // Browsers reinstall SW only when file content changes
-const SW_VERSION = "1.0.0";
+const SW_VERSION = "1.0.1";
 
 // Settings synced from main thread
 const settings = {
@@ -367,19 +367,33 @@ async function handleNotificationClick(data) {
  * Open the session in the app window
  */
 async function openSession(sessionId, projectId) {
-  // Build the URL to open
-  let url = "/";
+  // Build the URL to open - must be absolute for Android compatibility
+  // Use URL API to properly resolve relative paths against the SW scope
+  let path = "/";
   if (sessionId && projectId) {
-    url = `/projects/${encodeURIComponent(projectId)}/sessions/${sessionId}`;
+    path = `/projects/${encodeURIComponent(projectId)}/sessions/${sessionId}`;
   }
+  const url = new URL(path, self.registration.scope).href;
+
+  await swLog("info", "Opening session URL", { url, sessionId, projectId });
 
   // Try to focus an existing window with this session, or open a new one
-  const clients = await self.clients.matchAll({ type: "window" });
+  // includeUncontrolled: true ensures we find windows that haven't been claimed yet
+  const clients = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+
+  await swLog("info", "Found clients", {
+    count: clients.length,
+    urls: clients.map((c) => c.url),
+  });
 
   // Look for an existing window we can focus
   for (const client of clients) {
     // If already on this session, just focus
     if (sessionId && client.url.includes(sessionId)) {
+      await swLog("info", "Focusing existing session window");
       return client.focus();
     }
   }
@@ -387,13 +401,27 @@ async function openSession(sessionId, projectId) {
   // Try to navigate an existing window
   for (const client of clients) {
     if ("navigate" in client) {
-      await client.navigate(url);
-      return client.focus();
+      await swLog("info", "Navigating existing window", {
+        clientUrl: client.url,
+      });
+      try {
+        await client.navigate(url);
+        return client.focus();
+      } catch (e) {
+        await swLog("error", "Failed to navigate window", { error: e.message });
+      }
     }
   }
 
   // Open a new window as fallback
   if (self.clients.openWindow) {
-    return self.clients.openWindow(url);
+    await swLog("info", "Opening new window");
+    try {
+      return await self.clients.openWindow(url);
+    } catch (e) {
+      await swLog("error", "Failed to open window", { error: e.message, url });
+    }
+  } else {
+    await swLog("error", "openWindow not available");
   }
 }

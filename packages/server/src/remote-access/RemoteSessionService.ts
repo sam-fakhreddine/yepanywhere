@@ -35,6 +35,16 @@ const MAX_SESSIONS_PER_USER = 5;
 
 const CURRENT_VERSION = 1;
 
+/** Connection metadata captured when a session is created */
+export interface SessionConnectionMetadata {
+  /** Browser profile identifier linking to device */
+  browserProfileId?: string;
+  /** User agent string for device/browser identification */
+  userAgent?: string;
+  /** Origin URL where the connection came from */
+  origin?: string;
+}
+
 export interface RemoteSession {
   /** Unique session identifier */
   sessionId: string;
@@ -46,6 +56,14 @@ export interface RemoteSession {
   createdAt: string;
   /** When the session was last used (ISO timestamp) */
   lastUsed: string;
+  /** Browser profile ID that created this session */
+  browserProfileId?: string;
+  /** User agent string of device that created this session */
+  userAgent?: string;
+  /** Origin URL where this session was created from */
+  origin?: string;
+  /** When the session was last actively connected (ISO timestamp) */
+  lastConnectedAt?: string;
 }
 
 interface RemoteSessionsState {
@@ -130,11 +148,13 @@ export class RemoteSessionService {
    * Create a new session after successful SRP authentication.
    * @param username - The authenticated username
    * @param sessionKey - The derived secretbox key (32 bytes)
+   * @param metadata - Optional connection metadata (browserProfileId, userAgent, origin)
    * @returns The new session ID
    */
   async createSession(
     username: string,
     sessionKey: Uint8Array,
+    metadata?: SessionConnectionMetadata,
   ): Promise<string> {
     const sessionId = randomUUID();
     const now = new Date().toISOString();
@@ -145,6 +165,10 @@ export class RemoteSessionService {
       sessionKey: Buffer.from(sessionKey).toString("base64"),
       createdAt: now,
       lastUsed: now,
+      browserProfileId: metadata?.browserProfileId,
+      userAgent: metadata?.userAgent,
+      origin: metadata?.origin,
+      lastConnectedAt: now,
     };
 
     this.state.sessions[sessionId] = session;
@@ -245,6 +269,18 @@ export class RemoteSessionService {
   }
 
   /**
+   * Update lastConnectedAt timestamp for a session.
+   * Called when a client subscribes to activity events.
+   */
+  async updateLastConnected(sessionId: string): Promise<void> {
+    const session = this.state.sessions[sessionId];
+    if (session) {
+      session.lastConnectedAt = new Date().toISOString();
+      await this.save();
+    }
+  }
+
+  /**
    * Invalidate all sessions for a user (e.g., on password change).
    */
   async invalidateUserSessions(username: string): Promise<number> {
@@ -268,6 +304,19 @@ export class RemoteSessionService {
     return Object.values(this.state.sessions).filter(
       (s) => s.username === username && !this.isExpired(s),
     ).length;
+  }
+
+  /**
+   * List all active sessions (without session keys for security).
+   */
+  listSessions(): Array<Omit<RemoteSession, "sessionKey">> {
+    return Object.values(this.state.sessions)
+      .filter((s) => !this.isExpired(s))
+      .map(({ sessionKey: _, ...rest }) => rest)
+      .sort(
+        (a, b) =>
+          new Date(b.lastUsed).getTime() - new Date(a.lastUsed).getTime(),
+      );
   }
 
   /**

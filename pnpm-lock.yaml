@@ -135,8 +135,8 @@ importers:
         specifier: ^0.12.0
         version: 0.12.0(zod@4.3.5)
       '@anthropic-ai/claude-agent-sdk':
-        specifier: ^0.1.76
-        version: 0.1.77(zod@4.3.5)
+        specifier: ^0.2.7
+        version: 0.2.7(zod@4.3.5)
       '@hono/node-server':
         specifier: ^1.13.7
         version: 1.19.7(hono@4.11.3)
@@ -252,11 +252,11 @@ packages:
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
 
-  '@anthropic-ai/claude-agent-sdk@0.1.77':
-    resolution: {integrity: sha512-ZEjWQtkoB2MEY6K16DWMmF+8OhywAynH0m08V265cerbZ8xPD/2Ng2jPzbbO40mPeFSsMDJboShL+a3aObP0Jg==}
+  '@anthropic-ai/claude-agent-sdk@0.2.7':
+    resolution: {integrity: sha512-I1/zcnLah74kZeRkj/1QnDaC6ItJ2m/Bftlm25uoaRkZx7i7SkcpqM9jGE/r2A8PMxnw5WpabP60Xgj99CrTuw==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      zod: ^3.25.0 || ^4.0.0
+      zod: ^4.0.0
 
   '@asamuzakjp/css-color@3.2.0':
     resolution: {integrity: sha512-K1A6z8tS3XsmCMM86xoWdn7Fkdn9m6RSVtocUrJYIwZnFVkng/PvkEoWtOWmP+Scc6saYWHWZYbndEEXxl24jw==}
@@ -2304,7 +2304,7 @@ snapshots:
     dependencies:
       zod: 4.3.5
 
-  '@anthropic-ai/claude-agent-sdk@0.1.77(zod@4.3.5)':
+  '@anthropic-ai/claude-agent-sdk@0.2.7(zod@4.3.5)':
     dependencies:
       zod: 4.3.5
     optionalDependencies:

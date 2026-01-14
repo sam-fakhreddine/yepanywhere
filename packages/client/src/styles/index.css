@@ -5835,6 +5835,97 @@ a.sidebar-nav-item {
   max-width: 200px;
 }
 
+/* Remote Access Sessions */
+.remote-access-sessions {
+  border-top: 1px solid var(--border-color);
+  padding-top: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.sessions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.sessions-title {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.revoke-all-button {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-danger);
+  cursor: pointer;
+}
+
+.revoke-all-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.revoke-all-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sessions-empty {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--space-2);
+}
+
+.sessions-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.session-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-2);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.session-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.revoke-button {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-danger);
+  cursor: pointer;
+}
+
+.revoke-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.revoke-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ==========================================================================
    SessionListItem Component
    ========================================================================== */

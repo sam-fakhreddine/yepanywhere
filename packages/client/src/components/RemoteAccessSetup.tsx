@@ -59,12 +59,15 @@ export function RemoteAccessSetup({
     config,
     relayConfig,
     relayStatus,
+    sessions,
     loading,
     error: hookError,
     configure,
     enable,
     disable,
     updateRelayConfig,
+    revokeSession,
+    revokeAllSessions,
     refresh,
   } = useRemoteAccess();
 
@@ -435,6 +438,50 @@ export function RemoteAccessSetup({
             )}
           </div>
         )}
+
+        <div className="remote-access-sessions">
+          <div className="sessions-header">
+            <span className="sessions-title">Sessions ({sessions.length})</span>
+            {sessions.length > 0 && (
+              <button
+                type="button"
+                className="revoke-all-button"
+                onClick={() => revokeAllSessions()}
+                disabled={isSaving}
+              >
+                Revoke All
+              </button>
+            )}
+          </div>
+          {sessions.length === 0 ? (
+            <p className="sessions-empty">No sessions</p>
+          ) : (
+            <ul className="sessions-list">
+              {sessions.map((session) => (
+                <li key={session.sessionId} className="session-item">
+                  <div className="session-info">
+                    <span className="session-created">
+                      Created:{" "}
+                      {new Date(session.createdAt).toLocaleDateString()}
+                    </span>
+                    <span className="session-last-used">
+                      Last used:{" "}
+                      {new Date(session.lastUsed).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="revoke-button"
+                    onClick={() => revokeSession(session.sessionId)}
+                    disabled={isSaving}
+                  >
+                    Revoke
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         <div className="remote-access-actions">
           <button

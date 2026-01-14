@@ -282,6 +282,8 @@ export type {
   RemoteClientMessage,
   YepMessage,
   RelayMessage,
+  // Connection metadata types
+  OriginMetadata,
   // SRP authentication types (re-exported from relay.ts)
   SrpClientHello,
   SrpServerChallenge,

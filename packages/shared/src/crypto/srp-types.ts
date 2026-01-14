@@ -8,11 +8,17 @@
  * 4. Server → Client: SrpServerVerify (M2) or SrpError
  */
 
+import type { OriginMetadata } from "../connection.js";
+
 /** Client initiates SRP handshake with identity */
 export interface SrpClientHello {
   type: "srp_hello";
   /** Username/identity */
   identity: string;
+  /** Browser profile identifier for session tracking */
+  browserProfileId?: string;
+  /** Origin metadata for device/browser identification */
+  originMetadata?: OriginMetadata;
 }
 
 /** Server responds with salt and ephemeral public value B */

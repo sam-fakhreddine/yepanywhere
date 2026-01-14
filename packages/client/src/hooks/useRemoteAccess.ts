@@ -37,6 +37,13 @@ export interface RemoteAccessConfig {
   createdAt?: string;
 }
 
+export interface RemoteSession {
+  sessionId: string;
+  username: string;
+  createdAt: string;
+  lastUsed: string;
+}
+
 interface UseRemoteAccessResult {
   /** Current remote access configuration */
   config: RemoteAccessConfig | null;
@@ -44,6 +51,8 @@ interface UseRemoteAccessResult {
   relayConfig: RelayConfig | null;
   /** Current relay connection status */
   relayStatus: RelayStatusInfo | null;
+  /** Active remote sessions */
+  sessions: RemoteSession[];
   /** Whether the config is loading */
   loading: boolean;
   /** Error message if any */
@@ -60,6 +69,10 @@ interface UseRemoteAccessResult {
   updateRelayConfig: (config: RelayConfig) => Promise<void>;
   /** Clear relay configuration */
   clearRelayConfig: () => Promise<void>;
+  /** Revoke a specific session */
+  revokeSession: (sessionId: string) => Promise<void>;
+  /** Revoke all sessions */
+  revokeAllSessions: () => Promise<void>;
   /** Refresh the configuration */
   refresh: () => Promise<void>;
 }
@@ -68,21 +81,23 @@ export function useRemoteAccess(): UseRemoteAccessResult {
   const [config, setConfig] = useState<RemoteAccessConfig | null>(null);
   const [relayConfig, setRelayConfig] = useState<RelayConfig | null>(null);
   const [relayStatus, setRelayStatus] = useState<RelayStatusInfo | null>(null);
+  const [sessions, setSessions] = useState<RemoteSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [configResponse, relayResponse, statusResponse] = await Promise.all(
-        [
+      const [configResponse, relayResponse, statusResponse, sessionsResponse] =
+        await Promise.all([
           fetchJSON<RemoteAccessConfig>("/remote-access/config"),
           fetchJSON<{ relay: RelayConfig | null }>("/remote-access/relay"),
           fetchJSON<RelayStatusInfo>("/remote-access/relay/status"),
-        ],
-      );
+          fetchJSON<{ sessions: RemoteSession[] }>("/remote-access/sessions"),
+        ]);
       setConfig(configResponse);
       setRelayConfig(relayResponse.relay);
       setRelayStatus(statusResponse);
+      setSessions(sessionsResponse.sessions);
       setError(null);
     } catch (err) {
       console.error("[useRemoteAccess] Failed to fetch config:", err);
@@ -195,10 +210,42 @@ export function useRemoteAccess(): UseRemoteAccessResult {
     }
   }, [refresh]);
 
+  const revokeSession = useCallback(
+    async (sessionId: string) => {
+      try {
+        await fetchJSON(`/remote-access/sessions/${sessionId}`, {
+          method: "DELETE",
+        });
+        await refresh();
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to revoke session";
+        setError(message);
+        throw new Error(message);
+      }
+    },
+    [refresh],
+  );
+
+  const revokeAllSessions = useCallback(async () => {
+    try {
+      await fetchJSON("/remote-access/sessions", {
+        method: "DELETE",
+      });
+      await refresh();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to revoke all sessions";
+      setError(message);
+      throw new Error(message);
+    }
+  }, [refresh]);
+
   return {
     config,
     relayConfig,
     relayStatus,
+    sessions,
     loading,
     error,
     configure,
@@ -207,6 +254,8 @@ export function useRemoteAccess(): UseRemoteAccessResult {
     clearCredentials,
     updateRelayConfig,
     clearRelayConfig,
+    revokeSession,
+    revokeAllSessions,
     refresh,
   };
 }

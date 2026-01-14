@@ -9,6 +9,7 @@
 import type {
   ClientCapabilities,
   EncryptedEnvelope,
+  OriginMetadata,
   RelayEvent,
   RelayRequest,
   RelayResponse,
@@ -332,10 +333,24 @@ export class SecureConnection implements Connection {
     this.srpSession = new SrpClientSession();
     await this.srpSession.generateHello(this.username, this.password);
 
-    // Send hello
+    // Collect connection metadata for session tracking
+    const browserProfileId = getOrCreateBrowserProfileId();
+    const originMetadata: OriginMetadata = {
+      origin: window.location.origin,
+      scheme: window.location.protocol.replace(":", ""),
+      hostname: window.location.hostname,
+      port: window.location.port
+        ? Number.parseInt(window.location.port, 10)
+        : null,
+      userAgent: navigator.userAgent,
+    };
+
+    // Send hello with connection metadata
     const hello: SrpClientHello = {
       type: "srp_hello",
       identity: this.username,
+      browserProfileId,
+      originMetadata,
     };
     this.ws?.send(JSON.stringify(hello));
     this.connectionState = "srp_hello_sent";

@@ -13,6 +13,7 @@ import type { HttpBindings } from "@hono/node-server";
 import type {
   BinaryFormatValue,
   EncryptedEnvelope,
+  OriginMetadata,
   RelayRequest,
   RelaySubscribe,
   RelayUnsubscribe,
@@ -104,6 +105,10 @@ export interface ConnectionState {
   useBinaryEncrypted: boolean;
   /** Client's supported binary formats (Phase 3 capabilities) - defaults to [0x01] */
   supportedFormats: Set<BinaryFormatValue>;
+  /** Browser profile ID from SRP hello (for session tracking) */
+  browserProfileId: string | null;
+  /** Origin metadata from SRP hello (for session tracking) */
+  originMetadata: OriginMetadata | null;
 }
 
 /** Tracks an active upload over WebSocket relay */
@@ -173,6 +178,8 @@ export function createConnectionState(): ConnectionState {
     useBinaryFrames: false,
     useBinaryEncrypted: false,
     supportedFormats: new Set([BinaryFormat.JSON]),
+    browserProfileId: null,
+    originMetadata: null,
   };
 }
 
@@ -285,6 +292,9 @@ export async function handleSrpResume(
     connState.authState = "authenticated";
     connState.username = session.username;
     connState.sessionId = session.sessionId;
+
+    // Update lastConnectedAt to track active connection time
+    await remoteSessionService.updateLastConnected(session.sessionId);
 
     sendSrpMessage(ws, {
       type: "srp_resumed",
@@ -1012,6 +1022,10 @@ export async function handleSrpHello(
     connState.srpSession = new SrpServerSession();
     connState.username = msg.identity;
 
+    // Capture connection metadata for session tracking
+    connState.browserProfileId = msg.browserProfileId ?? null;
+    connState.originMetadata = msg.originMetadata ?? null;
+
     const { B } = await connState.srpSession.generateChallenge(
       msg.identity,
       credentials.salt,
@@ -1090,6 +1104,11 @@ export async function handleSrpProof(
       sessionId = await remoteSessionService.createSession(
         connState.username,
         connState.sessionKey,
+        {
+          browserProfileId: connState.browserProfileId ?? undefined,
+          userAgent: connState.originMetadata?.userAgent,
+          origin: connState.originMetadata?.origin,
+        },
       );
       connState.sessionId = sessionId;
       console.log("[WS Relay] Session created:", sessionId);

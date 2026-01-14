@@ -106,13 +106,24 @@ export function createPushRoutes(deps: PushRoutesDeps): Hono {
 
     // Return sanitized subscription info (hide sensitive keys)
     const sanitized = Object.entries(subscriptions).map(
-      ([browserProfileId, sub]) => ({
-        browserProfileId,
-        createdAt: sub.createdAt,
-        deviceName: sub.deviceName,
-        // Just show domain of endpoint for privacy
-        endpointDomain: new URL(sub.subscription.endpoint).hostname,
-      }),
+      ([browserProfileId, sub]) => {
+        // Safely extract domain from endpoint
+        let endpointDomain = "unknown";
+        try {
+          if (sub.subscription?.endpoint) {
+            endpointDomain = new URL(sub.subscription.endpoint).hostname;
+          }
+        } catch {
+          // Invalid URL, keep "unknown"
+        }
+
+        return {
+          browserProfileId,
+          createdAt: sub.createdAt,
+          deviceName: sub.deviceName,
+          endpointDomain,
+        };
+      },
     );
 
     return c.json({

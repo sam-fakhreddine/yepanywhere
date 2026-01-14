@@ -215,5 +215,46 @@ export function createRemoteAccessRoutes(
     });
   });
 
+  /**
+   * GET /api/remote-access/sessions
+   * List all active remote sessions.
+   */
+  app.get("/sessions", (c) => {
+    if (!remoteSessionService) {
+      return c.json({ sessions: [] });
+    }
+    const sessions = remoteSessionService.listSessions();
+    return c.json({ sessions });
+  });
+
+  /**
+   * DELETE /api/remote-access/sessions/:sessionId
+   * Revoke a specific session.
+   */
+  app.delete("/sessions/:sessionId", async (c) => {
+    if (!remoteSessionService) {
+      return c.json({ error: "Session service not available" }, 500);
+    }
+    const sessionId = c.req.param("sessionId");
+    await remoteSessionService.deleteSession(sessionId);
+    return c.json({ success: true });
+  });
+
+  /**
+   * DELETE /api/remote-access/sessions
+   * Revoke all sessions.
+   */
+  app.delete("/sessions", async (c) => {
+    if (!remoteSessionService) {
+      return c.json({ error: "Session service not available" }, 500);
+    }
+    const username = remoteAccessService.getUsername();
+    if (username) {
+      const count = await remoteSessionService.invalidateUserSessions(username);
+      return c.json({ success: true, revokedCount: count });
+    }
+    return c.json({ success: true, revokedCount: 0 });
+  });
+
   return app;
 }
