@@ -16,7 +16,12 @@
 // Version constant for controlled updates
 // Increment this when making intentional SW changes
 // Browsers reinstall SW only when file content changes
-const SW_VERSION = "1.0.1";
+const SW_VERSION = "1.0.2";
+
+// Resolve asset URLs relative to SW scope (handles /remote/ deployment)
+function assetUrl(path) {
+  return new URL(path, self.registration.scope).href;
+}
 
 // Settings synced from main thread
 const settings = {
@@ -253,8 +258,8 @@ async function handlePush(data) {
     const options = {
       body: data.message || "Test notification",
       tag: "test",
-      icon: "/icon-192.png",
-      badge: "/badge-96.png",
+      icon: assetUrl("icon-192.png"),
+      badge: assetUrl("badge-96.png"),
       requireInteraction: urgency === "persistent",
       silent: urgency === "silent",
     };
@@ -303,8 +308,8 @@ async function showPendingInputNotification(data) {
   const options = {
     body: data.summary || "Waiting for input",
     tag: `session-${data.sessionId}`,
-    icon: "/icon-192.png",
-    badge: "/badge-96.png",
+    icon: assetUrl("icon-192.png"),
+    badge: assetUrl("badge-96.png"),
     data: {
       sessionId: data.sessionId,
       projectId: data.projectId,
@@ -332,8 +337,8 @@ function showSessionHaltedNotification(data) {
   const options = {
     body,
     tag: `session-halted-${data.sessionId}`,
-    icon: "/icon-192.png",
-    badge: "/badge-96.png",
+    icon: assetUrl("icon-192.png"),
+    badge: assetUrl("badge-96.png"),
     data: {
       sessionId: data.sessionId,
       projectId: data.projectId,

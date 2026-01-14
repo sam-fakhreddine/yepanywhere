@@ -5,7 +5,8 @@ import {
   getOrCreateBrowserProfileId,
   getServerScoped,
 } from "../lib/storageKeys";
-const SW_PATH = "/sw.js";
+// Use Vite's base URL - in production remote build this is /remote/
+const SW_PATH = `${import.meta.env.BASE_URL}sw.js`;
 
 // In production, SW is always enabled
 // In dev mode, check server setting (allows runtime toggle via settings UI)

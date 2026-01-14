@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { type RelayStatus, useRemoteAccess } from "../hooks/useRemoteAccess";
+import { parseUserAgent } from "../lib/deviceDetection";
 import { QRCode } from "./QRCode";
 
 const DEFAULT_RELAY_URL = "wss://relay.yepanywhere.com/ws";
@@ -18,6 +19,35 @@ export interface RemoteAccessSetupProps {
   description?: string;
   /** Callback when setup completes successfully */
   onSetupComplete?: () => void;
+}
+
+/**
+ * Format a date for display with relative time.
+ */
+function formatRelativeDate(isoDate: string): string {
+  const date = new Date(isoDate);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMinutes < 1) {
+    return "just now";
+  }
+  if (diffMinutes < 60) {
+    return `${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`;
+  }
+  if (diffHours < 24) {
+    return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  }
+  if (diffDays === 1) {
+    return "yesterday";
+  }
+  if (diffDays < 7) {
+    return `${diffDays} days ago`;
+  }
+  return date.toLocaleDateString();
 }
 
 /**
@@ -457,28 +487,54 @@ export function RemoteAccessSetup({
             <p className="sessions-empty">No sessions</p>
           ) : (
             <ul className="sessions-list">
-              {sessions.map((session) => (
-                <li key={session.sessionId} className="session-item">
-                  <div className="session-info">
-                    <span className="session-created">
-                      Created:{" "}
-                      {new Date(session.createdAt).toLocaleDateString()}
-                    </span>
-                    <span className="session-last-used">
-                      Last used:{" "}
-                      {new Date(session.lastUsed).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="revoke-button"
-                    onClick={() => revokeSession(session.sessionId)}
-                    disabled={isSaving}
-                  >
-                    Revoke
-                  </button>
-                </li>
-              ))}
+              {sessions.map((session) => {
+                const { browser, os } = session.userAgent
+                  ? parseUserAgent(session.userAgent)
+                  : { browser: "Unknown", os: "Unknown" };
+                const hasDeviceInfo = session.userAgent || session.origin;
+
+                return (
+                  <li key={session.sessionId} className="session-item">
+                    <div className="session-info">
+                      {hasDeviceInfo ? (
+                        <>
+                          <span className="session-device">
+                            {browser} · {os}
+                          </span>
+                          {session.origin && (
+                            <code className="session-origin">
+                              {session.origin}
+                            </code>
+                          )}
+                          <span className="session-dates">
+                            Created {formatRelativeDate(session.createdAt)} ·
+                            Last used {formatRelativeDate(session.lastUsed)}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="session-created">
+                            Created:{" "}
+                            {new Date(session.createdAt).toLocaleDateString()}
+                          </span>
+                          <span className="session-last-used">
+                            Last used:{" "}
+                            {new Date(session.lastUsed).toLocaleDateString()}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="revoke-button"
+                      onClick={() => revokeSession(session.sessionId)}
+                      disabled={isSaving}
+                    >
+                      Revoke
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

@@ -42,6 +42,14 @@ export interface RemoteSession {
   username: string;
   createdAt: string;
   lastUsed: string;
+  /** Browser profile ID that created this session */
+  browserProfileId?: string;
+  /** User agent string of device that created this session */
+  userAgent?: string;
+  /** Origin URL where this session was created from */
+  origin?: string;
+  /** When the session was last actively connected */
+  lastConnectedAt?: string;
 }
 
 interface UseRemoteAccessResult {
