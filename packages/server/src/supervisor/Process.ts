@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import type { ProviderName, UrlProjectId } from "@yep-anywhere/shared";
+import type {
+  ModelInfo,
+  ProviderName,
+  SlashCommand,
+  UrlProjectId,
+} from "@yep-anywhere/shared";
 import { getLogger } from "../logging/logger.js";
 import type { MessageQueue } from "../sdk/messageQueue.js";
 import type {
@@ -59,6 +64,12 @@ export interface ProcessConstructorOptions extends ProcessOptions {
   setMaxThinkingTokensFn?: (tokens: number | null) => Promise<void>;
   /** Function to interrupt current turn gracefully (SDK 0.2.7+) */
   interruptFn?: () => Promise<void>;
+  /** Function to get supported models (SDK 0.2.7+) */
+  supportedModelsFn?: () => Promise<ModelInfo[]>;
+  /** Function to get supported slash commands (SDK 0.2.7+) */
+  supportedCommandsFn?: () => Promise<SlashCommand[]>;
+  /** Function to change model mid-session (SDK 0.2.7+) */
+  setModelFn?: (model?: string) => Promise<void>;
 }
 
 export class Process {
@@ -119,6 +130,15 @@ export class Process {
   /** Function to interrupt current turn gracefully (SDK 0.2.7+) */
   private interruptFn: (() => Promise<void>) | null;
 
+  /** Function to get supported models (SDK 0.2.7+) */
+  private supportedModelsFn: (() => Promise<ModelInfo[]>) | null;
+
+  /** Function to get supported slash commands (SDK 0.2.7+) */
+  private supportedCommandsFn: (() => Promise<SlashCommand[]>) | null;
+
+  /** Function to change model mid-session (SDK 0.2.7+) */
+  private setModelFn: ((model?: string) => Promise<void>) | null;
+
   /** Resolvers waiting for the real session ID */
   private sessionIdResolvers: Array<(id: string) => void> = [];
   private sessionIdResolved = false;
@@ -150,6 +170,9 @@ export class Process {
     this._maxThinkingTokens = options.maxThinkingTokens;
     this.setMaxThinkingTokensFn = options.setMaxThinkingTokensFn ?? null;
     this.interruptFn = options.interruptFn ?? null;
+    this.supportedModelsFn = options.supportedModelsFn ?? null;
+    this.supportedCommandsFn = options.supportedCommandsFn ?? null;
+    this.setModelFn = options.setModelFn ?? null;
 
     // Start bucket swap timer for bounded message history
     this.startBucketSwapTimer();
@@ -281,6 +304,84 @@ export class Process {
     // SDK uses null to disable, we use undefined for consistency with our types
     await this.setMaxThinkingTokensFn(tokens ?? null);
     this._maxThinkingTokens = tokens;
+    return true;
+  }
+
+  /**
+   * Whether this process supports dynamic model listing.
+   * Only Claude SDK 0.2.7+ supports this.
+   */
+  get supportsDynamicModels(): boolean {
+    return this.supportedModelsFn !== null;
+  }
+
+  /**
+   * Whether this process supports dynamic command listing.
+   * Only Claude SDK 0.2.7+ supports this.
+   */
+  get supportsDynamicCommands(): boolean {
+    return this.supportedCommandsFn !== null;
+  }
+
+  /**
+   * Whether this process supports model switching mid-session.
+   * Only Claude SDK 0.2.7+ supports this.
+   */
+  get supportsSetModel(): boolean {
+    return this.setModelFn !== null;
+  }
+
+  /**
+   * Get the list of available models from the SDK.
+   * Only supported by Claude SDK 0.2.7+.
+   *
+   * @returns Array of available models, or null if not supported
+   */
+  async supportedModels(): Promise<ModelInfo[] | null> {
+    if (!this.supportedModelsFn) {
+      return null;
+    }
+    return this.supportedModelsFn();
+  }
+
+  /**
+   * Get the list of available slash commands from the SDK.
+   * Only supported by Claude SDK 0.2.7+.
+   *
+   * @returns Array of available commands, or null if not supported
+   */
+  async supportedCommands(): Promise<SlashCommand[] | null> {
+    if (!this.supportedCommandsFn) {
+      return null;
+    }
+    return this.supportedCommandsFn();
+  }
+
+  /**
+   * Change the model mid-session without restarting.
+   * Only supported by Claude SDK 0.2.7+.
+   *
+   * @param model - New model to use, or undefined to use default
+   * @returns true if the change was applied, false if not supported
+   */
+  async setModel(model?: string): Promise<boolean> {
+    if (!this.setModelFn) {
+      return false;
+    }
+
+    const log = getLogger();
+    log.info(
+      {
+        event: "model_change",
+        sessionId: this._sessionId,
+        processId: this.id,
+        oldModel: this.model,
+        newModel: model,
+      },
+      `Changing model: ${this.model} → ${model}`,
+    );
+
+    await this.setModelFn(model);
     return true;
   }
 

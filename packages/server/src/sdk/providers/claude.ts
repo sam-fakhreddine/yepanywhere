@@ -7,7 +7,7 @@ import {
   type CanUseTool as SDKCanUseTool,
   query,
 } from "@anthropic-ai/claude-agent-sdk";
-import type { ModelInfo } from "@yep-anywhere/shared";
+import type { ModelInfo, SlashCommand } from "@yep-anywhere/shared";
 import { logSDKMessage } from "../messageLogger.js";
 import { MessageQueue } from "../messageQueue.js";
 import type { ContentBlock, SDKMessage } from "../types.js";
@@ -18,12 +18,26 @@ import type {
   StartSessionOptions,
 } from "./types.js";
 
-/** Static list of Claude models */
-const CLAUDE_MODELS: ModelInfo[] = [
-  { id: "sonnet", name: "Sonnet" },
-  { id: "opus", name: "Opus" },
-  { id: "haiku", name: "Haiku" },
+/** Static fallback list of Claude models (used if probe fails) */
+const CLAUDE_MODELS_FALLBACK: ModelInfo[] = [
+  {
+    id: "sonnet",
+    name: "Sonnet",
+    description: "Best balance of speed and capability",
+  },
+  {
+    id: "opus",
+    name: "Opus",
+    description: "Most capable model for complex tasks",
+  },
+  { id: "haiku", name: "Haiku", description: "Fastest model for simple tasks" },
 ];
+
+/** Cached models from SDK probe */
+let cachedModels: ModelInfo[] | null = null;
+
+/** Promise for in-flight probe (to avoid duplicate probes) */
+let probePromise: Promise<ModelInfo[]> | null = null;
 
 /**
  * OAuth credentials from ~/.claude/.credentials.json
@@ -136,10 +150,79 @@ export class ClaudeProvider implements AgentProvider {
 
   /**
    * Get available Claude models.
-   * Returns a static list of known models.
+   * Fetches dynamically from SDK via a probe session, with caching.
+   * Falls back to static list if probe fails or user is not authenticated.
    */
   async getAvailableModels(): Promise<ModelInfo[]> {
-    return CLAUDE_MODELS;
+    // Return cached models if available
+    if (cachedModels) {
+      return cachedModels;
+    }
+
+    // Check if user is authenticated before trying to probe
+    const authStatus = await this.getAuthStatus();
+    if (!authStatus.authenticated) {
+      return CLAUDE_MODELS_FALLBACK;
+    }
+
+    // If probe is already in progress, wait for it
+    if (probePromise) {
+      return probePromise;
+    }
+
+    // Start a new probe
+    probePromise = this.probeModels();
+    try {
+      const models = await probePromise;
+      cachedModels = models;
+      return models;
+    } catch (error) {
+      console.warn("[Claude] Failed to probe models, using fallback:", error);
+      return CLAUDE_MODELS_FALLBACK;
+    } finally {
+      probePromise = null;
+    }
+  }
+
+  /**
+   * Probe for available models by starting a minimal session.
+   * The session doesn't send any messages - it just calls supportedModels()
+   * on the SDK query and then aborts.
+   */
+  private async probeModels(): Promise<ModelInfo[]> {
+    const abortController = new AbortController();
+
+    // Create a generator that never yields (session waits for messages)
+    async function* emptyGenerator(): AsyncGenerator<never> {
+      // Never yield - just wait indefinitely
+      await new Promise(() => {});
+    }
+
+    try {
+      const sdkQuery = query({
+        prompt: emptyGenerator(),
+        options: {
+          cwd: homedir(), // Use home dir as neutral working directory
+          abortController,
+          permissionMode: "default",
+          // Don't persist this probe session to disk
+          persistSession: false,
+        },
+      });
+
+      // Get models from SDK initialization
+      const models = await sdkQuery.supportedModels();
+
+      // Map SDK ModelInfo to our ModelInfo format
+      return models.map((m) => ({
+        id: m.value,
+        name: m.displayName,
+        description: m.description,
+      }));
+    } finally {
+      // Always abort the probe session
+      abortController.abort();
+    }
   }
 
   /**
@@ -234,6 +317,28 @@ export class ClaudeProvider implements AgentProvider {
       setMaxThinkingTokens: (tokens: number | null) =>
         sdkQuery.setMaxThinkingTokens(tokens),
       interrupt: () => sdkQuery.interrupt(),
+      supportedModels: async (): Promise<ModelInfo[]> => {
+        const models = await sdkQuery.supportedModels();
+        // Map SDK ModelInfo (value, displayName, description) to our ModelInfo (id, name, description)
+        const mappedModels = models.map((m) => ({
+          id: m.value,
+          name: m.displayName,
+          description: m.description,
+        }));
+        // Update cache for future getAvailableModels() calls
+        cachedModels = mappedModels;
+        return mappedModels;
+      },
+      supportedCommands: async (): Promise<SlashCommand[]> => {
+        const commands = await sdkQuery.supportedCommands();
+        // Map SDK SlashCommand to our SlashCommand (same fields, just normalize)
+        return commands.map((c) => ({
+          name: c.name,
+          description: c.description,
+          argumentHint: c.argumentHint || undefined,
+        }));
+      },
+      setModel: (model?: string) => sdkQuery.setModel(model),
     };
   }
 

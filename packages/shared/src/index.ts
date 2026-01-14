@@ -20,6 +20,7 @@ export type {
   ProviderName,
   ProviderInfo,
   ModelInfo,
+  SlashCommand,
   PermissionMode,
   SessionStatus,
   ModelOption,

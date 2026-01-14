@@ -293,7 +293,16 @@ export class Supervisor {
       },
     });
 
-    const { iterator, queue, abort, setMaxThinkingTokens, interrupt } = result;
+    const {
+      iterator,
+      queue,
+      abort,
+      setMaxThinkingTokens,
+      interrupt,
+      supportedModels,
+      supportedCommands,
+      setModel,
+    } = result;
 
     const tempSessionId = randomUUID();
     const options: ProcessConstructorOptions = {
@@ -305,6 +314,9 @@ export class Supervisor {
       abortFn: abort,
       setMaxThinkingTokensFn: setMaxThinkingTokens,
       interruptFn: interrupt,
+      supportedModelsFn: supportedModels,
+      supportedCommandsFn: supportedCommands,
+      setModelFn: setModel,
       permissionMode: effectiveMode,
       provider: "claude", // Real SDK is always Claude
       model: modelSettings?.model,
@@ -371,7 +383,16 @@ export class Supervisor {
       },
     });
 
-    const { iterator, queue, abort, setMaxThinkingTokens, interrupt } = result;
+    const {
+      iterator,
+      queue,
+      abort,
+      setMaxThinkingTokens,
+      interrupt,
+      supportedModels,
+      supportedCommands,
+      setModel,
+    } = result;
 
     const options: ProcessConstructorOptions = {
       projectPath,
@@ -382,6 +403,9 @@ export class Supervisor {
       abortFn: abort,
       setMaxThinkingTokensFn: setMaxThinkingTokens,
       interruptFn: interrupt,
+      supportedModelsFn: supportedModels,
+      supportedCommandsFn: supportedCommands,
+      setModelFn: setModel,
       permissionMode: effectiveMode,
       provider: "claude", // Real SDK is always Claude
       model: modelSettings?.model,
@@ -442,7 +466,16 @@ export class Supervisor {
       },
     });
 
-    const { iterator, queue, abort, setMaxThinkingTokens, interrupt } = result;
+    const {
+      iterator,
+      queue,
+      abort,
+      setMaxThinkingTokens,
+      interrupt,
+      supportedModels,
+      supportedCommands,
+      setModel,
+    } = result;
 
     const tempSessionId = randomUUID();
     const options: ProcessConstructorOptions = {
@@ -454,6 +487,9 @@ export class Supervisor {
       abortFn: abort,
       setMaxThinkingTokensFn: setMaxThinkingTokens,
       interruptFn: interrupt,
+      supportedModelsFn: supportedModels,
+      supportedCommandsFn: supportedCommands,
+      setModelFn: setModel,
       permissionMode: effectiveMode,
       provider: activeProvider.name,
       model: modelSettings?.model,
@@ -516,7 +552,16 @@ export class Supervisor {
       },
     });
 
-    const { iterator, queue, abort, setMaxThinkingTokens, interrupt } = result;
+    const {
+      iterator,
+      queue,
+      abort,
+      setMaxThinkingTokens,
+      interrupt,
+      supportedModels,
+      supportedCommands,
+      setModel,
+    } = result;
 
     const options: ProcessConstructorOptions = {
       projectPath,
@@ -527,6 +572,9 @@ export class Supervisor {
       abortFn: abort,
       setMaxThinkingTokensFn: setMaxThinkingTokens,
       interruptFn: interrupt,
+      supportedModelsFn: supportedModels,
+      supportedCommandsFn: supportedCommands,
+      setModelFn: setModel,
       permissionMode: effectiveMode,
       provider: activeProvider.name,
       model: modelSettings?.model,

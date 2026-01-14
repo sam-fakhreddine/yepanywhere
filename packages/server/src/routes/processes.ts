@@ -151,5 +151,72 @@ export function createProcessesRoutes(deps: ProcessesDeps): Hono {
     return c.json({ interrupted: result.success, supported: result.supported });
   });
 
+  // GET /api/processes/:processId/models - Get available models from SDK
+  // Returns the list of models available for this session (dynamically from SDK).
+  routes.get("/:processId/models", async (c) => {
+    const processId = c.req.param("processId");
+
+    const process = deps.supervisor.getProcess(processId);
+    if (!process) {
+      return c.json({ error: "Process not found" }, 404);
+    }
+
+    const models = await process.supportedModels();
+    if (models === null) {
+      // Process doesn't support dynamic model listing
+      return c.json(
+        { error: "Dynamic model listing not supported for this process" },
+        400,
+      );
+    }
+
+    return c.json({ models });
+  });
+
+  // GET /api/processes/:processId/commands - Get available slash commands from SDK
+  // Returns the list of slash commands (skills) available for this session.
+  routes.get("/:processId/commands", async (c) => {
+    const processId = c.req.param("processId");
+
+    const process = deps.supervisor.getProcess(processId);
+    if (!process) {
+      return c.json({ error: "Process not found" }, 404);
+    }
+
+    const commands = await process.supportedCommands();
+    if (commands === null) {
+      // Process doesn't support dynamic command listing
+      return c.json(
+        { error: "Dynamic command listing not supported for this process" },
+        400,
+      );
+    }
+
+    return c.json({ commands });
+  });
+
+  // POST /api/processes/:processId/model - Change model mid-session
+  // Body: { model?: string } - model to switch to, or undefined for default
+  routes.post("/:processId/model", async (c) => {
+    const processId = c.req.param("processId");
+
+    const process = deps.supervisor.getProcess(processId);
+    if (!process) {
+      return c.json({ error: "Process not found" }, 404);
+    }
+
+    const body = await c.req.json<{ model?: string }>();
+    const success = await process.setModel(body.model);
+
+    if (!success) {
+      return c.json(
+        { error: "Model switching not supported for this process" },
+        400,
+      );
+    }
+
+    return c.json({ success: true, model: body.model });
+  });
+
   return routes;
 }

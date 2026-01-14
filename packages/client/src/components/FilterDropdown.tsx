@@ -7,6 +7,7 @@ const DESKTOP_BREAKPOINT = 769;
 export interface FilterOption<T extends string> {
   value: T;
   label: string;
+  description?: string; // Optional description shown below label
   count?: number;
   color?: string; // For provider colors (colored dot)
 }
@@ -196,7 +197,14 @@ export function FilterDropdown<T extends string>({
               />
             )}
 
-            <span className="filter-dropdown-label">{option.label}</span>
+            <span className="filter-dropdown-label-wrapper">
+              <span className="filter-dropdown-label">{option.label}</span>
+              {option.description && (
+                <span className="filter-dropdown-description">
+                  {option.description}
+                </span>
+              )}
+            </span>
 
             {option.count !== undefined && (
               <span className="filter-dropdown-count">{option.count}</span>

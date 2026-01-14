@@ -42,8 +42,22 @@ export interface ModelInfo {
   id: string;
   /** Human-readable name */
   name: string;
+  /** Description of the model's capabilities (optional) */
+  description?: string;
   /** Model size in bytes (for local models) */
   size?: number;
+}
+
+/**
+ * Slash command (skill) available in a session.
+ */
+export interface SlashCommand {
+  /** Command name without leading slash (e.g., "commit", "review-pr") */
+  name: string;
+  /** Description of what the command does */
+  description: string;
+  /** Hint for command arguments (e.g., "<file>") */
+  argumentHint?: string;
 }
 
 /**

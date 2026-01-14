@@ -1,5 +1,9 @@
 // Provider abstraction types for multi-provider support
-import type { ModelInfo, PermissionMode } from "@yep-anywhere/shared";
+import type {
+  ModelInfo,
+  PermissionMode,
+  SlashCommand,
+} from "@yep-anywhere/shared";
 import type { MessageQueue } from "../messageQueue.js";
 import type { CanUseTool, SDKMessage, UserMessage } from "../types.js";
 
@@ -75,6 +79,21 @@ export interface AgentSession {
    * Only supported by Claude SDK 0.2.7+.
    */
   interrupt?: () => Promise<void>;
+  /**
+   * Get the list of available models from the SDK.
+   * Only supported by Claude SDK 0.2.7+.
+   */
+  supportedModels?: () => Promise<ModelInfo[]>;
+  /**
+   * Get the list of available slash commands (skills) from the SDK.
+   * Only supported by Claude SDK 0.2.7+.
+   */
+  supportedCommands?: () => Promise<SlashCommand[]>;
+  /**
+   * Change the model mid-session without restarting.
+   * Only supported by Claude SDK 0.2.7+.
+   */
+  setModel?: (model?: string) => Promise<void>;
 }
 
 /**

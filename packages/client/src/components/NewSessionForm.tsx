@@ -181,6 +181,7 @@ export function NewSessionForm({
       label: model.size
         ? `${model.name} (${(model.size / (1024 * 1024 * 1024)).toFixed(1)} GB)`
         : model.name,
+      description: model.description,
     }));
   }, [availableModels]);
 

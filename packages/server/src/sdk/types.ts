@@ -141,6 +141,25 @@ export interface StartSessionResult {
    * Only supported by Claude SDK 0.2.7+.
    */
   interrupt?: () => Promise<void>;
+  /**
+   * Get the list of available models from the SDK.
+   * Only supported by Claude SDK 0.2.7+.
+   */
+  supportedModels?: () => Promise<
+    Array<{ id: string; name: string; description?: string }>
+  >;
+  /**
+   * Get the list of available slash commands from the SDK.
+   * Only supported by Claude SDK 0.2.7+.
+   */
+  supportedCommands?: () => Promise<
+    Array<{ name: string; description: string; argumentHint?: string }>
+  >;
+  /**
+   * Change the model mid-session without restarting.
+   * Only supported by Claude SDK 0.2.7+.
+   */
+  setModel?: (model?: string) => Promise<void>;
 }
 
 export interface RealClaudeSDKInterface {
