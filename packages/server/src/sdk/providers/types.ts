@@ -52,6 +52,10 @@ export interface StartSessionOptions {
   maxThinkingTokens?: number;
   /** Tool approval callback */
   onToolApproval?: CanUseTool;
+  /** SSH host for remote execution (undefined = local) */
+  executor?: string;
+  /** Environment variables to set on remote (for testing: CLAUDE_SESSIONS_DIR) */
+  remoteEnv?: Record<string, string>;
 }
 
 /**

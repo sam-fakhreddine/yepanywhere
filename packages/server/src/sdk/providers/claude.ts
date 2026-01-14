@@ -8,8 +8,11 @@ import {
   query,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { ModelInfo, SlashCommand } from "@yep-anywhere/shared";
+import { getLogger } from "../../logging/logger.js";
 import { logSDKMessage } from "../messageLogger.js";
 import { MessageQueue } from "../messageQueue.js";
+import { createRemoteSpawn, testSSHConnection } from "../remote-spawn.js";
+import { getProjectDirFromCwd, syncSessionFile } from "../session-sync.js";
 import type { ContentBlock, SDKMessage } from "../types.js";
 import type {
   AgentProvider,
@@ -229,8 +232,33 @@ export class ClaudeProvider implements AgentProvider {
    * Start a new Claude session.
    */
   async startSession(options: StartSessionOptions): Promise<AgentSession> {
+    const log = getLogger();
     const queue = new MessageQueue();
     const abortController = new AbortController();
+
+    // If remote executor specified, test connection first
+    if (options.executor) {
+      log.info(
+        {
+          event: "remote_session_start",
+          executor: options.executor,
+          cwd: options.cwd,
+        },
+        `Starting remote session on ${options.executor}`,
+      );
+
+      const testResult = await testSSHConnection(options.executor);
+      if (!testResult.success) {
+        throw new Error(
+          `SSH connection to ${options.executor} failed: ${testResult.error}`,
+        );
+      }
+      if (!testResult.claudeAvailable) {
+        throw new Error(
+          `Claude CLI not found on ${options.executor}. Install with: curl -fsSL https://claude.ai/install.sh | bash`,
+        );
+      }
+    }
 
     // Push the initial message into the queue (if provided)
     // If no message, the agent will wait until one is pushed
@@ -265,6 +293,14 @@ export class ClaudeProvider implements AgentProvider {
         }
       : undefined;
 
+    // Create remote spawn function if executor specified
+    const spawnClaudeCodeProcess = options.executor
+      ? createRemoteSpawn({
+          host: options.executor,
+          remoteEnv: options.remoteEnv,
+        })
+      : undefined;
+
     // Create the SDK query with our message generator
     let sdkQuery: Query;
     try {
@@ -285,6 +321,8 @@ export class ClaudeProvider implements AgentProvider {
           // Model and thinking options
           model: options.model,
           maxThinkingTokens: options.maxThinkingTokens,
+          // Remote execution via SSH
+          spawnClaudeCodeProcess,
         },
       });
     } catch (error) {
@@ -308,7 +346,12 @@ export class ClaudeProvider implements AgentProvider {
     }
 
     // Wrap the iterator to convert SDK message types to our internal types
-    const wrappedIterator = this.wrapIterator(sdkQuery);
+    // Pass executor info for session sync after result messages
+    const wrappedIterator = this.wrapIterator(sdkQuery, {
+      executor: options.executor,
+      cwd: options.cwd,
+      remoteEnv: options.remoteEnv,
+    });
 
     return {
       iterator: wrappedIterator,
@@ -345,17 +388,67 @@ export class ClaudeProvider implements AgentProvider {
   /**
    * Wrap the SDK iterator to convert message types.
    * The SDK emits its own message types which we convert to our SDKMessage type.
+   *
+   * For remote sessions, syncs session files after each result message.
    */
   private async *wrapIterator(
     iterator: AsyncIterable<AgentSDKMessage>,
+    remoteOptions?: {
+      executor?: string;
+      cwd: string;
+      remoteEnv?: Record<string, string>;
+    },
   ): AsyncIterableIterator<SDKMessage> {
+    const log = getLogger();
+    let sessionId = "unknown";
+
     try {
       for await (const message of iterator) {
         // Log raw SDK message for analysis (if LOG_SDK_MESSAGES=true)
-        const sessionId =
-          (message as { session_id?: string }).session_id ?? "unknown";
+        sessionId =
+          (message as { session_id?: string }).session_id ?? sessionId;
         logSDKMessage(sessionId, message);
-        yield this.convertMessage(message);
+
+        const converted = this.convertMessage(message);
+        yield converted;
+
+        // For remote sessions, sync session files after result messages
+        // This keeps the local UI up-to-date with remote progress
+        if (
+          remoteOptions?.executor &&
+          converted.type === "result" &&
+          sessionId !== "unknown"
+        ) {
+          const projectDir = getProjectDirFromCwd(remoteOptions.cwd);
+          log.debug(
+            {
+              event: "remote_session_sync",
+              executor: remoteOptions.executor,
+              sessionId,
+              projectDir,
+            },
+            "Syncing session from remote after turn",
+          );
+
+          // Sync in background - don't block the iterator
+          syncSessionFile(
+            remoteOptions.executor,
+            projectDir,
+            sessionId,
+            undefined,
+            remoteOptions.remoteEnv?.CLAUDE_SESSIONS_DIR,
+          ).catch((error) => {
+            log.warn(
+              {
+                event: "remote_session_sync_error",
+                executor: remoteOptions.executor,
+                sessionId,
+                error: error instanceof Error ? error.message : String(error),
+              },
+              `Failed to sync session from remote: ${error}`,
+            );
+          });
+        }
       }
     } catch (error) {
       // Handle abort errors gracefully

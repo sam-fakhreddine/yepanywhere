@@ -52,6 +52,10 @@ export interface ModelSettings {
   maxThinkingTokens?: number;
   /** Provider to use for this session. undefined = use default (Claude) */
   providerName?: ProviderName;
+  /** SSH host for remote execution (undefined = local) */
+  executor?: string;
+  /** Environment variables to set on remote (for testing: CLAUDE_SESSIONS_DIR) */
+  remoteEnv?: Record<string, string>;
 }
 
 /** Error response when queue is full */
@@ -458,6 +462,8 @@ export class Supervisor {
       permissionMode: effectiveMode,
       model: modelSettings?.model,
       maxThinkingTokens: modelSettings?.maxThinkingTokens,
+      executor: modelSettings?.executor,
+      remoteEnv: modelSettings?.remoteEnv,
       onToolApproval: async (toolName, input, opts) => {
         if (!processHolder.process) {
           return { behavior: "deny", message: "Process not ready" };
@@ -544,6 +550,8 @@ export class Supervisor {
       permissionMode: effectiveMode,
       model: modelSettings?.model,
       maxThinkingTokens: modelSettings?.maxThinkingTokens,
+      executor: modelSettings?.executor,
+      remoteEnv: modelSettings?.remoteEnv,
       onToolApproval: async (toolName, input, opts) => {
         if (!processHolder.process) {
           return { behavior: "deny", message: "Process not ready" };

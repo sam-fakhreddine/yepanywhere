@@ -14,6 +14,8 @@ const CURRENT_VERSION = 1;
 export interface ServerSettings {
   /** Whether clients should register the service worker (for push notifications) */
   serviceWorkerEnabled: boolean;
+  /** SSH host aliases for remote executors (from ~/.ssh/config) */
+  remoteExecutors?: string[];
 }
 
 /** Default settings */

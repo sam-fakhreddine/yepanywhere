@@ -78,6 +78,7 @@ Create the SSH spawn function.
 
 interface RemoteSpawnOptions {
   host: string;  // SSH alias
+  remoteEnv?: Record<string, string>;  // Env vars to set on remote (for testing: CLAUDE_SESSIONS_DIR)
 }
 
 function createRemoteSpawn(options: RemoteSpawnOptions) {
@@ -87,12 +88,19 @@ function createRemoteSpawn(options: RemoteSpawnOptions) {
     // Return ChildProcess (satisfies SpawnedProcess interface)
   };
 }
+
+async function testConnection(host: string): Promise<void> {
+  // Run `ssh -o ConnectTimeout=5 host true` to fail fast with clear error
+  // Call before spawning to surface connection issues early
+}
 ```
 
 Key considerations:
-- Pass `cwd` to remote via `cd $cwd &&` prefix or SSH `-t` with shell
+- Pass `cwd` to remote via `cd $cwd &&` prefix
+- Use `ssh -t` for PTY allocation so SIGHUP propagates when SSH terminates (kills remote Claude)
 - Forward necessary env vars
-- Handle abort signal → SSH process kill
+- Capture remote stderr to local log file for debugging (don't mix with SDK stdout)
+- Handle abort signal → SSH process kill (PTY ensures remote process also dies)
 
 #### 1.3 Session Sync
 Implement rsync wrapper for session sync.
@@ -111,8 +119,8 @@ async function syncSessions(options: SyncOptions): Promise<void> {
 }
 
 function getProjectDirFromCwd(cwd: string): string {
-  // Convert /home/user/project → -home-user-project
-  // Handle hostname prefix if needed
+  // Convert /home/kgraehl/code/project → home-kgraehl-code-project
+  // (matches SDK's session directory naming)
 }
 ```
 
@@ -125,12 +133,15 @@ Wire remote spawn into ClaudeProvider.
 interface StartSessionOptions {
   // ... existing
   executor?: string;  // undefined = local, otherwise SSH host
+  remoteEnv?: Record<string, string>;  // Env vars for remote (testing: CLAUDE_SESSIONS_DIR)
 }
 
 // In startSession():
 if (options.executor) {
+  await testConnection(options.executor);  // Fail fast with clear error
   sdkOptions.spawnClaudeCodeProcess = createRemoteSpawn({
-    host: options.executor
+    host: options.executor,
+    remoteEnv: options.remoteEnv,
   });
 }
 
@@ -225,11 +236,94 @@ Indicate remote sessions in session list.
 - Treat like local process crash
 - Session can be resumed (files still on remote)
 
+## Testing
+
+### Key Environment Variables
+
+Claude CLI respects these for overriding paths:
+- `CLAUDE_SESSIONS_DIR` - Override `~/.claude/projects/` completely
+- `ANTHROPIC_API_KEY` - Bypass credentials file (pass from local to remote)
+
+### Localhost E2E Testing
+
+Run full integration tests against localhost with isolated sessions:
+
+```typescript
+// packages/server/src/sdk/__tests__/remote-spawn.test.ts
+
+describe('remote spawn', () => {
+  let testSessionsDir: string;
+
+  beforeEach(async () => {
+    testSessionsDir = await mkdtemp('/tmp/claude-test-');
+  });
+
+  afterEach(async () => {
+    await rm(testSessionsDir, { recursive: true });
+  });
+
+  it('runs session on localhost via SSH', async () => {
+    const result = await startSession({
+      cwd: process.cwd(),
+      executor: 'localhost',
+      // These get forwarded to remote Claude process
+      remoteEnv: {
+        CLAUDE_SESSIONS_DIR: testSessionsDir,
+        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+      },
+    });
+
+    // Verify session files created in test dir
+    const files = await readdir(testSessionsDir);
+    expect(files.length).toBeGreaterThan(0);
+  });
+});
+```
+
+SSH command with isolated paths:
+```bash
+ssh -t localhost "CLAUDE_SESSIONS_DIR=/tmp/test/projects ANTHROPIC_API_KEY=$KEY cd '$cwd' && claude ..."
+```
+
+### Test Prerequisites
+
+```bash
+# Verify localhost SSH works (key-based auth)
+ssh localhost true
+
+# Verify Claude CLI accessible
+ssh localhost claude --version
+```
+
+### CI Setup
+
+For GitHub Actions:
+1. Enable localhost SSH (start sshd, add key to authorized_keys)
+2. Install Claude CLI in workflow
+3. Set `ANTHROPIC_API_KEY` secret
+4. Tests use temp directories, no cleanup issues
+
+### Manual Verification Checklist
+
+1. **Connection test**: `ssh -o ConnectTimeout=5 {host} true`
+2. **Path exists**: `ssh {host} test -d {cwd}`
+3. **Claude available**: `ssh {host} which claude`
+4. **Rsync works**: `rsync -avz --dry-run {host}:~/.claude/projects/ /tmp/test/`
+
+### Smoke Test
+
+1. Configure remote executor in settings
+2. Create new session with remote executor
+3. Send simple prompt ("echo hello")
+4. Verify session appears with executor badge
+5. Check `~/.yep-anywhere/logs/` for remote stderr
+6. Resume session, verify reconnects to same remote
+
 ## Future Enhancements
 
 1. **Periodic sync during long turns** - Poll rsync every N seconds while turn is in progress
 2. **Remote project browser** - Browse/autocomplete paths on remote via SSH
 3. **Auto-install Claude CLI** - Detect missing CLI and offer to install
-4. **Connection pooling** - Reuse SSH connections for multiple operations
+4. **SSH ControlMaster** - Use `--control-path` to reuse SSH connections, making rsync after every turn much faster
 5. **Remote credentials** - Pass API key from local to remote if not configured there
 6. **Different paths** - Support mapping local path to different remote path
