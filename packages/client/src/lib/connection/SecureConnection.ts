@@ -1538,11 +1538,14 @@ export class SecureConnection implements Connection {
    */
   async forceReconnect(): Promise<void> {
     console.log(
-      `[SecureConnection] Force reconnecting... wsState=${this.ws?.readyState}, connState=${this.connectionState}, isRelay=${this.isRelayConnection}`,
+      `[SecureConnection] Force reconnecting... wsState=${this.ws?.readyState}, connState=${this.connectionState}, isRelay=${this.isRelayConnection}, subscriptions=${this.subscriptions.size}`,
     );
 
-    // Close existing WebSocket without notifying subscriptions
-    // (we'll re-subscribe them after reconnecting)
+    // Save subscriptions to notify them after reconnect
+    // We'll call onClose on each to trigger their reconnect logic
+    const savedSubscriptions = new Map(this.subscriptions);
+
+    // Close existing WebSocket without notifying subscriptions yet
     if (this.ws) {
       console.log(
         `[SecureConnection] Closing existing WebSocket (readyState=${this.ws.readyState})`,
@@ -1566,11 +1569,14 @@ export class SecureConnection implements Connection {
     }
     this.pendingRequests.clear();
 
+    // Clear subscriptions - they'll re-subscribe when we notify onClose
+    this.subscriptions.clear();
+
     // Reset connection state but keep session info for resumption
     this.connectionState = "disconnected";
     this.connectionPromise = null;
 
-    // Reconnect
+    // Reconnect the WebSocket
     console.log("[SecureConnection] Calling ensureConnected...");
     await this.ensureConnected();
     // Use type assertion because TS doesn't know ensureConnected sets this.ws
@@ -1579,33 +1585,17 @@ export class SecureConnection implements Connection {
       `[SecureConnection] ensureConnected complete, wsState=${wsState}, connState=${this.connectionState}`,
     );
 
-    // Re-subscribe existing subscriptions by sending subscribe messages
+    // Notify all subscriptions via onClose so they can re-subscribe themselves
+    // This is better than trying to re-subscribe here because each subscription
+    // knows its own channel (activity vs session) and sessionId
     console.log(
-      `[SecureConnection] Re-subscribing ${this.subscriptions.size} subscriptions`,
+      `[SecureConnection] Notifying ${savedSubscriptions.size} subscriptions to reconnect`,
     );
-    for (const [subscriptionId, handlers] of this.subscriptions) {
-      const browserProfileId = getOrCreateBrowserProfileId();
-      const originMetadata = {
-        origin: window.location.origin,
-        scheme: window.location.protocol.replace(":", ""),
-        hostname: window.location.hostname,
-        port: window.location.port
-          ? Number.parseInt(window.location.port, 10)
-          : null,
-        userAgent: navigator.userAgent,
-      };
-
-      // Determine channel from subscription (activity subscriptions don't have sessionId)
-      // For now, assume all reconnected subscriptions are activity subscriptions
-      const msg: RelaySubscribe = {
-        type: "subscribe",
-        subscriptionId,
-        channel: "activity",
-        browserProfileId,
-        originMetadata,
-      };
-      console.log(`[SecureConnection] Sending subscribe for ${subscriptionId}`);
-      this.send(msg);
+    for (const [subscriptionId, handlers] of savedSubscriptions) {
+      console.log(
+        `[SecureConnection] Calling onClose for subscription ${subscriptionId}`,
+      );
+      handlers.onClose?.();
     }
 
     console.log("[SecureConnection] Force reconnect complete");
