@@ -1485,7 +1485,26 @@ export async function handleMessage(
 }
 
 /**
+ * Extract the message ID for error responses based on message type.
+ */
+function getMessageId(msg: RemoteClientMessage): string | undefined {
+  switch (msg.type) {
+    case "request":
+      return msg.id;
+    case "subscribe":
+      return msg.subscriptionId;
+    case "upload_start":
+    case "upload_chunk":
+    case "upload_end":
+      return msg.uploadId;
+    default:
+      return undefined;
+  }
+}
+
+/**
  * Route a parsed message to the appropriate handler.
+ * Wraps handlers in try/catch to ensure error responses are sent to clients.
  */
 async function routeMessage(
   msg: RemoteClientMessage,
@@ -1504,44 +1523,61 @@ async function routeMessage(
     browserProfileService,
   } = deps;
 
-  switch (msg.type) {
-    case "request":
-      await handleRequest(msg, send, app, baseUrl);
-      break;
+  try {
+    switch (msg.type) {
+      case "request":
+        await handleRequest(msg, send, app, baseUrl);
+        break;
 
-    case "subscribe":
-      handleSubscribe(
-        subscriptions,
-        msg,
-        send,
-        supervisor,
-        eventBus,
-        connectedBrowsers,
-        browserProfileService,
-      );
-      break;
+      case "subscribe":
+        handleSubscribe(
+          subscriptions,
+          msg,
+          send,
+          supervisor,
+          eventBus,
+          connectedBrowsers,
+          browserProfileService,
+        );
+        break;
 
-    case "unsubscribe":
-      handleUnsubscribe(subscriptions, msg);
-      break;
+      case "unsubscribe":
+        handleUnsubscribe(subscriptions, msg);
+        break;
 
-    case "upload_start":
-      await handleUploadStart(uploads, msg, send, uploadManager);
-      break;
+      case "upload_start":
+        await handleUploadStart(uploads, msg, send, uploadManager);
+        break;
 
-    case "upload_chunk":
-      await handleUploadChunk(uploads, msg, send, uploadManager);
-      break;
+      case "upload_chunk":
+        await handleUploadChunk(uploads, msg, send, uploadManager);
+        break;
 
-    case "upload_end":
-      await handleUploadEnd(uploads, msg, send, uploadManager);
-      break;
+      case "upload_end":
+        await handleUploadEnd(uploads, msg, send, uploadManager);
+        break;
 
-    default:
-      console.warn(
-        "[WS Relay] Unknown message type:",
-        (msg as { type?: string }).type,
-      );
+      default:
+        console.warn(
+          "[WS Relay] Unknown message type:",
+          (msg as { type?: string }).type,
+        );
+    }
+  } catch (err) {
+    // Send error response so client doesn't hang waiting
+    const messageId = getMessageId(msg);
+    console.error(
+      `[WS Relay] Unhandled error in routeMessage (type=${msg.type}, id=${messageId}):`,
+      err,
+    );
+    if (messageId) {
+      send({
+        type: "response",
+        id: messageId,
+        status: 500,
+        body: { error: "Internal server error" },
+      });
+    }
   }
 }
 

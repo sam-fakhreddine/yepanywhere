@@ -144,6 +144,13 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
           mountedUrlRef.current = null;
           reconnectTimeoutRef.current = setTimeout(connect, 2000);
         },
+        onClose: () => {
+          // Connection closed cleanly (e.g., relay restart) - trigger reconnect
+          setConnected(false);
+          wsSubscriptionRef.current = null;
+          mountedUrlRef.current = null;
+          reconnectTimeoutRef.current = setTimeout(connect, 2000);
+        },
       };
 
       wsSubscriptionRef.current = connection.subscribeSession(
@@ -201,6 +208,13 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
 
           // Auto-reconnect after 2s
           wsSubscriptionRef.current?.close();
+          wsSubscriptionRef.current = null;
+          mountedUrlRef.current = null;
+          reconnectTimeoutRef.current = setTimeout(connect, 2000);
+        },
+        onClose: () => {
+          // Connection closed cleanly (e.g., relay restart) - trigger reconnect
+          setConnected(false);
           wsSubscriptionRef.current = null;
           mountedUrlRef.current = null;
           reconnectTimeoutRef.current = setTimeout(connect, 2000);

@@ -220,6 +220,7 @@ class ActivityBus {
       ) => void;
       onOpen?: () => void;
       onError?: (err: Error) => void;
+      onClose?: () => void;
     }) => Subscription;
   }): void {
     this.wsSubscription = connection.subscribeActivity({
@@ -250,6 +251,16 @@ class ActivityBus {
         }
 
         // Auto-reconnect
+        this.reconnectTimeout = setTimeout(
+          () => this.connect(),
+          RECONNECT_DELAY_MS,
+        );
+      },
+      onClose: () => {
+        // Connection closed cleanly (e.g., relay restart) - trigger reconnect
+        console.log("[ActivityBus] Connection closed, reconnecting...");
+        this._connected = false;
+        this.wsSubscription = null;
         this.reconnectTimeout = setTimeout(
           () => this.connect(),
           RECONNECT_DELAY_MS,
@@ -295,6 +306,16 @@ class ActivityBus {
           }
 
           // Auto-reconnect
+          this.reconnectTimeout = setTimeout(
+            () => this.connect(),
+            RECONNECT_DELAY_MS,
+          );
+        },
+        onClose: () => {
+          // Connection closed cleanly (e.g., relay restart) - trigger reconnect
+          console.log("[ActivityBus] WebSocket closed, reconnecting...");
+          this._connected = false;
+          this.wsSubscription = null;
           this.reconnectTimeout = setTimeout(
             () => this.connect(),
             RECONNECT_DELAY_MS,

@@ -722,6 +722,11 @@ export class SecureConnection implements Connection {
 
     // 4. Resume SRP session on the new socket
     console.log("[SecureConnection] Resuming SRP session on new relay socket");
+    // Clear relay handshake handlers before transitioning to SRP phase
+    // to prevent messages from being routed to the wrong handler
+    ws.onmessage = null;
+    ws.onclose = null;
+    ws.onerror = null;
     this.ws = ws;
     await this.resumeOnExistingSocket();
   }
