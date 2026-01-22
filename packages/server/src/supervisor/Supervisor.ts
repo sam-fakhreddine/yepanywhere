@@ -395,6 +395,8 @@ export class Supervisor {
       permissionMode: effectiveMode,
       model: modelSettings?.model,
       maxThinkingTokens: modelSettings?.maxThinkingTokens,
+      executor: modelSettings?.executor,
+      remoteEnv: modelSettings?.remoteEnv,
       onToolApproval: async (toolName, input, opts) => {
         // Delegate to the process's handleToolApproval
         if (!processHolder.process) {

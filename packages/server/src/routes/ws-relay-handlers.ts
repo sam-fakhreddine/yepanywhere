@@ -355,6 +355,17 @@ export async function handleRequest(
       } catch {
         body = null;
       }
+    } else if (
+      contentType.startsWith("image/") ||
+      contentType.startsWith("audio/") ||
+      contentType.startsWith("video/") ||
+      contentType === "application/octet-stream"
+    ) {
+      // Binary content: read as ArrayBuffer and encode as base64
+      const arrayBuffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      const base64 = Buffer.from(bytes).toString("base64");
+      body = { _binary: true, data: base64 };
     } else {
       const text = await response.text();
       body = text || null;

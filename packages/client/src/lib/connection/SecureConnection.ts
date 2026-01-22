@@ -1195,6 +1195,87 @@ export class SecureConnection implements Connection {
   }
 
   /**
+   * Fetch binary data (images, files) and return as Blob.
+   * Handles base64-encoded binary responses from the relay.
+   */
+  async fetchBlob(path: string): Promise<Blob> {
+    // Use internal fetch-like logic but handle binary response
+    await this.ensureConnected();
+
+    const id = generateId();
+    const method = "GET";
+
+    const request: RelayRequest = {
+      type: "request",
+      id,
+      method,
+      path: path.startsWith("/api") ? path : `/api${path}`,
+      headers: { "X-Yep-Anywhere": "true" },
+    };
+
+    const startTime = Date.now();
+
+    if (getRelayDebugEnabled()) {
+      console.log(`[Relay] → ${method} ${request.path} (blob)`);
+    }
+
+    return new Promise<Blob>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        if (getRelayDebugEnabled()) {
+          const duration = Date.now() - startTime;
+          console.log(
+            `[Relay] ✗ ${method} ${request.path} TIMEOUT (${duration}ms)`,
+          );
+        }
+        this.pendingRequests.delete(id);
+        reject(new Error("Request timeout"));
+      }, 30000);
+
+      this.pendingRequests.set(id, {
+        resolve: (response: RelayResponse) => {
+          if (response.status >= 400) {
+            reject(new Error(`API error: ${response.status}`));
+            return;
+          }
+
+          // Handle binary response format: { _binary: true, data: "base64..." }
+          const body = response.body as { _binary?: boolean; data?: string };
+          if (body?._binary && typeof body.data === "string") {
+            // Decode base64 to binary
+            const binary = atob(body.data);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+              bytes[i] = binary.charCodeAt(i);
+            }
+            // Get content type from response headers
+            const contentType =
+              response.headers?.["content-type"] ||
+              response.headers?.["Content-Type"] ||
+              "application/octet-stream";
+            resolve(new Blob([bytes], { type: contentType }));
+          } else {
+            // Fallback for non-binary responses (shouldn't happen for images)
+            reject(new Error("Expected binary response"));
+          }
+        },
+        reject,
+        timeout,
+        startTime,
+        method,
+        path: request.path,
+      });
+
+      try {
+        this.send(request);
+      } catch (err) {
+        clearTimeout(timeout);
+        this.pendingRequests.delete(id);
+        reject(err);
+      }
+    });
+  }
+
+  /**
    * Subscribe to session events.
    */
   subscribeSession(

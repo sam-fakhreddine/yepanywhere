@@ -119,6 +119,15 @@ export interface Connection {
   fetch<T>(path: string, init?: RequestInit): Promise<T>;
 
   /**
+   * Fetch binary data (images, files) and return as Blob.
+   *
+   * @param path - Request path (e.g., "/projects/.../upload/image.png")
+   * @returns Blob containing the binary data
+   * @throws Error on HTTP errors
+   */
+  fetchBlob(path: string): Promise<Blob>;
+
+  /**
    * Subscribe to session events (replaces SSE to /api/sessions/:id/stream).
    *
    * Events include: message, status, connected, error, complete, heartbeat,

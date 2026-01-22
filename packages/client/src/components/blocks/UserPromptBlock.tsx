@@ -1,4 +1,5 @@
 import { memo, useState } from "react";
+import { useRemoteImage } from "../../hooks/useRemoteImage";
 import {
   type UploadedFileInfo,
   getFilename,
@@ -69,9 +70,12 @@ function getUploadUrl(filePath: string): string | null {
 function UploadedFileItem({ file }: { file: UploadedFileInfo }) {
   const [showModal, setShowModal] = useState(false);
   const isImage = isImageMimeType(file.mimeType);
-  const uploadUrl = isImage ? getUploadUrl(file.path) : null;
+  const apiPath = isImage ? getUploadUrl(file.path) : null;
 
-  if (isImage && uploadUrl) {
+  // Use the remote image hook to handle fetching via relay when needed
+  const { url: imageUrl, loading, error } = useRemoteImage(apiPath);
+
+  if (isImage && apiPath) {
     return (
       <>
         <button
@@ -85,7 +89,9 @@ function UploadedFileItem({ file }: { file: UploadedFileInfo }) {
         {showModal && (
           <Modal title={file.originalName} onClose={() => setShowModal(false)}>
             <div className="uploaded-image-modal">
-              <img src={uploadUrl} alt={file.originalName} />
+              {loading && <div className="image-loading">Loading...</div>}
+              {error && <div className="image-error">Failed to load image</div>}
+              {imageUrl && <img src={imageUrl} alt={file.originalName} />}
             </div>
           </Modal>
         )}

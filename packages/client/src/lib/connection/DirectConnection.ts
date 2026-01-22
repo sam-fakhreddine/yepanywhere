@@ -89,6 +89,24 @@ export class DirectConnection implements Connection {
   }
 
   /**
+   * Fetch binary data and return as Blob.
+   */
+  async fetchBlob(path: string): Promise<Blob> {
+    const res = await fetch(`${API_BASE}${path}`, {
+      credentials: "include",
+      headers: {
+        "X-Yep-Anywhere": "true",
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`API error: ${res.status} ${res.statusText}`);
+    }
+
+    return res.blob();
+  }
+
+  /**
    * Subscribe to session events via SSE.
    */
   subscribeSession(

@@ -124,6 +124,10 @@ export interface StartSessionOptions {
   /** Max thinking tokens. undefined = thinking disabled */
   maxThinkingTokens?: number;
   onToolApproval?: CanUseTool;
+  /** SSH host for remote execution (undefined = local) */
+  executor?: string;
+  /** Environment variables to set on remote (for testing: CLAUDE_SESSIONS_DIR) */
+  remoteEnv?: Record<string, string>;
 }
 
 export interface StartSessionResult {

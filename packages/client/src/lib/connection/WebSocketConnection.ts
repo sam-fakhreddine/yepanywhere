@@ -422,6 +422,70 @@ export class WebSocketConnection implements Connection {
   }
 
   /**
+   * Fetch binary data (images, files) and return as Blob.
+   * Handles base64-encoded binary responses from the server.
+   */
+  async fetchBlob(path: string): Promise<Blob> {
+    await this.ensureConnected();
+
+    const id = generateId();
+    const method = "GET";
+
+    const request: RelayRequest = {
+      type: "request",
+      id,
+      method,
+      path: path.startsWith("/api") ? path : `/api${path}`,
+      headers: { "X-Yep-Anywhere": "true" },
+    };
+
+    return new Promise<Blob>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingRequests.delete(id);
+        reject(new Error("Request timeout"));
+      }, 30000);
+
+      this.pendingRequests.set(id, {
+        resolve: (response: RelayResponse) => {
+          if (response.status >= 400) {
+            reject(new Error(`API error: ${response.status}`));
+            return;
+          }
+
+          // Handle binary response format: { _binary: true, data: "base64..." }
+          const body = response.body as { _binary?: boolean; data?: string };
+          if (body?._binary && typeof body.data === "string") {
+            // Decode base64 to binary
+            const binary = atob(body.data);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+              bytes[i] = binary.charCodeAt(i);
+            }
+            // Get content type from response headers
+            const contentType =
+              response.headers?.["content-type"] ||
+              response.headers?.["Content-Type"] ||
+              "application/octet-stream";
+            resolve(new Blob([bytes], { type: contentType }));
+          } else {
+            reject(new Error("Expected binary response"));
+          }
+        },
+        reject,
+        timeout,
+      });
+
+      try {
+        this.send(request);
+      } catch (err) {
+        clearTimeout(timeout);
+        this.pendingRequests.delete(id);
+        reject(err);
+      }
+    });
+  }
+
+  /**
    * Subscribe to session events.
    */
   subscribeSession(
