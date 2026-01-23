@@ -758,6 +758,12 @@ export function useSession(
             };
           });
         }
+
+        // Fetch messages from JSONL since last known message
+        // This handles reconnection after long disconnects where the server's
+        // in-memory buffer only has the last 30-60s of messages, but the JSONL
+        // has all messages written while the client was offline
+        fetchNewMessages();
       } else if (data.eventType === "mode-change") {
         // Handle mode change from another tab/client
         const modeData = data as {
@@ -846,6 +852,7 @@ export function useSession(
       setAgentContent,
       setMessages,
       setSession,
+      fetchNewMessages,
     ],
   );
 

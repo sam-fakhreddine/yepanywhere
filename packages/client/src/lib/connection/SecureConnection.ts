@@ -986,6 +986,26 @@ export class SecureConnection implements Connection {
    * Handle a response message.
    */
   private handleResponse(response: RelayResponse): void {
+    // First check if this is a subscription error response
+    // When a session subscription fails (e.g., 404 for no active process),
+    // the server sends a response with id=subscriptionId
+    const subscriptionHandlers = this.subscriptions.get(response.id);
+    if (subscriptionHandlers && response.status >= 400) {
+      // Subscription failed - notify via onError and clean up
+      const errorMessage =
+        typeof response.body === "object" &&
+        response.body !== null &&
+        "error" in response.body
+          ? String((response.body as { error: unknown }).error)
+          : `Subscription failed with status ${response.status}`;
+      console.log(
+        `[SecureConnection] Subscription ${response.id} failed: ${errorMessage}`,
+      );
+      this.subscriptions.delete(response.id);
+      subscriptionHandlers.onError?.(new Error(errorMessage));
+      return;
+    }
+
     const pending = this.pendingRequests.get(response.id);
     if (!pending) {
       console.warn(
