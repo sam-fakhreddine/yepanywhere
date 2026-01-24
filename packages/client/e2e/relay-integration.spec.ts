@@ -45,12 +45,6 @@ test.describe("Full Relay Integration", () => {
 
     // Wait for relay client to connect and register
     await waitForRelayStatus(baseURL, "waiting", 15000);
-
-    // Clear localStorage for fresh state
-    await page.addInitScript(() => {
-      localStorage.clear();
-      sessionStorage.clear();
-    });
   });
 
   test.afterEach(async ({ baseURL }) => {
@@ -97,12 +91,8 @@ test.describe("Full Relay Integration", () => {
     await expect(page.locator('a[href="/settings"]')).toBeVisible();
   });
 
-  // TODO: Investigate relay auto-resume timing issues
   // This test verifies that sessions persist across page refresh via relay.
-  // It currently fails because auto-resume through relay is more complex than
-  // direct mode - it needs to reconnect to relay, wait for pairing, then
-  // resume SRP. This may be a timing issue or a bug in the auto-resume flow.
-  test.skip("session persists after page refresh (auto-resume)", async ({
+  test("session persists after page refresh (auto-resume)", async ({
     page,
     remoteClientURL,
     relayWsURL,
