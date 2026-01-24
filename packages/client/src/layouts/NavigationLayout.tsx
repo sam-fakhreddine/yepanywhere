@@ -42,11 +42,12 @@ export function NavigationLayout() {
 
   // Close mobile sidebar overlay when viewport becomes wide enough for expanded desktop sidebar
   // This prevents having both sidebars visible after window resize/device rotation
+  // Only auto-close when desktop sidebar is actually visible (isWideScreen)
   useEffect(() => {
-    if (sidebarOpen && canShowExpanded(viewportWidth)) {
+    if (sidebarOpen && isWideScreen && canShowExpanded(viewportWidth)) {
       setSidebarOpen(false);
     }
-  }, [sidebarOpen, viewportWidth, canShowExpanded]);
+  }, [sidebarOpen, isWideScreen, viewportWidth, canShowExpanded]);
 
   // Smart toggle: if viewport can support expanded, toggle preference; otherwise open overlay
   const handleToggleExpanded = () => {
