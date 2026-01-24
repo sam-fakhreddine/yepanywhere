@@ -1,7 +1,7 @@
 import type {
+  AgentActivity,
   ContextUsage,
   PendingInputType,
-  ProcessStateType,
   UrlProjectId,
 } from "@yep-anywhere/shared";
 import { getWebsocketTransportEnabled } from "../hooks/useDeveloperMode";
@@ -57,8 +57,8 @@ export interface ProcessStateEvent {
   type: "process-state-changed";
   sessionId: string;
   projectId: UrlProjectId;
-  processState: ProcessStateType;
-  /** Type of pending input (only set when processState is "waiting-input") */
+  activity: AgentActivity;
+  /** Type of pending input (only set when activity is "waiting-input") */
   pendingInputType?: PendingInputType;
   timestamp: string;
 }

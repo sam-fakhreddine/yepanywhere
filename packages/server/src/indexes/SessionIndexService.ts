@@ -287,7 +287,7 @@ export class SessionIndexService implements ISessionIndexService {
               createdAt: cached.createdAt,
               updatedAt: cached.updatedAt,
               messageCount: cached.messageCount,
-              status: { state: "idle" },
+              ownership: { owner: "none" },
               contextUsage: cached.contextUsage,
               provider: cached.provider ?? DEFAULT_PROVIDER,
             });

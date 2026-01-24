@@ -7,7 +7,6 @@ export type {
   SessionCreatedEvent,
   SourceChangeEvent,
   ProcessStateEvent,
-  ProcessStateType,
   SessionMetadataChangedEvent,
   BusEvent,
   EventHandler,

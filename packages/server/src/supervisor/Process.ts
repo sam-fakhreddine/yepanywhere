@@ -15,13 +15,13 @@ import type {
   UserMessage,
 } from "../sdk/types.js";
 import type {
+  AgentActivity,
   ClaudeLoginEvent,
   InputRequest,
   ProcessEvent,
   ProcessInfo,
   ProcessOptions,
   ProcessState,
-  ProcessStateType,
 } from "./types.js";
 import { DEFAULT_IDLE_TIMEOUT_MS } from "./types.js";
 
@@ -86,7 +86,7 @@ export class Process {
   private legacyQueue: UserMessage[] = [];
   private messageQueue: MessageQueue | null;
   private abortFn: (() => void) | null;
-  private _state: ProcessState = { type: "running" };
+  private _state: ProcessState = { type: "in-turn" };
   private listeners: Set<Listener> = new Set();
   private idleTimer: NodeJS.Timeout | null = null;
   private idleTimeoutMs: number;
@@ -473,7 +473,7 @@ export class Process {
       if (this.iteratorDone) {
         this.transitionToIdle();
       } else {
-        this.setState({ type: "running" });
+        this.setState({ type: "in-turn" });
       }
     }
   }
@@ -578,17 +578,17 @@ export class Process {
   }
 
   getInfo(): ProcessInfo {
-    let stateType: ProcessStateType;
+    let activity: AgentActivity;
     if (this._state.type === "terminated") {
-      stateType = "terminated";
+      activity = "terminated";
     } else if (this._state.type === "waiting-input") {
-      stateType = "waiting-input";
+      activity = "waiting-input";
     } else if (this._state.type === "idle") {
-      stateType = "idle";
+      activity = "idle";
     } else if (this._state.type === "hold") {
-      stateType = "hold";
+      activity = "hold";
     } else {
-      stateType = "running";
+      activity = "in-turn";
     }
 
     const info: ProcessInfo = {
@@ -598,7 +598,7 @@ export class Process {
       projectPath: this.projectPath,
       projectName: path.basename(this.projectPath),
       sessionTitle: null, // Will be populated by Supervisor with session data
-      state: stateType,
+      state: activity,
       startedAt: this.startedAt.toISOString(),
       queueDepth: this.queueDepth,
       provider: this.provider,
@@ -789,7 +789,7 @@ export class Process {
       // Transition to running if we were idle
       if (this._state.type === "idle") {
         this.clearIdleTimer();
-        this.setState({ type: "running" });
+        this.setState({ type: "in-turn" });
       }
       // Pass message with UUID so SDK uses the same UUID we emitted via SSE
       const position = this.messageQueue.push(messageWithUuid);
@@ -988,7 +988,7 @@ export class Process {
       }
     }
     // No more pending approvals
-    this.setState({ type: "running" });
+    this.setState({ type: "in-turn" });
   }
 
   /**
@@ -1013,7 +1013,7 @@ export class Process {
         this._state.request.id === requestId
       ) {
         // Mock SDK case - just transition back to idle/running
-        this.setState({ type: "running" });
+        this.setState({ type: "in-turn" });
         return true;
       }
       return false;
@@ -1295,7 +1295,7 @@ export class Process {
     if (nextMessage) {
       // In real implementation with MessageQueue, this happens automatically
       // For mock SDK, we just transition back to running
-      this.setState({ type: "running" });
+      this.setState({ type: "in-turn" });
     }
   }
 

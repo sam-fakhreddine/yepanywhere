@@ -14,11 +14,11 @@
  */
 
 import type {
-  AppSessionStatus,
+  AgentActivity,
   AppSessionSummary,
   ContextUsage,
   PendingInputType,
-  ProcessStateType,
+  SessionOwnership,
 } from "../app-types.js";
 import type { UrlProjectId } from "../projectId.js";
 import { DEFAULT_PROVIDER, type ProviderName } from "../types.js";
@@ -44,16 +44,16 @@ export class SessionView {
     readonly updatedAt: string,
     /** Number of messages in the session */
     readonly messageCount: number,
-    /** Session ownership/process status */
-    readonly status: AppSessionStatus,
+    /** Session ownership - who controls the session */
+    readonly ownership: SessionOwnership,
     /** Whether session is archived (hidden from default list) */
     readonly isArchived: boolean,
     /** Whether session is starred/favorited */
     readonly isStarred: boolean,
     /** Type of pending input if session needs user action */
     readonly pendingInputType: PendingInputType | undefined,
-    /** Current process state (running, idle, waiting-input, terminated) */
-    readonly processState: ProcessStateType | undefined,
+    /** Current agent activity (in-turn, idle, waiting-input, terminated) */
+    readonly activity: AgentActivity | undefined,
     /** When the session was last viewed */
     readonly lastSeenAt: string | undefined,
     /** Whether session has new content since last viewed */
@@ -100,42 +100,42 @@ export class SessionView {
   }
 
   // ===========================================================================
-  // Status Getters
+  // Ownership Getters
   // ===========================================================================
 
   /**
-   * Check if the session is currently active (owned by this server).
+   * Check if the session is currently owned by this server.
    */
-  get isActive(): boolean {
-    return this.status.state === "owned";
+  get isOwned(): boolean {
+    return this.ownership.owner === "self";
   }
 
   /**
    * Check if the session is controlled by an external process.
    */
   get isExternal(): boolean {
-    return this.status.state === "external";
+    return this.ownership.owner === "external";
   }
 
   /**
-   * Check if the session is idle (no active process).
+   * Check if the session has no owner (no active process).
    */
-  get isIdle(): boolean {
-    return this.status.state === "idle";
+  get isUnowned(): boolean {
+    return this.ownership.owner === "none";
   }
 
   /**
    * Check if the session is waiting for user input.
    */
   get isWaitingForInput(): boolean {
-    return this.processState === "waiting-input";
+    return this.activity === "waiting-input";
   }
 
   /**
-   * Check if the session process is currently running.
+   * Check if the agent is currently in a turn.
    */
-  get isRunning(): boolean {
-    return this.processState === "running";
+  get isInTurn(): boolean {
+    return this.activity === "in-turn";
   }
 
   /**
@@ -162,11 +162,11 @@ export class SessionView {
       summary.createdAt,
       summary.updatedAt,
       summary.messageCount,
-      summary.status,
+      summary.ownership,
       summary.isArchived ?? false,
       summary.isStarred ?? false,
       summary.pendingInputType,
-      summary.processState,
+      summary.activity,
       summary.lastSeenAt,
       summary.hasUnread ?? false,
       summary.contextUsage,
@@ -187,11 +187,11 @@ export class SessionView {
     createdAt?: string;
     updatedAt?: string;
     messageCount?: number;
-    status?: AppSessionStatus;
+    ownership?: SessionOwnership;
     isArchived?: boolean;
     isStarred?: boolean;
     pendingInputType?: PendingInputType;
-    processState?: ProcessStateType;
+    activity?: AgentActivity;
     lastSeenAt?: string;
     hasUnread?: boolean;
     contextUsage?: ContextUsage;
@@ -207,11 +207,11 @@ export class SessionView {
       data.createdAt ?? now,
       data.updatedAt ?? now,
       data.messageCount ?? 0,
-      data.status ?? { state: "idle" },
+      data.ownership ?? { owner: "none" },
       data.isArchived ?? false,
       data.isStarred ?? false,
       data.pendingInputType,
-      data.processState,
+      data.activity,
       data.lastSeenAt,
       data.hasUnread ?? false,
       data.contextUsage,

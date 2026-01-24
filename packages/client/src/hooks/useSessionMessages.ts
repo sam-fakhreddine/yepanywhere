@@ -194,7 +194,7 @@ export function useSessionMessages(
         // Notify parent
         onLoadComplete?.({
           session: data.session,
-          status: data.status,
+          status: data.ownership,
           pendingInputRequest: data.pendingInputRequest,
         });
       })

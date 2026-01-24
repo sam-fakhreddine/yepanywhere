@@ -1,20 +1,20 @@
-import type { ProcessStateType } from "../hooks/useFileActivity";
+import type { AgentActivity } from "../hooks/useFileActivity";
 import type { SessionStatus } from "../types";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 
-type BadgeVariant = "owned" | "external" | "idle";
+type BadgeVariant = "self" | "external" | "none";
 type NotificationVariant = "needs-input" | "unread";
 type PendingInputType = "tool-approval" | "user-question";
 
 interface SessionStatusBadgeProps {
-  /** Session status object */
+  /** Session ownership object */
   status: SessionStatus;
   /** Type of pending input if session needs user action */
   pendingInputType?: PendingInputType;
   /** Whether session has unread content */
   hasUnread?: boolean;
-  /** Current process state (running/waiting-input) for activity indicators */
-  processState?: ProcessStateType;
+  /** Current agent activity (in-turn/waiting-input) for activity indicators */
+  activity?: AgentActivity;
 }
 
 interface CountBadgeProps {
@@ -48,18 +48,18 @@ export function NotificationBadge({ variant, label }: NotificationBadgeProps) {
 
 /**
  * Status badge for a single session in a list.
- * Priority: needs-input (blue) > running (pulsing) > unread (orange) > active (outline) > idle (nothing)
+ * Priority: needs-input (blue) > in-turn (pulsing) > unread (orange) > active (outline) > idle (nothing)
  * External sessions always show "External" badge regardless of other state.
  */
 export function SessionStatusBadge({
   status,
   pendingInputType,
   hasUnread,
-  processState,
+  activity,
 }: SessionStatusBadgeProps) {
   // External sessions always show the external badge
-  // We can't track fine-grained state (running, needs input) for external sessions
-  if (status.state === "external") {
+  // We can't track fine-grained state (in-turn, needs input) for external sessions
+  if (status.owner === "external") {
     return <span className="status-badge status-external">External</span>;
   }
 
@@ -70,16 +70,16 @@ export function SessionStatusBadge({
     return <NotificationBadge variant="needs-input" label={label} />;
   }
 
-  // Priority 2: Running (agent is thinking) - show pulsing indicator
-  if (processState === "running") {
+  // Priority 2: In-turn (agent is thinking) - show pulsing indicator
+  if (activity === "in-turn") {
     return <ThinkingIndicator variant="pill" />;
   }
 
   // Unread content is now handled via CSS class on session list item
   // (bold/bright text like Gmail instead of a badge)
 
-  // Active sessions (owned) don't need a separate indicator - "Thinking" badge
-  // already shows when the process is actively running
+  // Active sessions (self-owned) don't need a separate indicator - "Thinking" badge
+  // already shows when the process is actively in-turn
   return null;
 }
 
@@ -91,7 +91,7 @@ export function ActiveCountBadge({ variant, count }: CountBadgeProps) {
   if (count === 0) return null;
 
   const label =
-    variant === "owned"
+    variant === "self"
       ? `${count} Active`
       : variant === "external"
         ? `${count} External`

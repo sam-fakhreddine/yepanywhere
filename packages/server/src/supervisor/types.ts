@@ -1,8 +1,8 @@
 import type {
+  AgentActivity,
   ContextUsage,
   InputRequest,
   PendingInputType,
-  ProcessStateType,
   ProviderName,
   UrlProjectId,
 } from "@yep-anywhere/shared";
@@ -18,10 +18,10 @@ export { decodeProjectId, encodeProjectId } from "../projects/paths.js";
 
 // Re-export shared types used by server
 export type {
+  AgentActivity,
   ContextUsage,
   InputRequest,
   PendingInputType,
-  ProcessStateType,
 } from "@yep-anywhere/shared";
 
 // Project discovery
@@ -37,16 +37,16 @@ export interface Project {
   provider: ProviderName; // which provider's sessions are in this project
 }
 
-// Session status
-export type SessionStatus =
-  | { state: "idle" } // no active process
+// Session ownership - who controls the session
+export type SessionOwnership =
+  | { owner: "none" } // no active process
   | {
-      state: "owned";
+      owner: "self";
       processId: string;
       permissionMode?: PermissionMode;
       modeVersion?: number;
     } // we control it
-  | { state: "external" }; // another process owns it
+  | { owner: "external" }; // another process owns it
 
 // Session metadata (light, for lists)
 export interface SessionSummary {
@@ -57,7 +57,7 @@ export interface SessionSummary {
   createdAt: string; // ISO timestamp
   updatedAt: string;
   messageCount: number;
-  status: SessionStatus;
+  ownership: SessionOwnership;
   // Notification fields (added by enrichSessionsWithNotifications)
   /** Type of pending input if session needs user action */
   pendingInputType?: PendingInputType;
@@ -144,7 +144,7 @@ export interface Session extends SessionSummary {
 
 // Process state machine
 export type ProcessState =
-  | { type: "running" }
+  | { type: "in-turn" }
   | { type: "idle"; since: Date }
   | { type: "waiting-input"; request: InputRequest }
   | { type: "hold"; since: Date }
@@ -158,7 +158,7 @@ export interface ProcessInfo {
   projectPath: string;
   projectName: string; // path.basename(projectPath)
   sessionTitle: string | null; // from session data
-  state: ProcessStateType;
+  state: AgentActivity;
   startedAt: string;
   queueDepth: number;
   idleSince?: string; // ISO timestamp when entered idle

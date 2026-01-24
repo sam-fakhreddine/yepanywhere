@@ -147,20 +147,20 @@ export function thinkingOptionToTokens(
 }
 
 /**
- * Status of a session.
- * - "idle": No active process
- * - "owned": Process is running and owned by this server
+ * Session ownership - who controls the session.
+ * - "none": No active process
+ * - "self": Process is running and owned by this server
  * - "external": Session is being controlled by an external program
  */
-export type SessionStatus =
-  | { state: "idle" }
+export type SessionOwnership =
+  | { owner: "none" }
   | {
-      state: "owned";
+      owner: "self";
       processId: string;
       permissionMode?: PermissionMode;
       modeVersion?: number;
     }
-  | { state: "external" };
+  | { owner: "external" };
 
 /**
  * Metadata about a file in a project.

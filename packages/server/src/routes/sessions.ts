@@ -495,17 +495,17 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
     // Check if session is being controlled by an external program
     const isExternal = deps.externalTracker?.isExternal(sessionId) ?? false;
 
-    // Determine the session status
-    const status = process
+    // Determine the session ownership
+    const ownership = process
       ? {
-          state: "owned" as const,
+          owner: "self" as const,
           processId: process.id,
           permissionMode: process.permissionMode,
           modeVersion: process.modeVersion,
         }
       : isExternal
-        ? { state: "external" as const }
-        : { state: "idle" as const };
+        ? { owner: "external" as const }
+        : { owner: "none" as const };
 
     // Get session metadata (custom title, archived, starred)
     const metadata = deps.sessionMetadataService?.getMetadata(sessionId);
@@ -551,7 +551,7 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
         lastSeenAt,
         hasUnread,
       },
-      status,
+      ownership,
       pendingInputRequest,
     });
   });
@@ -652,17 +652,17 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
 
     const session = loadedSession ? normalizeSession(loadedSession) : null;
 
-    // Determine the session status
-    const status = process
+    // Determine the session ownership
+    const ownership = process
       ? {
-          state: "owned" as const,
+          owner: "self" as const,
           processId: process.id,
           permissionMode: process.permissionMode,
           modeVersion: process.modeVersion,
         }
       : isExternal
-        ? { state: "external" as const }
-        : (session?.status ?? { state: "idle" as const });
+        ? { owner: "external" as const }
+        : (session?.ownership ?? { owner: "none" as const });
 
     // Get pending input request from active process (for tool approval prompts)
     // This ensures clients get pending requests immediately without waiting for SSE
@@ -697,7 +697,7 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
             createdAt: new Date().toISOString(),
             updatedAt: newSessionUpdatedAt,
             messageCount: processMessages.length,
-            status,
+            ownership,
             messages: processMessages,
             customTitle: metadata?.customTitle,
             isArchived: metadata?.isArchived,
@@ -709,7 +709,7 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
             contextUsage,
           },
           messages: processMessages,
-          status,
+          ownership,
           pendingInputRequest,
         });
       }
@@ -745,7 +745,7 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
     return c.json({
       session: {
         ...session,
-        status,
+        ownership,
         customTitle: metadata?.customTitle,
         isArchived: metadata?.isArchived,
         isStarred: metadata?.isStarred,
@@ -755,7 +755,7 @@ export function createSessionsRoutes(deps: SessionsDeps): Hono {
         hasUnread,
       },
       messages: session.messages,
-      status,
+      ownership,
       pendingInputRequest,
     });
   });

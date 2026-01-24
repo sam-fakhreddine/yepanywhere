@@ -155,7 +155,7 @@ describe("Activity Stream SSE", () => {
     expect(processStateEvents.length).toBeGreaterThanOrEqual(1);
     expect(processStateEvents[0]?.data).toMatchObject({
       type: "process-state-changed",
-      processState: "running",
+      activity: "in-turn",
     });
 
     // Cleanup

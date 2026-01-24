@@ -36,7 +36,8 @@ function createSession(
     createdAt: hoursAgo(48),
     updatedAt,
     messageCount: 5,
-    status: { state: "idle" },
+    ownership: { owner: "none" },
+    provider: "claude",
     ...overrides,
   };
 }
@@ -156,17 +157,17 @@ describe("Inbox Routes", () => {
       expect(result.active).toHaveLength(0);
     });
 
-    it("categorizes session with running process (no pending) into active", async () => {
+    it("categorizes session with in-turn process (no pending) into active", async () => {
       const project = createProject("proj1", "myproject", "/sessions/proj1");
       const session = createSession("sess1", "proj1", minutesAgo(5));
 
       vi.mocked(mockScanner.listProjects).mockResolvedValue([project]);
       sessionsByDir.set("/sessions/proj1", [session]);
 
-      // Mock running process without pending input
+      // Mock in-turn process without pending input
       processMap.set("sess1", {
         getPendingInputRequest: () => null,
-        state: { type: "running" },
+        state: { type: "in-turn" },
       });
 
       const result = await makeRequest({
@@ -180,7 +181,7 @@ describe("Inbox Routes", () => {
       expect(result.needsAttention).toHaveLength(0);
       expect(result.active).toHaveLength(1);
       expect(result.active[0].sessionId).toBe("sess1");
-      expect(result.active[0].processState).toBe("running");
+      expect(result.active[0].activity).toBe("in-turn");
     });
 
     it("categorizes session updated in last 30 minutes into recentActivity", async () => {
@@ -322,17 +323,17 @@ describe("Inbox Routes", () => {
 
     it("session in active tier does not appear in lower tiers", async () => {
       const project = createProject("proj1", "myproject", "/sessions/proj1");
-      // Running session that is also recent and unread
+      // In-turn session that is also recent and unread
       const session = createSession("sess1", "proj1", minutesAgo(10));
 
       vi.mocked(mockScanner.listProjects).mockResolvedValue([project]);
       sessionsByDir.set("/sessions/proj1", [session]);
       unreadMap.set("sess1", true);
 
-      // Mock running process without pending input
+      // Mock in-turn process without pending input
       processMap.set("sess1", {
         getPendingInputRequest: () => null,
-        state: { type: "running" },
+        state: { type: "in-turn" },
       });
 
       const result = await makeRequest({
@@ -426,10 +427,10 @@ describe("Inbox Routes", () => {
         // supervisor: undefined
       });
 
-      // Session should appear in recentActivity (no process state info)
+      // Session should appear in recentActivity (no activity info)
       expect(result.recentActivity).toHaveLength(1);
       expect(result.recentActivity[0].sessionId).toBe("sess1");
-      expect(result.recentActivity[0].processState).toBeUndefined();
+      expect(result.recentActivity[0].activity).toBeUndefined();
       expect(result.recentActivity[0].pendingInputType).toBeUndefined();
     });
 

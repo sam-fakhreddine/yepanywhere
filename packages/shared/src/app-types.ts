@@ -158,9 +158,9 @@ export type AppConversationMessage =
 /** Type of pending input request for notification badges */
 export type PendingInputType = "tool-approval" | "user-question";
 
-/** Process state type - what the agent is doing */
-export type ProcessStateType =
-  | "running"
+/** Agent activity - what the agent is doing */
+export type AgentActivity =
+  | "in-turn"
   | "idle"
   | "waiting-input"
   | "hold"
@@ -260,17 +260,17 @@ export function getModelContextWindow(model: string | undefined): number {
 }
 
 /**
- * Session status - tracks ownership and active state.
+ * Session ownership - who controls the session.
  */
-export type AppSessionStatus =
-  | { state: "idle" } // no active process
+export type SessionOwnership =
+  | { owner: "none" } // no active process
   | {
-      state: "owned";
+      owner: "self";
       processId: string;
       permissionMode?: PermissionMode;
       modeVersion?: number;
     } // we control it
-  | { state: "external" }; // another process owns it
+  | { owner: "external" }; // another process owns it
 
 /**
  * Recent session entry with enriched data from the server.
@@ -298,14 +298,14 @@ export interface AppSessionSummary {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
-  status: AppSessionStatus;
+  ownership: SessionOwnership;
   // Provider field - which AI provider is running this session
   provider: ProviderName;
   // Model used for this session (resolved, not "default")
   model?: string;
   // Notification fields
   pendingInputType?: PendingInputType;
-  processState?: ProcessStateType;
+  activity?: AgentActivity;
   lastSeenAt?: string;
   hasUnread?: boolean;
   // Metadata fields

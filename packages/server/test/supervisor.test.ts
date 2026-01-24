@@ -212,7 +212,7 @@ describe("Supervisor", () => {
       expect(processStateEvents.length).toBeGreaterThanOrEqual(1);
       expect(processStateEvents[0]).toMatchObject({
         type: "process-state-changed",
-        processState: "running",
+        activity: "in-turn",
       });
     });
 
@@ -239,7 +239,7 @@ describe("Supervisor", () => {
       expect(statusEvents.length).toBeGreaterThanOrEqual(1);
       expect(statusEvents[0]).toMatchObject({
         type: "session-status-changed",
-        status: { state: "owned" },
+        ownership: { owner: "self" },
       });
     });
   });

@@ -2,8 +2,13 @@
  * Simple in-memory pub/sub event bus for file change and session status events.
  */
 
-import type { ContextUsage, UrlProjectId } from "@yep-anywhere/shared";
-import type { SessionStatus, SessionSummary } from "../supervisor/types.js";
+import type {
+  AgentActivity,
+  ContextUsage,
+  PendingInputType,
+  UrlProjectId,
+} from "@yep-anywhere/shared";
+import type { SessionOwnership, SessionSummary } from "../supervisor/types.js";
 
 export type FileChangeType = "create" | "modify" | "delete";
 
@@ -33,7 +38,7 @@ export interface SessionStatusEvent {
   sessionId: string;
   /** Base64url-encoded project path (UrlProjectId format) */
   projectId: UrlProjectId;
-  status: SessionStatus;
+  ownership: SessionOwnership;
   timestamp: string;
 }
 
@@ -65,21 +70,15 @@ export interface SessionSeenEvent {
   messageId?: string;
 }
 
-/** Process state type - what the agent is doing */
-export type ProcessStateType = "running" | "waiting-input" | "idle";
-
-/** Pending input type - what kind of input the agent is waiting for */
-export type PendingInputType = "tool-approval" | "user-question";
-
-/** Event emitted when a process state changes (running vs waiting for input) */
+/** Event emitted when a process activity changes (in-turn vs waiting for input) */
 export interface ProcessStateEvent {
   type: "process-state-changed";
   sessionId: string;
   /** Base64url-encoded project path (UrlProjectId format) */
   projectId: UrlProjectId;
-  /** Current process state - what the agent is doing */
-  processState: ProcessStateType;
-  /** Type of pending input (only set when processState is "waiting-input") */
+  /** Current agent activity - what the agent is doing */
+  activity: AgentActivity;
+  /** Type of pending input (only set when activity is "waiting-input") */
   pendingInputType?: PendingInputType;
   timestamp: string;
 }

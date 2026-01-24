@@ -18,8 +18,8 @@ import type { ProjectScanner } from "../projects/scanner.js";
 import type { ISessionReader } from "../sessions/types.js";
 import type { Supervisor } from "../supervisor/Supervisor.js";
 import type {
+  AgentActivity,
   PendingInputType,
-  ProcessStateType,
   Project,
   SessionSummary,
 } from "../supervisor/types.js";
@@ -40,7 +40,7 @@ export interface InboxItem {
   sessionTitle: string;
   updatedAt: string;
   pendingInputType?: PendingInputType;
-  processState?: ProcessStateType;
+  activity?: AgentActivity;
   hasUnread?: boolean;
 }
 
@@ -80,7 +80,7 @@ export function createInboxRoutes(deps: InboxDeps): Hono {
       session: SessionSummary;
       projectName: string;
       pendingInputType?: PendingInputType;
-      processState?: ProcessStateType;
+      activity?: AgentActivity;
       hasUnread?: boolean;
       customTitle?: string;
     }> = [];
@@ -111,9 +111,9 @@ export function createInboxRoutes(deps: InboxDeps): Hono {
         if (isArchived) continue;
 
         let pendingInputType: PendingInputType | undefined;
-        let processState: ProcessStateType | undefined;
+        let activity: AgentActivity | undefined;
 
-        // Get process state from supervisor
+        // Get agent activity from supervisor
         const process = deps.supervisor?.getProcessForSession(session.id);
         if (process) {
           const pendingRequest = process.getPendingInputRequest();
@@ -124,8 +124,8 @@ export function createInboxRoutes(deps: InboxDeps): Hono {
                 : "user-question";
           }
           const state = process.state.type;
-          if (state === "running" || state === "waiting-input") {
-            processState = state;
+          if (state === "in-turn" || state === "waiting-input") {
+            activity = state;
           }
         }
 
@@ -138,7 +138,7 @@ export function createInboxRoutes(deps: InboxDeps): Hono {
           session,
           projectName: project.name,
           pendingInputType,
-          processState,
+          activity,
           hasUnread,
           customTitle: metadata?.customTitle ?? session.customTitle,
         });
@@ -166,7 +166,7 @@ export function createInboxRoutes(deps: InboxDeps): Hono {
       }),
       updatedAt: item.session.updatedAt,
       pendingInputType: item.pendingInputType,
-      processState: item.processState,
+      activity: item.activity,
       hasUnread: item.hasUnread,
     });
 
@@ -178,10 +178,10 @@ export function createInboxRoutes(deps: InboxDeps): Hono {
       }
     }
 
-    // Tier 2: active - running sessions without pending input
+    // Tier 2: active - in-turn sessions without pending input
     for (const item of allSessions) {
       if (assignedSessionIds.has(item.session.id)) continue;
-      if (item.processState === "running") {
+      if (item.activity === "in-turn") {
         active.push(toInboxItem(item));
         assignedSessionIds.add(item.session.id);
       }

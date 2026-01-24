@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import type { GlobalSessionItem } from "../api/client";
-import type { ProcessStateType } from "../hooks/useFileActivity";
+import type { AgentActivity } from "../hooks/useFileActivity";
 import { useGlobalSessions } from "../hooks/useGlobalSessions";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 
@@ -47,10 +47,10 @@ function getDisplayTitle(session: GlobalSessionItem): string {
 
 /** Compact status indicator */
 function StatusIndicator({ session }: { session: GlobalSessionItem }) {
-  const processState = session.processState as ProcessStateType | undefined;
+  const activity = session.activity as AgentActivity | undefined;
 
-  // Running/thinking indicator
-  if (processState === "running") {
+  // In-turn/thinking indicator
+  if (activity === "in-turn") {
     return <ThinkingIndicator />;
   }
 
@@ -61,7 +61,7 @@ function StatusIndicator({ session }: { session: GlobalSessionItem }) {
   }
 
   // External session
-  if (session.status.state === "external") {
+  if (session.ownership.owner === "external") {
     return <span className="recent-sessions-badge external">Ext</span>;
   }
 

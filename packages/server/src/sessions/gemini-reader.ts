@@ -151,7 +151,7 @@ export class GeminiSessionReader implements ISessionReader {
         createdAt: session.startTime,
         updatedAt: session.lastUpdated ?? stats.mtime.toISOString(),
         messageCount,
-        status: { state: "idle" },
+        ownership: { owner: "none" },
         contextUsage,
         provider: "gemini",
         model,

@@ -1,10 +1,10 @@
 import type {
+  AgentActivity,
   BrowserProfilesResponse,
   ConnectionsResponse,
   EnrichedRecentEntry,
   FileContentResponse,
   PendingInputType,
-  ProcessStateType,
   ProviderInfo,
   ProviderName,
   ThinkingOption,
@@ -38,7 +38,7 @@ export interface InboxItem {
   sessionTitle: string | null;
   updatedAt: string;
   pendingInputType?: PendingInputType;
-  processState?: ProcessStateType;
+  activity?: AgentActivity;
   hasUnread?: boolean;
 }
 
@@ -65,9 +65,9 @@ export interface GlobalSessionItem {
   provider: ProviderName;
   projectId: string;
   projectName: string;
-  status: SessionStatus;
+  ownership: SessionStatus;
   pendingInputType?: PendingInputType;
-  processState?: ProcessStateType;
+  activity?: AgentActivity;
   hasUnread?: boolean;
   customTitle?: string;
   isArchived?: boolean;
@@ -318,7 +318,7 @@ export const api = {
     return fetchJSON<{
       session: Session;
       messages: Message[];
-      status: SessionStatus;
+      ownership: SessionStatus;
       pendingInputRequest?: InputRequest | null;
     }>(`/projects/${projectId}/sessions/${sessionId}${params}`);
   },
@@ -330,7 +330,7 @@ export const api = {
   getSessionMetadata: (projectId: string, sessionId: string) =>
     fetchJSON<{
       session: Session;
-      status: SessionStatus;
+      ownership: SessionStatus;
       pendingInputRequest?: InputRequest | null;
     }>(`/projects/${projectId}/sessions/${sessionId}/metadata`),
 

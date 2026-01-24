@@ -7,16 +7,16 @@ describe("SessionStatusBadge", () => {
     cleanup();
   });
 
-  it("shows Thinking badge when processState is running", () => {
+  it("shows Thinking badge when activity is in-turn", () => {
     const { container } = render(
       <SessionStatusBadge
         status={{
-          state: "owned",
+          owner: "self",
           processId: "p1",
           permissionMode: "default",
           modeVersion: 0,
         }}
-        processState="running"
+        activity="in-turn"
       />,
     );
 
@@ -26,11 +26,11 @@ describe("SessionStatusBadge", () => {
     expect(badge?.textContent).toBe("Thinking");
   });
 
-  it("shows nothing when owned but not running", () => {
+  it("shows nothing when owned but not in-turn", () => {
     const { container } = render(
       <SessionStatusBadge
         status={{
-          state: "owned",
+          owner: "self",
           processId: "p1",
           permissionMode: "default",
           modeVersion: 0,
@@ -38,30 +38,30 @@ describe("SessionStatusBadge", () => {
       />,
     );
 
-    // No indicator for owned sessions - "Thinking" badge shows when actually running
+    // No indicator for owned sessions - "Thinking" badge shows when actually in-turn
     expect(container.querySelector(".status-badge")).toBeNull();
     expect(container.querySelector(".status-indicator")).toBeNull();
   });
 
-  it("shows nothing when idle", () => {
+  it("shows nothing when unowned", () => {
     const { container } = render(
-      <SessionStatusBadge status={{ state: "idle" }} />,
+      <SessionStatusBadge status={{ owner: "none" }} />,
     );
 
     expect(container.querySelector(".status-badge")).toBeNull();
     expect(container.querySelector(".status-indicator")).toBeNull();
   });
 
-  it("prioritizes needs-input over running", () => {
+  it("prioritizes needs-input over in-turn", () => {
     const { container } = render(
       <SessionStatusBadge
         status={{
-          state: "owned",
+          owner: "self",
           processId: "p1",
           permissionMode: "default",
           modeVersion: 0,
         }}
-        processState="running"
+        activity="in-turn"
         pendingInputType="tool-approval"
       />,
     );
@@ -80,12 +80,12 @@ describe("SessionStatusBadge", () => {
     const { container } = render(
       <SessionStatusBadge
         status={{
-          state: "owned",
+          owner: "self",
           processId: "p1",
           permissionMode: "default",
           modeVersion: 0,
         }}
-        processState="running"
+        activity="in-turn"
         hasUnread={true}
       />,
     );
@@ -96,9 +96,9 @@ describe("SessionStatusBadge", () => {
     expect(thinkingBadge?.textContent).toBe("Thinking");
   });
 
-  it("shows nothing for idle sessions (unread handled via CSS class)", () => {
+  it("shows nothing for unowned sessions (unread handled via CSS class)", () => {
     const { container } = render(
-      <SessionStatusBadge status={{ state: "idle" }} hasUnread={true} />,
+      <SessionStatusBadge status={{ owner: "none" }} hasUnread={true} />,
     );
 
     // No badge - unread is now handled via CSS class on parent element
@@ -110,7 +110,7 @@ describe("SessionStatusBadge", () => {
     const { container } = render(
       <SessionStatusBadge
         status={{
-          state: "owned",
+          owner: "self",
           processId: "p1",
           permissionMode: "default",
           modeVersion: 0,

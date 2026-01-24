@@ -77,7 +77,7 @@ function SessionPageContent({
   // This allows SSE to connect immediately and show optimistic title without waiting for getSession
   // Also get model/provider so ProviderBadge can render immediately
   const navState = location.state as {
-    initialStatus?: { state: "owned"; processId: string };
+    initialStatus?: { owner: "self"; processId: string };
     initialTitle?: string;
     initialModel?: string;
     initialProvider?: ProviderName;
@@ -269,7 +269,7 @@ function SessionPageContent({
     updatedAt: sessionUpdatedAt,
     lastSeenAt: session?.lastSeenAt,
     hasUnread: session?.hasUnread,
-    enabled: status.state !== "external",
+    enabled: status.owner !== "external",
   });
 
   const handleSend = async (text: string) => {
@@ -281,7 +281,7 @@ function SessionPageContent({
 
     // Add to pending queue and get tempId to pass to server
     const tempId = addPendingMessage(text);
-    setProcessState("running"); // Optimistic: show processing indicator immediately
+    setProcessState("in-turn"); // Optimistic: show processing indicator immediately
     setScrollTrigger((prev) => prev + 1); // Force scroll to bottom
 
     // Capture current attachments and clear optimistically
@@ -289,7 +289,7 @@ function SessionPageContent({
     setAttachments([]);
 
     try {
-      if (status.state === "idle") {
+      if (status.owner === "none") {
         // Resume the session with current permission mode and model settings
         // Use session's existing model if available (important for non-Claude providers),
         // otherwise fall back to user's model preference for new Claude sessions
@@ -311,7 +311,7 @@ function SessionPageContent({
           tempId,
         );
         // Update status to trigger SSE connection
-        setStatus({ state: "owned", processId: result.processId });
+        setStatus({ owner: "self", processId: result.processId });
       } else {
         // Queue to existing process with current permission mode and thinking setting
         const thinking = getThinkingSetting();
@@ -325,7 +325,7 @@ function SessionPageContent({
         );
         // If process was restarted due to thinking mode change, update the status
         if (result.restarted && result.processId) {
-          setStatus({ state: "owned", processId: result.processId });
+          setStatus({ owner: "self", processId: result.processId });
         }
       }
       // Success - clear the draft from localStorage
@@ -344,7 +344,7 @@ function SessionPageContent({
         (err.message.includes("404") ||
           err.message.includes("No active process"));
       if (is404) {
-        setStatus({ state: "idle" });
+        setStatus({ owner: "none" });
         showToast(
           "Session process ended. Your message has been restored.",
           "error",
@@ -357,7 +357,7 @@ function SessionPageContent({
   };
 
   const handleAbort = async () => {
-    if (status.state === "owned" && status.processId) {
+    if (status.owner === "self" && status.processId) {
       // Try interrupt first (graceful stop), fall back to abort if not supported
       try {
         const result = await api.interruptProcess(status.processId);
@@ -515,22 +515,22 @@ function SessionPageContent({
   // Check if pending request is an AskUserQuestion
   const isAskUserQuestion = pendingInputRequest?.toolName === "AskUserQuestion";
 
-  // If process is actively running or waiting for input, don't mark tools as orphaned.
+  // If process is actively in-turn or waiting for input, don't mark tools as orphaned.
   // "orphanedToolUseIds" from server just means "no result yet" - but if the process is
-  // running (e.g., executing a Task subagent) or waiting for approval, they're not orphaned.
+  // in-turn (e.g., executing a Task subagent) or waiting for approval, they're not orphaned.
   const activeToolApproval =
-    processState === "running" || processState === "waiting-input";
+    processState === "in-turn" || processState === "waiting-input";
 
   // Detect if session has pending tool calls without results
-  // This can happen when the session is idle but was active in another process (VS Code, CLI)
+  // This can happen when the session is unowned but was active in another process (VS Code, CLI)
   // that is waiting for user input (tool approval, question answer)
   const hasPendingToolCalls = useMemo(() => {
-    if (status.state !== "idle") return false;
+    if (status.owner !== "none") return false;
     const items = preprocessMessages(messages);
     return items.some(
       (item) => item.type === "tool_call" && item.status === "pending",
     );
-  }, [messages, status.state]);
+  }, [messages, status.owner]);
 
   // Compute display title - priority:
   // 1. Local custom title (user renamed in this session)
@@ -660,7 +660,7 @@ function SessionPageContent({
   };
 
   const handleTerminate = async () => {
-    if (status.state === "owned" && status.processId) {
+    if (status.owner === "self" && status.processId) {
       try {
         await api.abortProcess(status.processId);
         showToast("Session terminated", "success");
@@ -807,7 +807,7 @@ function SessionPageContent({
                     hasUnread={hasUnread}
                     provider={session?.provider}
                     processId={
-                      status.state === "owned" ? status.processId : undefined
+                      status.owner === "self" ? status.processId : undefined
                     }
                     onToggleStar={handleToggleStar}
                     onToggleArchive={handleToggleArchive}
@@ -836,7 +836,7 @@ function SessionPageContent({
                   <ProviderBadge
                     provider={effectiveProvider}
                     model={effectiveModel}
-                    isThinking={processState === "running"}
+                    isThinking={processState === "in-turn"}
                   />
                 </button>
               )}
@@ -857,7 +857,7 @@ function SessionPageContent({
           />
         )}
 
-        {status.state === "external" && (
+        {status.owner === "external" && (
           <div className="external-session-warning">
             External session active - enter messages at your own risk!
           </div>
@@ -889,7 +889,7 @@ function SessionPageContent({
                 <MessageList
                   messages={messages}
                   isProcessing={
-                    status.state === "owned" && processState === "running"
+                    status.owner === "self" && processState === "in-turn"
                   }
                   isCompacting={isCompacting}
                   scrollTrigger={scrollTrigger}
@@ -940,8 +940,8 @@ function SessionPageContent({
                     supportsPermissionMode={supportsPermissionMode}
                     supportsThinkingToggle={supportsThinkingToggle}
                     contextUsage={session?.contextUsage}
-                    isRunning={status.state === "owned"}
-                    isThinking={processState === "running"}
+                    isRunning={status.owner === "self"}
+                    isThinking={processState === "in-turn"}
                     onStop={handleAbort}
                     pendingApproval={
                       approvalCollapsed
@@ -964,7 +964,7 @@ function SessionPageContent({
               <MessageInput
                 onSend={handleSend}
                 placeholder={
-                  status.state === "external"
+                  status.owner === "external"
                     ? "External session - send at your own risk..."
                     : processState === "idle"
                       ? "Send a message to resume..."
@@ -977,8 +977,8 @@ function SessionPageContent({
                 onHoldChange={holdModeEnabled ? setHold : undefined}
                 supportsPermissionMode={supportsPermissionMode}
                 supportsThinkingToggle={supportsThinkingToggle}
-                isRunning={status.state === "owned"}
-                isThinking={processState === "running"}
+                isRunning={status.owner === "self"}
+                isThinking={processState === "in-turn"}
                 onStop={handleAbort}
                 draftKey={`draft-message-${sessionId}`}
                 onDraftControlsReady={handleDraftControlsReady}
@@ -996,7 +996,7 @@ function SessionPageContent({
                 onRemoveAttachment={handleRemoveAttachment}
                 uploadProgress={uploadProgress}
                 slashCommands={
-                  supportsSlashCommands && status.state === "owned"
+                  supportsSlashCommands && status.owner === "self"
                     ? allSlashCommands
                     : []
                 }

@@ -367,14 +367,14 @@ export function Sidebar({
                       title={getSessionDisplayTitle(session)}
                       fullTitle={getSessionDisplayTitle(session)}
                       provider={session.provider}
-                      status={session.status}
+                      status={session.ownership}
                       pendingInputType={session.pendingInputType}
                       hasUnread={session.hasUnread}
                       isStarred={session.isStarred}
                       isArchived={session.isArchived}
                       mode="compact"
                       isCurrent={session.id === currentSessionId}
-                      processState={session.processState}
+                      activity={session.activity}
                       onNavigate={onNavigate}
                       showProjectName
                       projectName={session.projectName}
@@ -416,14 +416,14 @@ export function Sidebar({
                       title={getSessionDisplayTitle(session)}
                       fullTitle={getSessionDisplayTitle(session)}
                       provider={session.provider}
-                      status={session.status}
+                      status={session.ownership}
                       pendingInputType={session.pendingInputType}
                       hasUnread={session.hasUnread}
                       isStarred={session.isStarred}
                       isArchived={session.isArchived}
                       mode="compact"
                       isCurrent={session.id === currentSessionId}
-                      processState={session.processState}
+                      activity={session.activity}
                       onNavigate={onNavigate}
                       showProjectName
                       projectName={session.projectName}
@@ -463,14 +463,14 @@ export function Sidebar({
                     title={getSessionDisplayTitle(session)}
                     fullTitle={getSessionDisplayTitle(session)}
                     provider={session.provider}
-                    status={session.status}
+                    status={session.ownership}
                     pendingInputType={session.pendingInputType}
                     hasUnread={session.hasUnread}
                     isStarred={session.isStarred}
                     isArchived={session.isArchived}
                     mode="compact"
                     isCurrent={session.id === currentSessionId}
-                    processState={session.processState}
+                    activity={session.activity}
                     onNavigate={onNavigate}
                     showProjectName
                     projectName={session.projectName}

@@ -61,7 +61,7 @@ export class PushNotifier {
     event: ProcessStateEvent,
   ): Promise<void> {
     // Send dismiss when leaving waiting-input (if we sent a notification for it)
-    if (event.processState !== "waiting-input") {
+    if (event.activity !== "waiting-input") {
       if (this.sessionsWithNotification.has(event.sessionId)) {
         await this.sendDismiss(event.sessionId);
         this.sessionsWithNotification.delete(event.sessionId);

@@ -28,7 +28,7 @@ import {
   useStreamingContent,
 } from "./useStreamingContent";
 
-export type ProcessState = "idle" | "running" | "waiting-input" | "hold";
+export type ProcessState = "idle" | "in-turn" | "waiting-input" | "hold";
 
 // Re-export types from useSessionMessages
 export type { AgentContent, AgentContentMap } from "./useSessionMessages";
@@ -48,16 +48,16 @@ export interface PendingMessage {
 export function useSession(
   projectId: string,
   sessionId: string,
-  initialStatus?: { state: "owned"; processId: string },
+  initialStatus?: { owner: "self"; processId: string },
   streamingMarkdownCallbacks?: StreamingMarkdownCallbacks,
 ) {
   // Use initial status if provided (from navigation state) to connect SSE immediately
   const [status, setStatus] = useState<SessionStatus>(
-    initialStatus ?? { state: "idle" },
+    initialStatus ?? { owner: "none" },
   );
-  // If we have initial status, assume process is running (just started)
+  // If we have initial status, assume process is in-turn (just started)
   const [processState, setProcessState] = useState<ProcessState>(
-    initialStatus ? "running" : "idle",
+    initialStatus ? "in-turn" : "idle",
   );
   const [pendingInputRequest, setPendingInputRequest] =
     useState<InputRequest | null>(null);
@@ -122,14 +122,14 @@ export function useSession(
     (result: SessionLoadResult) => {
       // Only update status from REST if we don't already have an owned status from navigation.
       // This prevents a race condition where:
-      // 1. Session created with initialStatus = {state: "owned"}
-      // 2. SSE connects because status.state === "owned"
-      // 3. REST API returns status = {state: "idle"} (stale)
-      // 4. setStatus({state: "idle"}) disconnects SSE before it receives events
+      // 1. Session created with initialStatus = {owner: "self"}
+      // 2. SSE connects because status.owner === "self"
+      // 3. REST API returns status = {owner: "none"} (stale)
+      // 4. setStatus({owner: "none"}) disconnects SSE before it receives events
       // The owned status from initialStatus should only be changed by SSE events.
       setStatus((prev) => {
         // If we already have owned status (from initialStatus), keep it unless REST also says owned
-        if (prev.state === "owned" && result.status.state !== "owned") {
+        if (prev.owner === "self" && result.status.owner !== "self") {
           return prev;
         }
         return result.status;
@@ -137,7 +137,7 @@ export function useSession(
 
       // Sync permission mode from server if owned
       if (
-        result.status.state === "owned" &&
+        result.status.owner === "self" &&
         result.status.permissionMode &&
         result.status.modeVersion !== undefined
       ) {
@@ -190,7 +190,7 @@ export function useSession(
       setLocalMode(mode);
 
       // If there's an active process, immediately sync to server
-      if (status.state === "owned" || status.state === "external") {
+      if (status.owner === "self" || status.owner === "external") {
         try {
           const result = await api.setPermissionMode(sessionId, mode);
           // Update server-confirmed mode
@@ -205,14 +205,14 @@ export function useSession(
         }
       }
     },
-    [sessionId, status.state],
+    [sessionId, status.owner],
   );
 
   // Set hold state (soft pause) for the session
   const setHold = useCallback(
     async (hold: boolean) => {
       // Only works if there's an active process
-      if (status.state !== "owned" && status.state !== "external") {
+      if (status.owner !== "self" && status.owner !== "external") {
         console.warn("Cannot set hold: no active process");
         return;
       }
@@ -223,14 +223,14 @@ export function useSession(
         // but we can optimistically update if needed
         if (result.state === "hold") {
           setProcessState("hold");
-        } else if (result.state === "running") {
-          setProcessState("running");
+        } else if (result.state === "in-turn") {
+          setProcessState("in-turn");
         }
       } catch (err) {
         console.warn("Failed to set hold:", err);
       }
     },
-    [sessionId, status.state],
+    [sessionId, status.owner],
   );
 
   // Throttle state for incremental fetching
@@ -391,14 +391,14 @@ export function useSession(
 
       // For owned sessions: messages come via SSE stream, metadata via session-updated event
       // No API call needed - skip file change processing entirely
-      if (status.state === "owned") {
+      if (status.owner === "self") {
         return;
       }
 
       // For external/idle sessions: fetch both messages and metadata via API
       throttledFetch();
     },
-    [sessionId, status.state, throttledFetch],
+    [sessionId, status.owner, throttledFetch],
   );
 
   // Handle session content updates via SSE (title, messageCount, updatedAt, contextUsage)
@@ -446,17 +446,17 @@ export function useSession(
 
       // Update process state from activity bus
       if (
-        event.processState === "idle" ||
-        event.processState === "running" ||
-        event.processState === "waiting-input" ||
-        event.processState === "hold"
+        event.activity === "idle" ||
+        event.activity === "in-turn" ||
+        event.activity === "waiting-input" ||
+        event.activity === "hold"
       ) {
-        setProcessState(event.processState);
+        setProcessState(event.activity);
       }
 
       // If activity bus says waiting-input but we don't have the request,
       // fetch it via REST as a backup
-      if (event.processState === "waiting-input" && event.pendingInputType) {
+      if (event.activity === "waiting-input" && event.pendingInputType) {
         setPendingInputRequest((current) => {
           if (current) return current; // Already have it, don't fetch
 
@@ -669,10 +669,10 @@ export function useSession(
           state: string;
           request?: InputRequest;
         };
-        // Track process state (running, idle, waiting-input, hold)
+        // Track process state (in-turn, idle, waiting-input, hold)
         if (
           statusData.state === "idle" ||
-          statusData.state === "running" ||
+          statusData.state === "in-turn" ||
           statusData.state === "waiting-input" ||
           statusData.state === "hold"
         ) {
@@ -696,7 +696,7 @@ export function useSession(
         }
       } else if (data.eventType === "complete") {
         setProcessState("idle");
-        setStatus({ state: "idle" });
+        setStatus({ owner: "none" });
         setPendingInputRequest(null);
       } else if (data.eventType === "connected") {
         // Sync state and permission mode from connected event
@@ -724,7 +724,7 @@ export function useSession(
         // Sync process state so watching tabs see "processing" indicator
         if (
           connectedData.state === "idle" ||
-          connectedData.state === "running" ||
+          connectedData.state === "in-turn" ||
           connectedData.state === "waiting-input" ||
           connectedData.state === "hold"
         ) {
@@ -870,13 +870,13 @@ export function useSession(
   const handleSSEError = useCallback(async () => {
     try {
       const data = await api.getSessionMetadata(projectId, sessionId);
-      if (data.status.state !== "owned") {
-        setStatus({ state: "idle" });
+      if (data.ownership.owner !== "self") {
+        setStatus({ owner: "none" });
         setProcessState("idle");
       }
     } catch {
       // If session fetch fails, assume process is dead
-      setStatus({ state: "idle" });
+      setStatus({ owner: "none" });
       setProcessState("idle");
     }
   }, [projectId, sessionId]);
@@ -884,7 +884,7 @@ export function useSession(
   // Only connect to session stream when we own the session
   // External sessions are tracked via the activity stream instead
   const { connected } = useSSE(
-    status.state === "owned" ? `/api/sessions/${sessionId}/stream` : null,
+    status.owner === "self" ? `/api/sessions/${sessionId}/stream` : null,
     { onMessage: handleSSEMessage, onError: handleSSEError },
   );
 

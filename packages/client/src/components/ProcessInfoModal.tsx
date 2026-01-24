@@ -131,7 +131,7 @@ export function ProcessInfoModal({
 
   // Fetch process info when modal opens (if session is owned)
   useEffect(() => {
-    if (status.state !== "owned") return;
+    if (status.owner !== "self") return;
 
     setLoading(true);
     setError(null);
@@ -147,12 +147,12 @@ export function ProcessInfoModal({
       .finally(() => {
         setLoading(false);
       });
-  }, [sessionId, status.state]);
+  }, [sessionId, status.owner]);
 
   const getStateDisplay = () => {
-    if (status.state === "owned") {
+    if (status.owner === "self") {
       switch (processState) {
-        case "running":
+        case "in-turn":
           return "Running";
         case "idle":
           return "Idle";
@@ -164,7 +164,7 @@ export function ProcessInfoModal({
           return processState;
       }
     }
-    if (status.state === "external") return "External (other process)";
+    if (status.owner === "external") return "External (other process)";
     return "Idle (no process)";
   };
 
@@ -245,7 +245,7 @@ export function ProcessInfoModal({
 
         {/* Process Info - always show, with state-dependent content */}
         <Section title="Process">
-          {status.state === "owned" ? (
+          {status.owner === "self" ? (
             <>
               {loading && (
                 <div className="process-info-loading">Loading...</div>
@@ -285,7 +285,7 @@ export function ProcessInfoModal({
                 <div className="process-info-loading">No process data</div>
               )}
             </>
-          ) : status.state === "external" ? (
+          ) : status.owner === "external" ? (
             <div className="process-info-muted">
               Session controlled by external process (VS Code, CLI)
             </div>

@@ -36,9 +36,9 @@ export type {
   AppConversationMessage,
   AppContentBlock,
   PendingInputType,
-  ProcessStateType,
+  AgentActivity,
   ContextUsage,
-  AppSessionStatus,
+  SessionOwnership,
   AppSessionSummary,
   AppSession,
   AgentStatus,
@@ -124,9 +124,12 @@ export interface Message {
 }
 
 // Type aliases for session types
-import type { AppSessionStatus, AppSessionSummary } from "@yep-anywhere/shared";
+import type {
+  AppSessionSummary,
+  SessionOwnership as SessionOwnershipType,
+} from "@yep-anywhere/shared";
 
-export type SessionStatus = AppSessionStatus;
+export type SessionStatus = SessionOwnershipType;
 export type SessionSummary = AppSessionSummary;
 
 /**

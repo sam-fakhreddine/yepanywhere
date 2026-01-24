@@ -15,8 +15,8 @@ import type { ISessionReader } from "../sessions/types.js";
 import type { ExternalSessionTracker } from "../supervisor/ExternalSessionTracker.js";
 import type { Supervisor } from "../supervisor/Supervisor.js";
 import type {
+  AgentActivity,
   PendingInputType,
-  ProcessStateType,
   Project,
   SessionSummary,
 } from "../supervisor/types.js";
@@ -111,8 +111,8 @@ export function createProjectsRoutes(deps: ProjectsDeps): Hono {
           createdAt: process.startedAt.toISOString(),
           updatedAt: now,
           messageCount: 0,
-          status: {
-            state: "owned",
+          ownership: {
+            owner: "self",
             processId: process.id,
             permissionMode: process.permissionMode,
             modeVersion: process.modeVersion,
@@ -157,21 +157,21 @@ export function createProjectsRoutes(deps: ProjectsDeps): Hono {
       const process = deps.supervisor?.getProcessForSession(session.id);
       const isExternal = deps.externalTracker?.isExternal(session.id) ?? false;
 
-      // Enrich with status
-      const status = process
+      // Enrich with ownership
+      const ownership = process
         ? {
-            state: "owned" as const,
+            owner: "self" as const,
             processId: process.id,
             permissionMode: process.permissionMode,
             modeVersion: process.modeVersion,
           }
         : isExternal
-          ? { state: "external" as const }
-          : session.status;
+          ? { owner: "external" as const }
+          : session.ownership;
 
-      // Enrich with notification data and process state
+      // Enrich with notification data and agent activity
       let pendingInputType: PendingInputType | undefined;
-      let processState: ProcessStateType | undefined;
+      let activity: AgentActivity | undefined;
       if (process) {
         const pendingRequest = process.getPendingInputRequest();
         if (pendingRequest) {
@@ -180,10 +180,10 @@ export function createProjectsRoutes(deps: ProjectsDeps): Hono {
               ? "tool-approval"
               : "user-question";
         }
-        // Get the current process state (running/waiting-input/idle)
+        // Get the current agent activity (in-turn/waiting-input/idle)
         const state = process.state.type;
-        if (state === "running" || state === "waiting-input") {
-          processState = state;
+        if (state === "in-turn" || state === "waiting-input") {
+          activity = state;
         }
       }
 
@@ -202,9 +202,9 @@ export function createProjectsRoutes(deps: ProjectsDeps): Hono {
 
       return {
         ...session,
-        status,
+        ownership,
         pendingInputType,
-        processState,
+        activity,
         lastSeenAt,
         hasUnread,
         customTitle,

@@ -22,10 +22,10 @@ import type { ISessionReader } from "../sessions/types.js";
 import type { ExternalSessionTracker } from "../supervisor/ExternalSessionTracker.js";
 import type { Supervisor } from "../supervisor/Supervisor.js";
 import type {
+  AgentActivity,
   PendingInputType,
-  ProcessStateType,
   Project,
-  SessionStatus,
+  SessionOwnership,
   SessionSummary,
 } from "../supervisor/types.js";
 
@@ -59,9 +59,9 @@ export interface GlobalSessionItem {
   projectId: string;
   projectName: string;
   // Enrichment (all in-memory, cheap)
-  status: SessionStatus;
+  ownership: SessionOwnership;
   pendingInputType?: PendingInputType;
-  processState?: ProcessStateType;
+  activity?: AgentActivity;
   hasUnread?: boolean;
   customTitle?: string;
   isArchived?: boolean;
@@ -250,20 +250,20 @@ export function createGlobalSessionsRoutes(deps: GlobalSessionsDeps): Hono {
         const isExternal =
           deps.externalTracker?.isExternal(session.id) ?? false;
 
-        const status: SessionStatus = process
+        const ownership: SessionOwnership = process
           ? {
-              state: "owned",
+              owner: "self",
               processId: process.id,
               permissionMode: process.permissionMode,
               modeVersion: process.modeVersion,
             }
           : isExternal
-            ? { state: "external" }
-            : (session.status ?? { state: "idle" });
+            ? { owner: "external" }
+            : (session.ownership ?? { owner: "none" });
 
-        // Get process state
+        // Get agent activity
         let pendingInputType: PendingInputType | undefined;
-        let processState: ProcessStateType | undefined;
+        let activity: AgentActivity | undefined;
         if (process) {
           const pendingRequest = process.getPendingInputRequest();
           if (pendingRequest) {
@@ -273,8 +273,8 @@ export function createGlobalSessionsRoutes(deps: GlobalSessionsDeps): Hono {
                 : "user-question";
           }
           const state = process.state.type;
-          if (state === "running" || state === "waiting-input") {
-            processState = state;
+          if (state === "in-turn" || state === "waiting-input") {
+            activity = state;
           }
         }
 
@@ -302,9 +302,9 @@ export function createGlobalSessionsRoutes(deps: GlobalSessionsDeps): Hono {
           provider: session.provider,
           projectId: session.projectId,
           projectName: project.name,
-          status,
+          ownership,
           pendingInputType,
-          processState,
+          activity,
           hasUnread,
           customTitle,
           isArchived,

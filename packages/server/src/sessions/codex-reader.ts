@@ -156,7 +156,7 @@ export class CodexSessionReader implements ISessionReader {
         createdAt: metaEntry.payload.timestamp,
         updatedAt: stats.mtime.toISOString(),
         messageCount,
-        status: { state: "idle" },
+        ownership: { owner: "none" },
         contextUsage,
         provider: this.determineProvider(metaEntry, model),
         model,

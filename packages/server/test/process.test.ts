@@ -774,7 +774,7 @@ describe("Process", () => {
 
       // No more pending requests
       expect(process.getPendingInputRequest()).toBeNull();
-      expect(process.state.type).toBe("running");
+      expect(process.state.type).toBe("in-turn");
     });
   });
 
@@ -1091,7 +1091,7 @@ describe("Process", () => {
       process.setHold(false);
       expect(process.isHeld).toBe(false);
       expect(process.holdSince).toBe(null);
-      expect(process.state.type).toBe("running");
+      expect(process.state.type).toBe("in-turn");
     });
 
     it("emits state-change events for hold/resume", async () => {
@@ -1114,7 +1114,7 @@ describe("Process", () => {
       process.setHold(false);
 
       expect(stateChanges).toContain("hold");
-      expect(stateChanges).toContain("running");
+      expect(stateChanges).toContain("in-turn");
     });
 
     it("setHold is idempotent", async () => {

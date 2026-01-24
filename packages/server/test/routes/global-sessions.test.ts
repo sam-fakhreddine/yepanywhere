@@ -38,7 +38,7 @@ function createSession(
     createdAt: hoursAgo(48),
     updatedAt,
     messageCount: 5,
-    status: { state: "idle" },
+    ownership: { owner: "none" },
     provider: "claude",
     ...overrides,
   };
@@ -410,7 +410,7 @@ describe("Global Sessions Routes", () => {
   });
 
   describe("enrichment", () => {
-    it("enriches with owned status from supervisor", async () => {
+    it("enriches with self ownership from supervisor", async () => {
       const project = createProject("proj1", "project", "/sessions/proj1");
       const session = createSession("sess1", "proj1", minutesAgo(5));
 
@@ -419,23 +419,23 @@ describe("Global Sessions Routes", () => {
       processMap.set("sess1", {
         id: "proc-1",
         getPendingInputRequest: () => null,
-        state: { type: "running" },
+        state: { type: "in-turn" },
         permissionMode: "default",
         modeVersion: 1,
       });
 
       const result = await makeRequest();
 
-      expect(result.sessions[0].status).toEqual({
-        state: "owned",
+      expect(result.sessions[0].ownership).toEqual({
+        owner: "self",
         processId: "proc-1",
         permissionMode: "default",
         modeVersion: 1,
       });
-      expect(result.sessions[0].processState).toBe("running");
+      expect(result.sessions[0].activity).toBe("in-turn");
     });
 
-    it("enriches with external status", async () => {
+    it("enriches with external ownership", async () => {
       const project = createProject("proj1", "project", "/sessions/proj1");
       const session = createSession("sess1", "proj1", minutesAgo(5));
 
@@ -445,7 +445,7 @@ describe("Global Sessions Routes", () => {
 
       const result = await makeRequest();
 
-      expect(result.sessions[0].status).toEqual({ state: "external" });
+      expect(result.sessions[0].ownership).toEqual({ owner: "external" });
     });
 
     it("enriches with pendingInputType", async () => {

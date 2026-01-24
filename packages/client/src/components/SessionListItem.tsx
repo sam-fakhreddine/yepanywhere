@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
-import type { ProcessStateType } from "../hooks/useFileActivity";
+import type { AgentActivity } from "../hooks/useFileActivity";
 import type {
-  AppSessionStatus,
   ContextUsage,
   PendingInputType,
   ProviderName,
+  SessionStatus,
 } from "../types";
 import { ContextUsageIndicator } from "./ContextUsageIndicator";
 import { SessionMenu } from "./SessionMenu";
@@ -24,10 +24,10 @@ interface SessionListItemProps {
   projectName?: string;
   updatedAt?: string;
   hasUnread?: boolean;
-  processState?: ProcessStateType;
+  activity?: AgentActivity;
   pendingInputType?: PendingInputType;
   contextUsage?: ContextUsage;
-  status?: AppSessionStatus;
+  status?: SessionStatus;
   provider?: ProviderName;
   /** SSH host for remote execution (undefined = local) */
   executor?: string;
@@ -84,7 +84,7 @@ export function SessionListItem({
   projectName,
   updatedAt,
   hasUnread: hasUnreadProp,
-  processState,
+  activity,
   pendingInputType,
   contextUsage,
   status,
@@ -253,7 +253,7 @@ export function SessionListItem({
   // Activity indicator for compact mode
   const getCompactActivityIndicator = () => {
     // External sessions always show external badge
-    if (status?.state === "external") {
+    if (status?.owner === "external") {
       return <span className="session-badge session-badge-external">Ext</span>;
     }
 
@@ -265,8 +265,8 @@ export function SessionListItem({
       );
     }
 
-    // Priority 2: Running (thinking)
-    if (processState === "running") {
+    // Priority 2: In-turn (thinking)
+    if (activity === "in-turn") {
       return <ThinkingIndicator />;
     }
 
@@ -395,7 +395,7 @@ export function SessionListItem({
                     status={status}
                     pendingInputType={pendingInputType}
                     hasUnread={hasUnread}
-                    processState={processState}
+                    activity={activity}
                   />
                 )}
               </span>

@@ -18,7 +18,11 @@ import type {
   SessionUpdatedEvent,
 } from "../watcher/EventBus.js";
 import type { Supervisor } from "./Supervisor.js";
-import type { ContextUsage, SessionStatus, SessionSummary } from "./types.js";
+import type {
+  ContextUsage,
+  SessionOwnership,
+  SessionSummary,
+} from "./types.js";
 
 interface ExternalSessionInfo {
   detectedAt: Date;
@@ -148,7 +152,7 @@ export class ExternalSessionTracker {
             }
           } else {
             // New external session - emit session-created
-            summary.status = { state: "external" };
+            summary.ownership = { owner: "external" };
 
             const event: SessionCreatedEvent = {
               type: "session-created",
@@ -506,7 +510,7 @@ export class ExternalSessionTracker {
         createdAt: meta.timestamp,
         updatedAt: stats.mtime.toISOString(),
         messageCount: 0,
-        status: { state: "external" },
+        ownership: { owner: "external" },
         provider: "codex",
         model: meta.model,
       };
@@ -570,9 +574,9 @@ export class ExternalSessionTracker {
         });
       }
 
-      // Emit status change event
-      void this.emitStatusChangeByInfo(sessionId, externalInfo, {
-        state: "external",
+      // Emit ownership change event
+      void this.emitOwnershipChangeByInfo(sessionId, externalInfo, {
+        owner: "external",
       });
     }
   }
@@ -583,8 +587,10 @@ export class ExternalSessionTracker {
       clearTimeout(existing.timeoutId);
       this.externalSessions.delete(sessionId);
 
-      // Emit status change event
-      void this.emitStatusChangeByInfo(sessionId, existing, { state: "idle" });
+      // Emit ownership change event
+      void this.emitOwnershipChangeByInfo(sessionId, existing, {
+        owner: "none",
+      });
     }
   }
 
@@ -593,23 +599,23 @@ export class ExternalSessionTracker {
       const info = this.externalSessions.get(sessionId);
       if (info) {
         this.externalSessions.delete(sessionId);
-        // Emit status change to idle
-        void this.emitStatusChangeByInfo(sessionId, info, { state: "idle" });
+        // Emit ownership change to none
+        void this.emitOwnershipChangeByInfo(sessionId, info, { owner: "none" });
       }
     }, this.decayMs);
   }
 
-  private async emitStatusChangeByInfo(
+  private async emitOwnershipChangeByInfo(
     sessionId: string,
     info: ExternalSessionInfo,
-    status: SessionStatus,
+    ownership: SessionOwnership,
   ): Promise<void> {
     if (info.projectId) {
       const event: SessionStatusEvent = {
         type: "session-status-changed",
         sessionId,
         projectId: info.projectId,
-        status,
+        ownership,
         timestamp: new Date().toISOString(),
       };
       this.eventBus.emit(event);
@@ -624,7 +630,7 @@ export class ExternalSessionTracker {
     );
     if (!project) {
       console.warn(
-        `[ExternalSessionTracker] Cannot emit status change - project not found: ${info.dirProjectId}`,
+        `[ExternalSessionTracker] Cannot emit ownership change - project not found: ${info.dirProjectId}`,
       );
       return;
     }
@@ -633,7 +639,7 @@ export class ExternalSessionTracker {
       type: "session-status-changed",
       sessionId,
       projectId: project.id,
-      status,
+      ownership,
       timestamp: new Date().toISOString(),
     };
 

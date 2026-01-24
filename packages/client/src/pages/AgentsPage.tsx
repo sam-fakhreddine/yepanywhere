@@ -121,7 +121,7 @@ function ProcessCard({ process, isTerminated = false }: ProcessCardProps) {
           >
             {getProviderLabel(process.provider)}
           </span>
-          {process.state === "running" ? (
+          {process.state === "in-turn" ? (
             <ThinkingIndicator variant="pill" label="Running" />
           ) : (
             <span
@@ -181,9 +181,9 @@ export function AgentsPage() {
 
   const { openSidebar, isWideScreen } = useNavigationLayout();
 
-  // Split processes into active (running/waiting-input) and idle
+  // Split processes into active (in-turn/waiting-input) and idle
   const activeProcesses = processes.filter(
-    (p) => p.state === "running" || p.state === "waiting-input",
+    (p) => p.state === "in-turn" || p.state === "waiting-input",
   );
   const idleProcesses = processes.filter((p) => p.state === "idle");
 

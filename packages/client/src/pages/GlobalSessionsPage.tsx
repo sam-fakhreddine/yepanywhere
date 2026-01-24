@@ -682,9 +682,9 @@ export function GlobalSessionsPage() {
                         fullTitle={getSessionDisplayTitle(session)}
                         updatedAt={session.updatedAt}
                         hasUnread={session.hasUnread}
-                        processState={session.processState}
+                        activity={session.activity}
                         pendingInputType={session.pendingInputType}
-                        status={session.status}
+                        status={session.ownership}
                         provider={session.provider}
                         executor={session.executor}
                         isStarred={session.isStarred}

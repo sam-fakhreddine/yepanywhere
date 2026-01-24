@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { activityBus } from "../lib/activityBus";
-import type { ProcessStateType, SessionSummary } from "../types";
+import type { AgentActivity, SessionSummary } from "../types";
 
 export interface SessionStatus {
-  processState?: ProcessStateType;
+  activity?: AgentActivity;
   pendingInputType?: SessionSummary["pendingInputType"];
   hasUnread?: boolean;
 }
@@ -26,7 +26,7 @@ export function useSessionStatuses(
         const session = initialSessions.get(id);
         if (session) {
           initial.set(id, {
-            processState: session.processState,
+            activity: session.activity,
             pendingInputType: session.pendingInputType,
             hasUnread: session.hasUnread,
           });
@@ -63,7 +63,7 @@ export function useSessionStatuses(
         const session = initialSessions.get(id);
         if (session && !next.has(id)) {
           next.set(id, {
-            processState: session.processState,
+            activity: session.activity,
             pendingInputType: session.pendingInputType,
             hasUnread: session.hasUnread,
           });
@@ -79,7 +79,7 @@ export function useSessionStatuses(
   useEffect(() => {
     const unsubscribers: (() => void)[] = [];
 
-    // Process state changes (running/waiting-input/idle)
+    // Process state changes (in-turn/waiting-input/idle)
     unsubscribers.push(
       activityBus.on("process-state-changed", (event) => {
         if (!sessionIdSetRef.current.has(event.sessionId)) return;
@@ -88,15 +88,13 @@ export function useSessionStatuses(
           const next = new Map(prev);
           const current = next.get(event.sessionId) ?? {};
 
-          // When state changes to "running", clear pendingInputType since input was resolved
+          // When state changes to "in-turn", clear pendingInputType since input was resolved
           const pendingInputType =
-            event.processState === "running"
-              ? undefined
-              : current.pendingInputType;
+            event.activity === "in-turn" ? undefined : current.pendingInputType;
 
           next.set(event.sessionId, {
             ...current,
-            processState: event.processState,
+            activity: event.activity,
             pendingInputType,
           });
           return next;
@@ -104,7 +102,7 @@ export function useSessionStatuses(
       }),
     );
 
-    // Session status changes (idle/owned/external)
+    // Session ownership changes (none/self/external)
     unsubscribers.push(
       activityBus.on("session-status-changed", (event) => {
         if (!sessionIdSetRef.current.has(event.sessionId)) return;
@@ -113,11 +111,11 @@ export function useSessionStatuses(
           const next = new Map(prev);
           const current = next.get(event.sessionId) ?? {};
 
-          // When session goes idle, clear process state and pendingInputType
-          if (event.status.state === "idle") {
+          // When session goes to none ownership, clear activity and pendingInputType
+          if (event.status.owner === "none") {
             next.set(event.sessionId, {
               ...current,
-              processState: undefined,
+              activity: undefined,
               pendingInputType: undefined,
             });
           }

@@ -179,25 +179,25 @@ export function useGlobalSessions(options: UseGlobalSessionsOptions = {}) {
     }, REFETCH_DEBOUNCE_MS);
   }, [fetch]);
 
-  // Handle session status changes
+  // Handle session ownership changes
   const handleSessionStatusChange = useCallback((event: SessionStatusEvent) => {
     setSessions((prev) =>
       prev.map((session) =>
         session.id === event.sessionId
-          ? { ...session, status: event.status }
+          ? { ...session, ownership: event.status }
           : session,
       ),
     );
 
-    // Clear process state when session goes idle
-    if (event.status.state === "idle") {
+    // Clear activity when session goes to none ownership
+    if (event.status.owner === "none") {
       setSessions((prev) =>
         prev.map((session) =>
           session.id === event.sessionId
             ? {
                 ...session,
                 pendingInputType: undefined,
-                processState: undefined,
+                activity: undefined,
               }
             : session,
         ),
@@ -210,13 +210,13 @@ export function useGlobalSessions(options: UseGlobalSessionsOptions = {}) {
     setSessions((prev) =>
       prev.map((session) =>
         session.id === event.sessionId
-          ? { ...session, processState: event.processState }
+          ? { ...session, activity: event.activity }
           : session,
       ),
     );
 
-    // When state changes to "running", clear pendingInputType
-    if (event.processState === "running") {
+    // When state changes to "in-turn", clear pendingInputType
+    if (event.activity === "in-turn") {
       setSessions((prev) =>
         prev.map((session) =>
           session.id === event.sessionId
@@ -264,9 +264,9 @@ export function useGlobalSessions(options: UseGlobalSessionsOptions = {}) {
           provider: event.session.provider,
           projectId: event.session.projectId,
           projectName,
-          status: event.session.status,
+          ownership: event.session.ownership,
           pendingInputType: event.session.pendingInputType,
-          processState: event.session.processState,
+          activity: event.session.activity,
           hasUnread: event.session.hasUnread,
           customTitle: event.session.customTitle,
           isArchived: event.session.isArchived,

@@ -22,7 +22,6 @@ export type {
   ModelInfo,
   SlashCommand,
   PermissionMode,
-  SessionStatus,
   ModelOption,
   ThinkingOption,
   FileMetadata,
@@ -121,9 +120,9 @@ export type {
   AppConversationMessage,
   // Session types
   PendingInputType,
-  ProcessStateType,
+  AgentActivity,
   ContextUsage,
-  AppSessionStatus,
+  SessionOwnership,
   AppSessionSummary,
   AppSession,
   // Agent session types

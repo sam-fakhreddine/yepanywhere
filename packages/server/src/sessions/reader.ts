@@ -162,7 +162,7 @@ export class ClaudeSessionReader implements ISessionReader {
         createdAt: stats.birthtime.toISOString(),
         updatedAt: stats.mtime.toISOString(),
         messageCount: conversationMessages.length,
-        status: { state: "idle" }, // Will be updated by Supervisor
+        ownership: { owner: "none" }, // Will be updated by Supervisor
         contextUsage,
         provider: "claude",
         model,

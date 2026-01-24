@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchJSON } from "../api/client";
 import type {
+  AgentActivity,
   ContextUsage,
-  ProcessStateType,
   ProviderName,
   UrlProjectId,
 } from "../types";
@@ -16,7 +16,7 @@ export interface ProcessInfo {
   projectId: UrlProjectId;
   projectPath: string;
   projectName: string;
-  state: ProcessStateType;
+  state: AgentActivity;
   startedAt: string;
   queueDepth: number;
   /** Session title from first user message */
@@ -81,9 +81,9 @@ export function useProcesses() {
     };
   }, [fetchProcesses]);
 
-  // Count of active processes (running or waiting-input)
+  // Count of active processes (in-turn or waiting-input)
   const activeCount = processes.filter(
-    (p) => p.state === "running" || p.state === "waiting-input",
+    (p) => p.state === "in-turn" || p.state === "waiting-input",
   ).length;
 
   return {

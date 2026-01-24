@@ -114,7 +114,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "waiting-input",
+        activity: "waiting-input",
         timestamp: new Date().toISOString(),
       };
 
@@ -135,7 +135,7 @@ describe("PushNotifier", () => {
       expect(payload.requestId).toBe("req-1");
     });
 
-    it("should not send push when state is running", async () => {
+    it("should not send push when activity is in-turn", async () => {
       new PushNotifier({
         eventBus: mockEventBus,
         pushService: mockPushService,
@@ -146,7 +146,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "running",
+        activity: "in-turn",
         timestamp: new Date().toISOString(),
       };
 
@@ -171,7 +171,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "waiting-input",
+        activity: "waiting-input",
         timestamp: new Date().toISOString(),
       };
 
@@ -196,7 +196,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "waiting-input",
+        activity: "waiting-input",
         timestamp: new Date().toISOString(),
       };
 
@@ -244,7 +244,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "waiting-input",
+        activity: "waiting-input",
         timestamp: new Date().toISOString(),
       };
 
@@ -290,7 +290,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "waiting-input",
+        activity: "waiting-input",
         timestamp: new Date().toISOString(),
       };
 
@@ -337,7 +337,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "waiting-input",
+        activity: "waiting-input",
         timestamp: new Date().toISOString(),
       };
 
@@ -385,7 +385,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "waiting-input",
+        activity: "waiting-input",
         timestamp: new Date().toISOString(),
       };
 
@@ -433,7 +433,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "waiting-input",
+        activity: "waiting-input",
         timestamp: new Date().toISOString(),
       };
 
@@ -453,7 +453,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "running",
+        activity: "in-turn",
         timestamp: new Date().toISOString(),
       };
 
@@ -482,7 +482,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "running",
+        activity: "in-turn",
         timestamp: new Date().toISOString(),
       };
 
@@ -538,7 +538,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "waiting-input",
+        activity: "waiting-input",
         timestamp: new Date().toISOString(),
       };
 
@@ -556,7 +556,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "running",
+        activity: "in-turn",
         timestamp: new Date().toISOString(),
       };
 
@@ -612,7 +612,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "waiting-input",
+        activity: "waiting-input",
         timestamp: new Date().toISOString(),
       };
 
@@ -669,7 +669,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "waiting-input",
+        activity: "waiting-input",
         timestamp: new Date().toISOString(),
       };
 
@@ -718,7 +718,7 @@ describe("PushNotifier", () => {
         type: "process-state-changed",
         sessionId: "session-1",
         projectId: testProjectId,
-        processState: "waiting-input",
+        activity: "waiting-input",
         timestamp: new Date().toISOString(),
       };
 

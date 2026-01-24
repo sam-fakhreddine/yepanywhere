@@ -272,7 +272,7 @@ export class OpenCodeSessionReader implements ISessionReader {
           ? new Date(session.time.updated).toISOString()
           : stats.mtime.toISOString(),
         messageCount,
-        status: { state: "idle" }, // Will be updated by Supervisor
+        ownership: { owner: "none" }, // Will be updated by Supervisor
         contextUsage,
         provider: "opencode",
         model,

@@ -12,21 +12,21 @@ export function StatusIndicator({
   connected,
   processState = "idle",
 }: Props) {
-  // Hide when session is idle (no active subprocess from UX perspective)
-  if (status.state === "idle") {
+  // Hide when session has no owner (no active subprocess from UX perspective)
+  if (status.owner === "none") {
     return null;
   }
 
-  // Hide running state - now shown in ProviderBadge's thinking indicator
-  if (processState === "running" && connected && status.state === "owned") {
+  // Hide in-turn state - now shown in ProviderBadge's thinking indicator
+  if (processState === "in-turn" && connected && status.owner === "self") {
     return null;
   }
 
   // Determine status text for tooltip/accessibility
   const getStatusText = () => {
-    if (!connected && status.state === "owned") return "Reconnecting...";
-    if (status.state === "external") return "External process";
-    if (processState === "running") return "Processing";
+    if (!connected && status.owner === "self") return "Reconnecting...";
+    if (status.owner === "external") return "External process";
+    if (processState === "in-turn") return "Processing";
     if (processState === "waiting-input") return "Waiting for input";
     return "Ready";
   };
@@ -40,7 +40,7 @@ export function StatusIndicator({
       aria-label={statusText}
     >
       <span
-        className={`status-dot status-${status.state} process-${processState}${!connected ? " disconnected" : ""}`}
+        className={`status-dot status-${status.owner} process-${processState}${!connected ? " disconnected" : ""}`}
         role="status"
       />
     </div>

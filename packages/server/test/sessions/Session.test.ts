@@ -127,7 +127,7 @@ describe("Session", () => {
       expect(session?.createdAt).toBeDefined();
       expect(session?.updatedAt).toBeDefined();
       expect(session?.messageCount).toBe(1);
-      expect(session?.status).toEqual({ state: "idle" });
+      expect(session?.ownership).toEqual({ owner: "none" });
     });
   });
 
@@ -142,12 +142,13 @@ describe("Session", () => {
         createdAt: "2024-01-01T00:00:00Z",
         updatedAt: "2024-01-02T00:00:00Z",
         messageCount: 10,
-        status: { state: "owned", processId: "proc-1" },
+        ownership: { owner: "self", processId: "proc-1" },
         isArchived: true,
         isStarred: true,
         pendingInputType: "tool-approval",
-        processState: "waiting-input",
+        activity: "waiting-input",
         hasUnread: true,
+        provider: "claude",
       };
 
       const session = Session.fromSummary(summary, deps);
@@ -159,7 +160,7 @@ describe("Session", () => {
       expect(session.displayTitle).toBe("Custom name");
       expect(session.isArchived).toBe(true);
       expect(session.isStarred).toBe(true);
-      expect(session.isActive).toBe(true);
+      expect(session.isOwned).toBe(true);
       expect(session.isWaitingForInput).toBe(true);
       expect(session.hasUnread).toBe(true);
       expect(session.needsAttention).toBe(true);
@@ -311,7 +312,7 @@ describe("Session", () => {
       expect(json.createdAt).toBeDefined();
       expect(json.updatedAt).toBeDefined();
       expect(json.messageCount).toBe(1);
-      expect(json.status).toEqual({ state: "idle" });
+      expect(json.ownership).toEqual({ owner: "none" });
     });
   });
 
@@ -341,12 +342,12 @@ describe("Session", () => {
       expect(session?.tooltipTitle).toBe("This is a longer prompt for tooltip");
     });
 
-    it("isIdle returns true for idle sessions", async () => {
+    it("isUnowned returns true for unowned sessions", async () => {
       await createSessionFile("session-idle", "Prompt");
       const session = await Session.load("session-idle", projectId, deps);
 
-      expect(session?.isIdle).toBe(true);
-      expect(session?.isActive).toBe(false);
+      expect(session?.isUnowned).toBe(true);
+      expect(session?.isOwned).toBe(false);
       expect(session?.isExternal).toBe(false);
     });
 
@@ -359,9 +360,10 @@ describe("Session", () => {
         createdAt: "2024-01-01T00:00:00Z",
         updatedAt: "2024-01-01T00:00:00Z",
         messageCount: 1,
-        status: { state: "idle" },
+        ownership: { owner: "none" },
         hasUnread: true,
         pendingInputType: "tool-approval",
+        provider: "claude",
       };
 
       const session = Session.fromSummary(summary, deps);

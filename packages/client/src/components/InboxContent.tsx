@@ -85,9 +85,7 @@ function InboxSection({ config, items, hideProjectName }: InboxSectionProps) {
                 projectName={item.projectName}
                 updatedAt={item.updatedAt}
                 hasUnread={item.hasUnread}
-                processState={
-                  config.key === "active" ? "running" : item.processState
-                }
+                activity={config.key === "active" ? "in-turn" : item.activity}
                 pendingInputType={item.pendingInputType}
                 mode="card"
                 showProjectName={!hideProjectName}

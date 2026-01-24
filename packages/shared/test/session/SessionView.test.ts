@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type {
-  AppSessionStatus,
+  AgentActivity,
   AppSessionSummary,
+  SessionOwnership,
 } from "../../src/app-types.js";
 import type { UrlProjectId } from "../../src/projectId.js";
 import {
@@ -21,16 +22,11 @@ function createView(
     createdAt: string;
     updatedAt: string;
     messageCount: number;
-    status: AppSessionStatus;
+    ownership: SessionOwnership;
     isArchived: boolean;
     isStarred: boolean;
     pendingInputType: "tool-approval" | "user-question" | undefined;
-    processState:
-      | "running"
-      | "idle"
-      | "waiting-input"
-      | "terminated"
-      | undefined;
+    activity: AgentActivity | undefined;
     lastSeenAt: string | undefined;
     hasUnread: boolean;
     contextUsage: { inputTokens: number; percentage: number } | undefined;
@@ -47,14 +43,15 @@ function createView(
     overrides.createdAt ?? "2024-01-01T00:00:00Z",
     overrides.updatedAt ?? "2024-01-02T00:00:00Z",
     overrides.messageCount ?? 10,
-    overrides.status ?? { state: "idle" },
+    overrides.ownership ?? { owner: "none" },
     overrides.isArchived ?? false,
     overrides.isStarred ?? false,
     overrides.pendingInputType,
-    overrides.processState,
+    overrides.activity,
     overrides.lastSeenAt,
     overrides.hasUnread ?? false,
     overrides.contextUsage,
+    "claude",
   );
 }
 
@@ -183,45 +180,45 @@ describe("SessionView", () => {
     });
   });
 
-  describe("status getters", () => {
-    it("isActive returns true when status is owned", () => {
+  describe("ownership getters", () => {
+    it("isOwned returns true when owner is self", () => {
       const view = createView({
-        status: { state: "owned", processId: "proc-1" },
+        ownership: { owner: "self", processId: "proc-1" },
       });
-      expect(view.isActive).toBe(true);
-      expect(view.isIdle).toBe(false);
+      expect(view.isOwned).toBe(true);
+      expect(view.isUnowned).toBe(false);
       expect(view.isExternal).toBe(false);
     });
 
-    it("isIdle returns true when status is idle", () => {
-      const view = createView({ status: { state: "idle" } });
-      expect(view.isIdle).toBe(true);
-      expect(view.isActive).toBe(false);
+    it("isUnowned returns true when owner is none", () => {
+      const view = createView({ ownership: { owner: "none" } });
+      expect(view.isUnowned).toBe(true);
+      expect(view.isOwned).toBe(false);
       expect(view.isExternal).toBe(false);
     });
 
-    it("isExternal returns true when status is external", () => {
-      const view = createView({ status: { state: "external" } });
+    it("isExternal returns true when owner is external", () => {
+      const view = createView({ ownership: { owner: "external" } });
       expect(view.isExternal).toBe(true);
-      expect(view.isActive).toBe(false);
-      expect(view.isIdle).toBe(false);
+      expect(view.isOwned).toBe(false);
+      expect(view.isUnowned).toBe(false);
     });
   });
 
-  describe("process state getters", () => {
-    it("isRunning returns true when processState is running", () => {
-      const view = createView({ processState: "running" });
-      expect(view.isRunning).toBe(true);
+  describe("activity getters", () => {
+    it("isInTurn returns true when activity is in-turn", () => {
+      const view = createView({ activity: "in-turn" });
+      expect(view.isInTurn).toBe(true);
     });
 
-    it("isWaitingForInput returns true when processState is waiting-input", () => {
-      const view = createView({ processState: "waiting-input" });
+    it("isWaitingForInput returns true when activity is waiting-input", () => {
+      const view = createView({ activity: "waiting-input" });
       expect(view.isWaitingForInput).toBe(true);
     });
 
-    it("returns false for undefined processState", () => {
-      const view = createView({ processState: undefined });
-      expect(view.isRunning).toBe(false);
+    it("returns false for undefined activity", () => {
+      const view = createView({ activity: undefined });
+      expect(view.isInTurn).toBe(false);
       expect(view.isWaitingForInput).toBe(false);
     });
   });
@@ -262,14 +259,15 @@ describe("SessionView", () => {
         createdAt: "2024-01-01T00:00:00Z",
         updatedAt: "2024-01-02T00:00:00Z",
         messageCount: 10,
-        status: { state: "owned", processId: "proc-1" },
+        ownership: { owner: "self", processId: "proc-1" },
         isArchived: true,
         isStarred: true,
         pendingInputType: "tool-approval",
-        processState: "waiting-input",
+        activity: "waiting-input",
         lastSeenAt: "2024-01-01T12:00:00Z",
         hasUnread: true,
         contextUsage: { inputTokens: 5000, percentage: 25 },
+        provider: "claude",
       };
 
       const view = SessionView.from(summary);
@@ -282,7 +280,7 @@ describe("SessionView", () => {
       expect(view.displayTitle).toBe("Custom name");
       expect(view.isArchived).toBe(true);
       expect(view.isStarred).toBe(true);
-      expect(view.isActive).toBe(true);
+      expect(view.isOwned).toBe(true);
       expect(view.isWaitingForInput).toBe(true);
       expect(view.hasUnread).toBe(true);
       expect(view.needsAttention).toBe(true);
@@ -298,7 +296,8 @@ describe("SessionView", () => {
         createdAt: "2024-01-01T00:00:00Z",
         updatedAt: "2024-01-02T00:00:00Z",
         messageCount: 5,
-        status: { state: "idle" },
+        ownership: { owner: "none" },
+        provider: "claude",
       };
 
       const view = SessionView.from(summary);
@@ -309,7 +308,7 @@ describe("SessionView", () => {
       expect(view.isStarred).toBe(false);
       expect(view.hasUnread).toBe(false);
       expect(view.pendingInputType).toBeUndefined();
-      expect(view.processState).toBeUndefined();
+      expect(view.activity).toBeUndefined();
     });
   });
 
@@ -339,7 +338,7 @@ describe("SessionView", () => {
       expect(view.customTitle).toBeUndefined();
       expect(view.displayTitle).toBe("Untitled");
       expect(view.messageCount).toBe(0);
-      expect(view.isIdle).toBe(true);
+      expect(view.isUnowned).toBe(true);
       expect(view.isArchived).toBe(false);
       expect(view.isStarred).toBe(false);
     });

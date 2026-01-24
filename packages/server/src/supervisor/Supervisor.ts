@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ProviderName, UrlProjectId } from "@yep-anywhere/shared";
+import type { AgentActivity, PendingInputType } from "@yep-anywhere/shared";
 import { getLogger } from "../logging/logger.js";
 import { getProvider } from "../sdk/providers/index.js";
 import type { AgentProvider } from "../sdk/providers/types.js";
@@ -11,9 +12,7 @@ import type {
 } from "../sdk/types.js";
 import type {
   EventBus,
-  PendingInputType,
   ProcessStateEvent,
-  ProcessStateType,
   SessionAbortedEvent,
   SessionCreatedEvent,
   SessionStatusEvent,
@@ -31,7 +30,7 @@ import {
   DEFAULT_IDLE_PREEMPT_THRESHOLD_MS,
   type ProcessInfo,
   type ProcessOptions,
-  type SessionStatus,
+  type SessionOwnership,
   type SessionSummary,
   encodeProjectId,
 } from "./types.js";
@@ -1038,8 +1037,8 @@ export class Supervisor {
     this.sessionToProcess.set(process.sessionId, process.id);
     this.everOwnedSessions.add(process.sessionId);
 
-    const status: SessionStatus = {
-      state: "owned",
+    const ownership: SessionOwnership = {
+      owner: "self",
       processId: process.id,
       permissionMode: process.permissionMode,
       modeVersion: process.modeVersion,
@@ -1047,16 +1046,16 @@ export class Supervisor {
 
     // Emit session created event for new sessions
     if (isNewSession) {
-      this.emitSessionCreated(process, status);
+      this.emitSessionCreated(process, ownership);
     }
 
-    // Emit status change event
-    this.emitStatusChange(process.sessionId, process.projectId, status);
+    // Emit ownership change event
+    this.emitOwnershipChange(process.sessionId, process.projectId, ownership);
 
-    // Emit initial process state (process starts in running state)
+    // Emit initial agent activity (process starts in in-turn state)
     const initialState = process.state;
     if (
-      initialState.type === "running" ||
+      initialState.type === "in-turn" ||
       initialState.type === "waiting-input"
     ) {
       // Convert InputRequest.type to PendingInputType if waiting for input at start
@@ -1066,7 +1065,7 @@ export class Supervisor {
         pendingInputType =
           requestType === "tool-approval" ? "tool-approval" : "user-question";
       }
-      this.emitProcessStateChange(
+      this.emitAgentActivityChange(
         process.sessionId,
         process.projectId,
         initialState.type,
@@ -1121,19 +1120,23 @@ export class Supervisor {
           );
         }
 
-        // Emit status change for new session ID so clients can update
-        const status: SessionStatus = {
-          state: "owned",
+        // Emit ownership change for new session ID so clients can update
+        const ownership: SessionOwnership = {
+          owner: "self",
           processId: process.id,
           permissionMode: process.permissionMode,
           modeVersion: process.modeVersion,
         };
-        this.emitStatusChange(event.newSessionId, process.projectId, status);
+        this.emitOwnershipChange(
+          event.newSessionId,
+          process.projectId,
+          ownership,
+        );
       } else if (event.type === "state-change") {
-        // Emit process state change for all states that clients need to track
-        // This includes running/waiting-input (active) and idle (inactive)
+        // Emit agent activity change for all states that clients need to track
+        // This includes in-turn/waiting-input (active) and idle (inactive)
         if (
-          event.state.type === "running" ||
+          event.state.type === "in-turn" ||
           event.state.type === "waiting-input" ||
           event.state.type === "idle"
         ) {
@@ -1147,7 +1150,7 @@ export class Supervisor {
                 ? "tool-approval"
                 : "user-question";
           }
-          this.emitProcessStateChange(
+          this.emitAgentActivityChange(
             process.sessionId,
             process.projectId,
             event.state.type,
@@ -1195,14 +1198,14 @@ export class Supervisor {
       }
     }
 
-    // Emit status change event (back to idle)
-    this.emitStatusChange(process.sessionId, process.projectId, {
-      state: "idle",
+    // Emit ownership change event (back to none)
+    this.emitOwnershipChange(process.sessionId, process.projectId, {
+      owner: "none",
     });
 
-    // Emit process state change to notify clients that this session is no longer running
+    // Emit agent activity change to notify clients that this session is no longer running
     // This is needed for real-time updates (e.g., AgentsNavItem indicator)
-    this.emitProcessStateChange(process.sessionId, process.projectId, "idle");
+    this.emitAgentActivityChange(process.sessionId, process.projectId, "idle");
 
     // Emit worker activity after unregistering (worker removed)
     this.emitWorkerActivity();
@@ -1243,10 +1246,10 @@ export class Supervisor {
     return [...this.terminatedProcesses];
   }
 
-  private emitStatusChange(
+  private emitOwnershipChange(
     sessionId: string,
     projectId: UrlProjectId,
-    status: SessionStatus,
+    ownership: SessionOwnership,
   ): void {
     if (!this.eventBus) return;
 
@@ -1254,13 +1257,16 @@ export class Supervisor {
       type: "session-status-changed",
       sessionId,
       projectId,
-      status,
+      ownership,
       timestamp: new Date().toISOString(),
     };
     this.eventBus.emit(event);
   }
 
-  private emitSessionCreated(process: Process, status: SessionStatus): void {
+  private emitSessionCreated(
+    process: Process,
+    ownership: SessionOwnership,
+  ): void {
     if (!this.eventBus) return;
 
     const now = new Date().toISOString();
@@ -1272,7 +1278,7 @@ export class Supervisor {
       createdAt: now,
       updatedAt: now,
       messageCount: 0,
-      status,
+      ownership,
       provider: process.provider,
     };
 
@@ -1284,10 +1290,10 @@ export class Supervisor {
     this.eventBus.emit(event);
   }
 
-  private emitProcessStateChange(
+  private emitAgentActivityChange(
     sessionId: string,
     projectId: UrlProjectId,
-    processState: ProcessStateType,
+    activity: AgentActivity,
     pendingInputType?: PendingInputType,
   ): void {
     if (!this.eventBus) return;
@@ -1296,7 +1302,7 @@ export class Supervisor {
       type: "process-state-changed",
       sessionId,
       projectId,
-      processState,
+      activity,
       pendingInputType,
       timestamp: new Date().toISOString(),
     };
@@ -1311,7 +1317,7 @@ export class Supervisor {
     if (!this.eventBus) return;
 
     const hasActiveWork = Array.from(this.processes.values()).some(
-      (p) => p.state.type === "running" || p.state.type === "waiting-input",
+      (p) => p.state.type === "in-turn" || p.state.type === "waiting-input",
     );
 
     const event: WorkerActivityEvent = {
@@ -1509,7 +1515,7 @@ export class Supervisor {
     hasActiveWork: boolean;
   } {
     const hasActiveWork = Array.from(this.processes.values()).some(
-      (p) => p.state.type === "running" || p.state.type === "waiting-input",
+      (p) => p.state.type === "in-turn" || p.state.type === "waiting-input",
     );
     return {
       activeWorkers: this.processes.size,
