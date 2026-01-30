@@ -106,6 +106,7 @@ function ConnectionGate({ children }: Props) {
     clearAutoResumeError,
     retryAutoResume,
     currentHostId,
+    isIntentionalDisconnect,
   } = useRemoteConnection();
   const location = useLocation();
   const isLoginRoute = LOGIN_ROUTES.some(
@@ -151,8 +152,8 @@ function ConnectionGate({ children }: Props) {
     return <>{children}</>;
   }
 
-  // Connected - redirect away from login routes
-  if (isLoginRoute) {
+  // Connected - redirect away from login routes (unless user intentionally disconnected)
+  if (isLoginRoute && !isIntentionalDisconnect) {
     // Determine redirect URL based on current host
     // Note: With base="/remote/", route "/{username}/projects" becomes URL "/remote/{username}/projects"
     let redirectUrl = "/projects";

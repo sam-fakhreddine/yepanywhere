@@ -102,6 +102,8 @@ interface RemoteConnectionState {
   currentHostId: string | null;
   /** Set the current host ID (called by RelayHostRoutes after connect) */
   setCurrentHostId: (hostId: string | null) => void;
+  /** Whether user intentionally disconnected (prevents auto-redirect) */
+  isIntentionalDisconnect: boolean;
   /** Connect to server with credentials (direct mode) */
   connect: (
     wsUrl: string,
@@ -256,6 +258,8 @@ export function RemoteConnectionProvider({ children }: Props) {
   }, []);
   // Track if we've attempted auto-resume (to prevent repeated attempts)
   const [autoResumeAttempted, setAutoResumeAttempted] = useState(false);
+  // Track intentional disconnect (to prevent auto-redirect back to host after Switch Host)
+  const [isIntentionalDisconnect, setIsIntentionalDisconnect] = useState(false);
 
   // Keep stored credentials in ref for updates during the component lifecycle
   const storedRef = useRef(initialStored);
@@ -289,6 +293,7 @@ export function RemoteConnectionProvider({ children }: Props) {
     ) => {
       setIsConnecting(true);
       setError(null);
+      setIsIntentionalDisconnect(false);
       rememberMeRef.current = rememberMe;
 
       try {
@@ -378,6 +383,7 @@ export function RemoteConnectionProvider({ children }: Props) {
 
       setIsConnecting(true);
       setError(null);
+      setIsIntentionalDisconnect(false);
       rememberMeRef.current = rememberMe;
       onStatusChange?.("connecting_relay");
 
@@ -512,7 +518,10 @@ export function RemoteConnectionProvider({ children }: Props) {
     clearStoredCredentials();
     setError(null);
     setAutoResumeError(null);
-  }, [connection]);
+    // Clear host ID and mark as intentional disconnect to prevent auto-redirect
+    setCurrentHostId(null);
+    setIsIntentionalDisconnect(true);
+  }, [connection, setCurrentHostId]);
 
   const clearAutoResumeError = useCallback(() => {
     setAutoResumeError(null);
@@ -700,6 +709,7 @@ export function RemoteConnectionProvider({ children }: Props) {
     autoResumeError,
     currentHostId,
     setCurrentHostId,
+    isIntentionalDisconnect,
     connect,
     connectViaRelay,
     disconnect,
