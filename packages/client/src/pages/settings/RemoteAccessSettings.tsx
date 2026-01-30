@@ -1,10 +1,17 @@
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { RemoteAccessSetup } from "../../components/RemoteAccessSetup";
 import { useOptionalRemoteConnection } from "../../contexts/RemoteConnectionContext";
 import { getHostById } from "../../lib/hostStorage";
 
 export function RemoteAccessSettings() {
+  const navigate = useNavigate();
   const remoteConnection = useOptionalRemoteConnection();
+
+  // Handle switching hosts - disconnect and go to host picker
+  const handleSwitchHost = () => {
+    remoteConnection?.disconnect();
+    navigate("/login");
+  };
 
   // When connected via relay, show connection info and logout
   if (remoteConnection) {
@@ -29,9 +36,13 @@ export function RemoteAccessSettings() {
               <strong>Current Host</strong>
               <p>{displayName}</p>
             </div>
-            <Link to="/login" className="settings-button">
+            <button
+              type="button"
+              className="settings-button"
+              onClick={handleSwitchHost}
+            >
               Switch Host
-            </Link>
+            </button>
           </div>
           <div className="settings-item">
             <div className="settings-item-info">
