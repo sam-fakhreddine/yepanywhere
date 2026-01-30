@@ -149,8 +149,13 @@ function createAutoResumeError(
  */
 export function RelayHostRoutes() {
   const { relayUsername } = useParams<{ relayUsername: string }>();
-  const { connection, connectViaRelay, isAutoResuming, setCurrentHostId } =
-    useRemoteConnection();
+  const {
+    connection,
+    connectViaRelay,
+    isAutoResuming,
+    setCurrentHostId,
+    isIntentionalDisconnect,
+  } = useRemoteConnection();
 
   const [state, setState] = useState<ConnectionState>("checking");
   const [error, setError] = useState<AutoResumeError | null>(null);
@@ -165,6 +170,12 @@ export function RelayHostRoutes() {
     // If already connected to this host, we're good
     if (connection) {
       setState("connected");
+      return;
+    }
+
+    // If user intentionally disconnected (e.g., clicked "Switch Host"),
+    // don't try to reconnect - they're navigating away
+    if (isIntentionalDisconnect) {
       return;
     }
 
@@ -221,6 +232,7 @@ export function RelayHostRoutes() {
     connectViaRelay,
     isAutoResuming,
     setCurrentHostId,
+    isIntentionalDisconnect,
   ]);
 
   // Handle different states
