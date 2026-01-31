@@ -87,8 +87,13 @@ test.describe("Full Relay Integration", () => {
     });
 
     // Verify navigation items are present (proves API requests work through relay)
-    await expect(page.locator('a[href="/projects"]')).toBeVisible();
-    await expect(page.locator('a[href="/settings"]')).toBeVisible();
+    // In relay mode, URLs are prefixed with the relay username
+    await expect(
+      page.locator(`a[href="/${TEST_RELAY_USERNAME}/projects"]`),
+    ).toBeVisible();
+    await expect(
+      page.locator(`a[href="/${TEST_RELAY_USERNAME}/settings"]`),
+    ).toBeVisible();
   });
 
   // This test verifies that sessions persist across page refresh via relay.
@@ -193,7 +198,10 @@ test.describe("Full Relay Integration", () => {
     ).not.toBeVisible();
 
     // Verify projects are still accessible after refresh
-    await expect(page.locator('a[href="/projects"]')).toBeVisible();
+    // In relay mode, URLs are prefixed with the relay username
+    await expect(
+      page.locator(`a[href="/${TEST_RELAY_USERNAME}/projects"]`),
+    ).toBeVisible();
   });
 
   test("mock project visible through relay connection", async ({
