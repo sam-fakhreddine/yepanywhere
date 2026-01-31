@@ -1160,12 +1160,12 @@ describe("Secure WebSocket Transport E2E", () => {
 
           offset = end;
 
-          // Small delay to let server process each chunk
-          await new Promise((resolve) => setTimeout(resolve, 20));
+          // Delay to let server process each chunk (longer for CI reliability)
+          await new Promise((resolve) => setTimeout(resolve, 50));
         }
 
-        // Small delay before sending end to ensure all chunks processed
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        // Delay before sending end to ensure all chunks processed
+        await new Promise((resolve) => setTimeout(resolve, 200));
 
         // Send encrypted upload_end
         const endMsg: RelayUploadEnd = {
