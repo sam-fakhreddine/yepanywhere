@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { FloatingActionButton } from "./components/FloatingActionButton";
 import { HostOfflineModal } from "./components/HostOfflineModal";
+import { RelayConnectionBar } from "./components/RelayConnectionBar";
 import { InboxProvider } from "./contexts/InboxContext";
 import {
   RemoteConnectionProvider,
@@ -188,6 +189,7 @@ export function RemoteApp({ children }: Props) {
   return (
     <ToastProvider>
       <RemoteConnectionProvider>
+        <RelayConnectionBar />
         <ConnectionGate>{children}</ConnectionGate>
       </RemoteConnectionProvider>
     </ToastProvider>

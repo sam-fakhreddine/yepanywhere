@@ -375,3 +375,143 @@ export function findSiblingToolResults(
 
   return siblingResults;
 }
+
+/** A complete sibling branch that contains tool_use/tool_result pairs */
+export interface SiblingToolBranch {
+  /** UUID of the node on active branch where this branch diverges */
+  branchPoint: string;
+  /** All nodes in this branch (including tool_use and tool_result messages) */
+  nodes: DagNode[];
+  /** Tool use IDs in this branch that have matching results */
+  completedToolUseIds: string[];
+}
+
+/**
+ * Find complete sibling tool branches - branches that diverge from the active branch
+ * and contain completed tool_use/tool_result pairs.
+ *
+ * This handles the case where Claude spawns parallel Tasks as CHAINED messages:
+ * Each Task is in a separate assistant message that chains from the previous.
+ * When results come back, the conversation continues from one branch, leaving
+ * other tasks on "dead" branches.
+ *
+ * Example structure:
+ *   text-msg → task-1-msg → task-2-msg → task-3-msg → result-3
+ *                  │              └──→ result-2
+ *                  └──→ result-1 → continues... (ACTIVE BRANCH)
+ *
+ * In this case:
+ * - Active branch: text-msg → task-1-msg → result-1 → continues
+ * - Sibling branch: task-2-msg → task-3-msg → result-3 (with result-2 as sub-sibling)
+ *
+ * This function finds task-2-msg, task-3-msg, result-2, and result-3 as siblings.
+ *
+ * @param activeBranch - The active conversation branch
+ * @param allMessages - All raw messages from the session
+ * @returns Array of sibling branches with their nodes
+ */
+export function findSiblingToolBranches(
+  activeBranch: DagNode[],
+  allMessages: ClaudeSessionEntry[],
+): SiblingToolBranch[] {
+  if (activeBranch.length === 0) return [];
+
+  // Build maps for quick lookup
+  const activeBranchUuids = new Set(activeBranch.map((node) => node.uuid));
+
+  // Build nodeMap and childrenMap from all messages
+  const nodeMap = new Map<string, DagNode>();
+  const childrenMap = new Map<string | null, string[]>();
+
+  for (let lineIndex = 0; lineIndex < allMessages.length; lineIndex++) {
+    const raw = allMessages[lineIndex];
+    if (!raw) continue;
+
+    const uuid = "uuid" in raw ? raw.uuid : undefined;
+    if (!uuid) continue;
+
+    const parentUuid = "parentUuid" in raw ? (raw.parentUuid ?? null) : null;
+
+    const node: DagNode = { uuid, parentUuid, lineIndex, raw };
+    nodeMap.set(uuid, node);
+
+    const children = childrenMap.get(parentUuid) ?? [];
+    children.push(uuid);
+    childrenMap.set(parentUuid, children);
+  }
+
+  // Collect all tool_result IDs for checking if tool_uses are completed
+  const allToolResultIds = collectAllToolResultIds(allMessages);
+
+  // Find sibling branch starting points: children of active branch nodes that are not on active branch
+  const siblingStarts: Array<{ branchPoint: string; startUuid: string }> = [];
+  for (const node of activeBranch) {
+    const children = childrenMap.get(node.uuid) ?? [];
+    for (const childUuid of children) {
+      if (!activeBranchUuids.has(childUuid)) {
+        siblingStarts.push({ branchPoint: node.uuid, startUuid: childUuid });
+      }
+    }
+  }
+
+  // For each sibling start, walk the entire subtree and check for completed tool_uses
+  const siblingBranches: SiblingToolBranch[] = [];
+
+  for (const { branchPoint, startUuid } of siblingStarts) {
+    // Collect all nodes in this subtree using BFS
+    const subtreeNodes: DagNode[] = [];
+    const queue = [startUuid];
+    const visited = new Set<string>();
+
+    while (queue.length > 0) {
+      const uuid = queue.shift();
+      if (!uuid || visited.has(uuid)) continue;
+      visited.add(uuid);
+
+      const node = nodeMap.get(uuid);
+      if (!node) continue;
+
+      subtreeNodes.push(node);
+
+      // Add children to queue
+      const children = childrenMap.get(uuid) ?? [];
+      for (const childUuid of children) {
+        if (!visited.has(childUuid)) {
+          queue.push(childUuid);
+        }
+      }
+    }
+
+    // Check if any tool_uses in this subtree have matching results
+    const completedToolUseIds: string[] = [];
+    for (const node of subtreeNodes) {
+      const content = getMessageContent(node.raw);
+      if (!Array.isArray(content)) continue;
+
+      for (const block of content) {
+        if (typeof block === "string") continue;
+        if (
+          block.type === "tool_use" &&
+          "id" in block &&
+          block.id &&
+          allToolResultIds.has(block.id)
+        ) {
+          completedToolUseIds.push(block.id);
+        }
+      }
+    }
+
+    // Only include branches that have at least one completed tool_use
+    if (completedToolUseIds.length > 0) {
+      // Sort nodes by lineIndex for consistent ordering
+      subtreeNodes.sort((a, b) => a.lineIndex - b.lineIndex);
+      siblingBranches.push({
+        branchPoint,
+        nodes: subtreeNodes,
+        completedToolUseIds,
+      });
+    }
+  }
+
+  return siblingBranches;
+}

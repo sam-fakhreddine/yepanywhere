@@ -1,4 +1,6 @@
 import type {
+  ClaudeSessionContent,
+  ClaudeSessionEntry,
   CodexSessionContent,
   UnifiedSession,
   UrlProjectId,
@@ -8,6 +10,110 @@ import { normalizeSession } from "../../src/sessions/normalization.js";
 import type { LoadedSession } from "../../src/sessions/types.js";
 
 describe("normalizeSession", () => {
+  it("includes sibling tool_results for parallel Tasks with same parentUuid", () => {
+    // This simulates 3 parallel Task tool_uses where each produces a tool_result
+    // with the same parentUuid (all are children of the assistant message)
+    const rawMessages: ClaudeSessionEntry[] = [
+      {
+        type: "assistant",
+        uuid: "msg-1",
+        parentUuid: null,
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", id: "task-1", name: "Task", input: {} },
+            { type: "tool_use", id: "task-2", name: "Task", input: {} },
+            { type: "tool_use", id: "task-3", name: "Task", input: {} },
+          ],
+        },
+      },
+      // All 3 results have the same parentUuid - they are siblings
+      {
+        type: "user",
+        uuid: "result-1",
+        parentUuid: "msg-1",
+        message: {
+          role: "user",
+          content: [
+            { type: "tool_result", tool_use_id: "task-1", content: "Result 1" },
+          ],
+        },
+      },
+      {
+        type: "user",
+        uuid: "result-2",
+        parentUuid: "msg-1",
+        message: {
+          role: "user",
+          content: [
+            { type: "tool_result", tool_use_id: "task-2", content: "Result 2" },
+          ],
+        },
+      },
+      {
+        type: "user",
+        uuid: "result-3",
+        parentUuid: "msg-1",
+        message: {
+          role: "user",
+          content: [
+            { type: "tool_result", tool_use_id: "task-3", content: "Result 3" },
+          ],
+        },
+      },
+    ];
+
+    const mockSession: LoadedSession = {
+      summary: {
+        id: "test-session",
+        projectId: "test-project" as UrlProjectId,
+        title: "Test Session",
+        fullTitle: "Test Session",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messageCount: 4,
+        status: { state: "idle" },
+        provider: "claude",
+      },
+      data: {
+        provider: "claude",
+        session: {
+          messages: rawMessages,
+        },
+      } as UnifiedSession,
+    };
+
+    const normalized = normalizeSession(mockSession);
+
+    // Should have 4 messages: assistant + 3 tool results (2 siblings + 1 active)
+    expect(normalized.messages).toHaveLength(4);
+
+    // First message should be the assistant with 3 tool_use blocks
+    expect(normalized.messages[0].type).toBe("assistant");
+    const assistantContent = normalized.messages[0].message?.content;
+    expect(Array.isArray(assistantContent)).toBe(true);
+    expect((assistantContent as unknown[]).length).toBe(3);
+
+    // Collect all tool_use_ids from the remaining messages (tool_results)
+    const toolResultIds: string[] = [];
+    for (let i = 1; i < normalized.messages.length; i++) {
+      const msg = normalized.messages[i];
+      const content = msg.message?.content;
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block.type === "tool_result" && block.tool_use_id) {
+            toolResultIds.push(block.tool_use_id);
+          }
+        }
+      }
+    }
+
+    // All 3 task results should be present
+    expect(toolResultIds).toContain("task-1");
+    expect(toolResultIds).toContain("task-2");
+    expect(toolResultIds).toContain("task-3");
+  });
+
   it("normalizes codex-oss sessions correctly", () => {
     const mockSession: LoadedSession = {
       summary: {
@@ -56,5 +162,170 @@ describe("normalizeSession", () => {
     // The session_meta entry is not converted to a message
     expect(normalized.messages).toHaveLength(1);
     expect(normalized.messages[0].message.content).toEqual("Hello OSS");
+  });
+
+  it("includes chained parallel Tasks on sibling branches", () => {
+    // This simulates the real-world scenario where Claude spawns 3 parallel Tasks
+    // as CHAINED messages (each task in separate assistant message that chains from previous)
+    // When results come back, conversation continues from the FIRST result,
+    // leaving other tasks on "dead" branches
+    const rawMessages: ClaudeSessionEntry[] = [
+      {
+        type: "assistant",
+        uuid: "text-msg",
+        parentUuid: null,
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Let me explore..." }],
+        },
+      },
+      {
+        type: "assistant",
+        uuid: "task-1-msg",
+        parentUuid: "text-msg",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", id: "task-1-id", name: "Task", input: {} },
+          ],
+        },
+      },
+      {
+        type: "assistant",
+        uuid: "task-2-msg",
+        parentUuid: "task-1-msg",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", id: "task-2-id", name: "Task", input: {} },
+          ],
+        },
+      },
+      {
+        type: "assistant",
+        uuid: "task-3-msg",
+        parentUuid: "task-2-msg",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", id: "task-3-id", name: "Task", input: {} },
+          ],
+        },
+      },
+      // Results
+      {
+        type: "user",
+        uuid: "result-3",
+        parentUuid: "task-3-msg",
+        message: {
+          role: "user",
+          content: [
+            { type: "tool_result", tool_use_id: "task-3-id", content: "R3" },
+          ],
+        },
+      },
+      {
+        type: "user",
+        uuid: "result-2",
+        parentUuid: "task-2-msg",
+        message: {
+          role: "user",
+          content: [
+            { type: "tool_result", tool_use_id: "task-2-id", content: "R2" },
+          ],
+        },
+      },
+      {
+        type: "user",
+        uuid: "result-1",
+        parentUuid: "task-1-msg",
+        message: {
+          role: "user",
+          content: [
+            { type: "tool_result", tool_use_id: "task-1-id", content: "R1" },
+          ],
+        },
+      },
+      // Conversation continues from result-1, making task-2 and task-3 on dead branches
+      {
+        type: "assistant",
+        uuid: "cont-1",
+        parentUuid: "result-1",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Excellent..." }],
+        },
+      },
+      {
+        type: "user",
+        uuid: "cont-2",
+        parentUuid: "cont-1",
+        message: { role: "user", content: "Continue" },
+      },
+      {
+        type: "assistant",
+        uuid: "cont-3",
+        parentUuid: "cont-2",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Sure..." }],
+        },
+      },
+      {
+        type: "user",
+        uuid: "cont-4",
+        parentUuid: "cont-3",
+        message: { role: "user", content: "More" },
+      },
+    ];
+
+    const mockSession: LoadedSession = {
+      summary: {
+        id: "test-session",
+        projectId: "test-project" as UrlProjectId,
+        title: "Test Session",
+        fullTitle: "Test Session",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messageCount: 11,
+        status: { state: "idle" },
+        provider: "claude",
+      },
+      data: {
+        provider: "claude",
+        session: {
+          messages: rawMessages,
+        },
+      } as UnifiedSession,
+    };
+
+    const normalized = normalizeSession(mockSession);
+
+    // Collect all tool_use IDs and tool_result IDs from normalized messages
+    const toolUseIds: string[] = [];
+    const toolResultIds: string[] = [];
+    for (const msg of normalized.messages) {
+      const content = msg.message?.content;
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block.type === "tool_use" && block.id) {
+            toolUseIds.push(block.id);
+          }
+          if (block.type === "tool_result" && block.tool_use_id) {
+            toolResultIds.push(block.tool_use_id);
+          }
+        }
+      }
+    }
+
+    // All 3 Task tool_uses should be present
+    expect(toolUseIds).toContain("task-1-id");
+    expect(toolUseIds).toContain("task-2-id");
+    expect(toolUseIds).toContain("task-3-id");
+
+    // All 3 Task results should be present
+    expect(toolResultIds).toContain("task-1-id");
+    expect(toolResultIds).toContain("task-2-id");
+    expect(toolResultIds).toContain("task-3-id");
   });
 });

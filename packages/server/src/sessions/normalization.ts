@@ -20,6 +20,7 @@ import {
   buildDag,
   collectAllToolResultIds,
   findOrphanedToolUses,
+  findSiblingToolBranches,
   findSiblingToolResults,
 } from "./dag.js";
 import type { LoadedSession } from "./types.js";
@@ -62,6 +63,13 @@ export function normalizeSession(loaded: LoadedSession): Session {
         rawMessages,
       );
 
+      // Find complete sibling tool branches (tool_use + tool_result pairs on dead branches)
+      // This handles the case where Claude spawns parallel tasks as chained messages
+      const siblingToolBranches = findSiblingToolBranches(
+        activeBranch,
+        rawMessages,
+      );
+
       // Build a map of parentUuid -> sibling tool_results for efficient insertion
       const siblingsByParent = new Map<string, Message[]>();
       for (const sibling of siblingToolResults) {
@@ -78,7 +86,21 @@ export function normalizeSession(loaded: LoadedSession): Session {
         }
       }
 
-      // Convert active branch to Message objects, inserting sibling tool_results after their parent
+      // Build a map of branchPoint -> sibling branch nodes for chained parallel tasks
+      const siblingBranchesByParent = new Map<string, Message[]>();
+      for (const branch of siblingToolBranches) {
+        const converted = branch.nodes.map((node) =>
+          convertClaudeMessage(node.raw, -1, new Set<string>()),
+        );
+        const existing = siblingBranchesByParent.get(branch.branchPoint);
+        if (existing) {
+          existing.push(...converted);
+        } else {
+          siblingBranchesByParent.set(branch.branchPoint, converted);
+        }
+      }
+
+      // Convert active branch to Message objects, inserting sibling branches after their parent
       const messages: Message[] = [];
       for (let i = 0; i < activeBranch.length; i++) {
         const node = activeBranch[i];
@@ -90,6 +112,12 @@ export function normalizeSession(loaded: LoadedSession): Session {
         const siblings = siblingsByParent.get(node.uuid);
         if (siblings) {
           messages.push(...siblings);
+        }
+
+        // Insert any sibling tool branches that branch from this node
+        const siblingBranchNodes = siblingBranchesByParent.get(node.uuid);
+        if (siblingBranchNodes) {
+          messages.push(...siblingBranchNodes);
         }
       }
 

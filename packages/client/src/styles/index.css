@@ -8006,3 +8006,41 @@ a.sidebar-nav-item {
   padding-top: var(--space-2);
   border-top: 1px solid var(--border-subtle);
 }
+
+/* ==========================================================================
+   Relay Connection Bar
+   ========================================================================== */
+
+.relay-connection-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 9999;
+  pointer-events: none;
+  transition: background-color 0.3s ease;
+}
+
+.relay-connection-connected {
+  background-color: var(--success-color);
+}
+
+.relay-connection-connecting {
+  background-color: var(--thinking-color);
+  animation: connection-pulse 1.5s ease-in-out infinite;
+}
+
+.relay-connection-disconnected {
+  background-color: var(--error-color);
+}
+
+@keyframes connection-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}

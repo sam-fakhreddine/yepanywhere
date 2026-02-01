@@ -181,6 +181,28 @@ export function RelayHostRoutes() {
         return;
       }
 
+      // If currentHostId is not set (e.g., after auto-resume from old storage),
+      // try to find the host by relay username and set it
+      if (!currentHostId) {
+        const hostByUsername = getHostByRelayUsername(relayUsername);
+        if (hostByUsername) {
+          console.log(
+            `[RelayHostRoutes] Connection without hostId, setting to "${hostByUsername.id}" for "${relayUsername}"`,
+          );
+          setCurrentHostId(hostByUsername.id);
+          setState("connected");
+          return;
+        }
+        // No saved host for this username - can't verify connection matches URL
+        // Disconnect and redirect to login for this host
+        console.log(
+          `[RelayHostRoutes] Connection without hostId and no saved host for "${relayUsername}", redirecting to login`,
+        );
+        disconnect(false);
+        setState("no_host");
+        return;
+      }
+
       // Connected to a different host - disconnect and let the effect reconnect
       // Use isIntentional=false so the effect will reconnect to the new host
       console.log(
@@ -194,26 +216,48 @@ export function RelayHostRoutes() {
     // If user intentionally disconnected (e.g., clicked "Switch Host"),
     // don't try to reconnect - they're navigating away
     if (isIntentionalDisconnect) {
+      console.log(
+        `[RelayHostRoutes] Intentional disconnect, not reconnecting to "${relayUsername}"`,
+      );
       return;
     }
 
     // If auto-resume is in progress, wait for it
     if (isAutoResuming) {
+      console.log(
+        `[RelayHostRoutes] Auto-resume in progress, waiting... (relayUsername="${relayUsername}")`,
+      );
       setState("connecting");
       return;
     }
 
     // Look up saved host by relay username
     const host = getHostByRelayUsername(relayUsername);
+    console.log(
+      `[RelayHostRoutes] Looking up host for "${relayUsername}":`,
+      host
+        ? {
+            id: host.id,
+            hasSession: !!host.session,
+            hasRelayUrl: !!host.relayUrl,
+          }
+        : "not found",
+    );
 
     if (!host) {
       // No saved host - redirect to login with pre-filled username
+      console.log(
+        `[RelayHostRoutes] No saved host for "${relayUsername}", redirecting to login`,
+      );
       setState("no_host");
       return;
     }
 
     if (!host.session || !host.relayUrl) {
       // Host exists but no session - need to login
+      console.log(
+        `[RelayHostRoutes] Host "${relayUsername}" has no session or relayUrl, redirecting to login`,
+      );
       setState("no_session");
       return;
     }

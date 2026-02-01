@@ -4,6 +4,7 @@ import {
   buildDag,
   collectAllToolResultIds,
   findOrphanedToolUses,
+  findSiblingToolBranches,
   findSiblingToolResults,
 } from "../../src/sessions/dag.js";
 
@@ -618,5 +619,207 @@ describe("findSiblingToolResults", () => {
     expect(siblingResults.length).toBe(1);
     expect(siblingResults[0]?.toolUseIds).toContain("tool-1");
     expect(siblingResults[0]?.toolUseIds).toContain("tool-2");
+  });
+
+  it("finds separate sibling tool_results for 3 parallel Tasks with same parentUuid", () => {
+    // Real-world scenario: Claude spawns 3 parallel Task calls
+    // Each Task produces its own tool_result message, all with same parentUuid
+    // The DAG selects one as active, the other 2 are siblings
+    const messages: RawSessionMessage[] = [
+      {
+        type: "assistant",
+        uuid: "msg-1",
+        parentUuid: null,
+        message: {
+          content: [
+            { type: "tool_use", id: "task-1", name: "Task" },
+            { type: "tool_use", id: "task-2", name: "Task" },
+            { type: "tool_use", id: "task-3", name: "Task" },
+          ],
+        },
+      },
+      // All 3 results have the same parentUuid (siblings of each other)
+      {
+        type: "user",
+        uuid: "result-1",
+        parentUuid: "msg-1",
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "task-1" }],
+        },
+      },
+      {
+        type: "user",
+        uuid: "result-2",
+        parentUuid: "msg-1",
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "task-2" }],
+        },
+      },
+      {
+        type: "user",
+        uuid: "result-3",
+        parentUuid: "msg-1",
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "task-3" }],
+        },
+      },
+    ];
+
+    const { activeBranch } = buildDag(messages);
+    const siblingResults = findSiblingToolResults(activeBranch, messages);
+
+    // Active branch: msg-1 → result-3 (last by lineIndex)
+    // This is because all results have same conversation length (1 user/assistant message each)
+    // and result-3 has the highest lineIndex
+    expect(activeBranch.map((n) => n.uuid)).toEqual(["msg-1", "result-3"]);
+
+    // The other 2 results should be found as siblings
+    expect(siblingResults.length).toBe(2);
+
+    // Extract all found tool_use_ids from siblings
+    const siblingToolUseIds = siblingResults.flatMap((s) => s.toolUseIds);
+    expect(siblingToolUseIds).toContain("task-1");
+    expect(siblingToolUseIds).toContain("task-2");
+    // task-3 is on active branch, not a sibling
+    expect(siblingToolUseIds).not.toContain("task-3");
+
+    // All siblings should have parentUuid pointing to msg-1
+    for (const sibling of siblingResults) {
+      expect(sibling.parentUuid).toBe("msg-1");
+    }
+  });
+
+  it("finds chained parallel Tasks where later tasks end up on dead branches", () => {
+    // Real-world scenario: Claude spawns 3 parallel Tasks as CHAINED messages
+    // Each Task is in a separate assistant message that chains from the previous
+    // When results come back, the conversation continues from the FIRST result,
+    // leaving the other tasks on dead branches
+    //
+    // Structure:
+    // text-msg → task-1-msg → task-2-msg → task-3-msg → result-3
+    //                │              └──→ result-2
+    //                └──→ result-1 → cont-1 → cont-2 → ... (ACTIVE BRANCH)
+    const messages: RawSessionMessage[] = [
+      {
+        type: "assistant",
+        uuid: "text-msg",
+        parentUuid: null,
+        message: { content: [{ type: "text", text: "Let me explore..." }] },
+      },
+      {
+        type: "assistant",
+        uuid: "task-1-msg",
+        parentUuid: "text-msg",
+        message: {
+          content: [{ type: "tool_use", id: "task-1-id", name: "Task" }],
+        },
+      },
+      {
+        type: "assistant",
+        uuid: "task-2-msg",
+        parentUuid: "task-1-msg",
+        message: {
+          content: [{ type: "tool_use", id: "task-2-id", name: "Task" }],
+        },
+      },
+      {
+        type: "assistant",
+        uuid: "task-3-msg",
+        parentUuid: "task-2-msg",
+        message: {
+          content: [{ type: "tool_use", id: "task-3-id", name: "Task" }],
+        },
+      },
+      // Results come back - task-3 finishes first
+      {
+        type: "user",
+        uuid: "result-3",
+        parentUuid: "task-3-msg",
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "task-3-id" }],
+        },
+      },
+      {
+        type: "user",
+        uuid: "result-2",
+        parentUuid: "task-2-msg",
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "task-2-id" }],
+        },
+      },
+      {
+        type: "user",
+        uuid: "result-1",
+        parentUuid: "task-1-msg",
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "task-1-id" }],
+        },
+      },
+      // Conversation continues significantly from result-1 (making it the active branch)
+      // This is what happens in real sessions - Claude continues working after all tasks complete
+      {
+        type: "assistant",
+        uuid: "cont-1",
+        parentUuid: "result-1",
+        message: { content: [{ type: "text", text: "Excellent..." }] },
+      },
+      {
+        type: "user",
+        uuid: "cont-2",
+        parentUuid: "cont-1",
+        message: { content: "Continue please" },
+      },
+      {
+        type: "assistant",
+        uuid: "cont-3",
+        parentUuid: "cont-2",
+        message: { content: [{ type: "text", text: "Sure..." }] },
+      },
+      {
+        type: "user",
+        uuid: "cont-4",
+        parentUuid: "cont-3",
+        message: { content: "More" },
+      },
+    ];
+
+    const { activeBranch } = buildDag(messages);
+
+    // Active branch follows the longest path through result-1 → cont-1 → cont-2 → cont-3 → cont-4
+    // This is 7 nodes vs 5 nodes for the task-3 path
+    expect(activeBranch.map((n) => n.uuid)).toEqual([
+      "text-msg",
+      "task-1-msg",
+      "result-1",
+      "cont-1",
+      "cont-2",
+      "cont-3",
+      "cont-4",
+    ]);
+
+    // The old function findSiblingToolResults only finds results for tool_uses on the ACTIVE branch.
+    // task-2-id and task-3-id are NOT on the active branch, so it finds 0.
+    const siblingResults = findSiblingToolResults(activeBranch, messages);
+    expect(siblingResults.length).toBe(0);
+
+    // The new function findSiblingToolBranches finds complete sibling branches
+    // that contain tool_use/tool_result pairs, even when the tool_use is on a dead branch.
+    const siblingBranches = findSiblingToolBranches(activeBranch, messages);
+
+    // Should find 1 sibling branch starting from task-1-msg (the branch point)
+    // This branch contains: task-2-msg, task-3-msg, result-3, result-2
+    expect(siblingBranches.length).toBe(1);
+    expect(siblingBranches[0]?.branchPoint).toBe("task-1-msg");
+
+    // The sibling branch should contain all 4 nodes
+    const siblingUuids = siblingBranches[0]?.nodes.map((n) => n.uuid) ?? [];
+    expect(siblingUuids).toContain("task-2-msg");
+    expect(siblingUuids).toContain("task-3-msg");
+    expect(siblingUuids).toContain("result-2");
+    expect(siblingUuids).toContain("result-3");
+
+    // Both task-2 and task-3 should be marked as completed
+    expect(siblingBranches[0]?.completedToolUseIds).toContain("task-2-id");
+    expect(siblingBranches[0]?.completedToolUseIds).toContain("task-3-id");
   });
 });
