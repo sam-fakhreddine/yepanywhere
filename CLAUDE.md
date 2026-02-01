@@ -111,6 +111,17 @@ The CI workflow verifies the changelog contains an entry for the version being r
 
 The workflow runs lint, typecheck, and tests, then builds with `pnpm build:bundle` and publishes with `--provenance` for supply chain attestation. It also creates a GitHub Release with auto-generated notes.
 
+## Releasing the Website
+
+The website (landing pages + remote relay client at `/remote`) is deployed separately from npm. See `site/RELEASING.md` for the full process.
+
+Quick reference:
+```bash
+# Update site/CHANGELOG.md first, then:
+git tag site-v1.1.0
+git push origin site-v1.1.0
+```
+
 ## Server Logs
 
 Server logs are written to `{dataDir}/logs/` (default: `~/.yep-anywhere/logs/`):

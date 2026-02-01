@@ -2,13 +2,8 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'site/**'
-      - 'packages/client/**'
-      - 'packages/shared/**'
-      - '.github/workflows/pages.yml'
+    tags:
+      - 'site-v*'
   workflow_dispatch:
 
 permissions:
