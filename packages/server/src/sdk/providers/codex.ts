@@ -5,9 +5,7 @@
  * The SDK reads auth from ~/.codex/auth.json automatically.
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { execSync } from "node:child_process";
 import {
   Codex,
   type CodexOptions,
@@ -39,20 +37,6 @@ export interface CodexProviderConfig {
   baseUrl?: string;
   /** API key override (normally read from ~/.codex/auth.json) */
   apiKey?: string;
-}
-
-/**
- * Auth info from ~/.codex/auth.json
- */
-interface CodexAuthJson {
-  OPENAI_API_KEY?: string | null;
-  tokens?: {
-    id_token?: string;
-    access_token?: string;
-    refresh_token?: string;
-    account_id?: string;
-  };
-  last_refresh?: string;
 }
 
 /**
@@ -98,13 +82,22 @@ export class CodexProvider implements AgentProvider {
   }
 
   /**
-   * Check if the Codex SDK/CLI is available.
+   * Check if the Codex CLI is installed.
    */
   async isInstalled(): Promise<boolean> {
-    // The SDK wraps the CLI, so check if auth file exists
-    // which indicates the CLI has been set up
-    const authPath = join(homedir(), ".codex", "auth.json");
-    return existsSync(authPath);
+    return this.isCodexCliInstalled();
+  }
+
+  /**
+   * Check if Codex CLI is installed by looking for it in PATH.
+   */
+  private isCodexCliInstalled(): boolean {
+    try {
+      execSync("which codex", { stdio: "ignore" });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -117,49 +110,16 @@ export class CodexProvider implements AgentProvider {
 
   /**
    * Get detailed authentication status.
+   * If Codex CLI is installed, assume it's authenticated.
+   * The SDK handles auth internally and will error at session start if not authenticated.
    */
   async getAuthStatus(): Promise<AuthStatus> {
-    const authPath = join(homedir(), ".codex", "auth.json");
-
-    if (!existsSync(authPath)) {
-      return {
-        installed: false,
-        authenticated: false,
-        enabled: false,
-      };
-    }
-
-    try {
-      const authData: CodexAuthJson = JSON.parse(
-        readFileSync(authPath, "utf-8"),
-      );
-
-      // Check if we have OAuth tokens or API key
-      const hasTokens =
-        authData.tokens?.access_token || authData.tokens?.refresh_token;
-      const hasApiKey =
-        authData.OPENAI_API_KEY && authData.OPENAI_API_KEY !== null;
-
-      if (!hasTokens && !hasApiKey) {
-        return {
-          installed: true,
-          authenticated: false,
-          enabled: false,
-        };
-      }
-
-      return {
-        installed: true,
-        authenticated: true,
-        enabled: true,
-      };
-    } catch {
-      return {
-        installed: true,
-        authenticated: false,
-        enabled: false,
-      };
-    }
+    const installed = this.isCodexCliInstalled();
+    return {
+      installed,
+      authenticated: installed,
+      enabled: installed,
+    };
   }
 
   /**

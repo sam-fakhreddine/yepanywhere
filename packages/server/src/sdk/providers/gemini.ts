@@ -57,16 +57,6 @@ export interface GeminiProviderConfig {
 }
 
 /**
- * OAuth credentials from ~/.gemini/oauth_creds.json
- */
-interface GeminiOAuthCreds {
-  access_token?: string;
-  refresh_token?: string;
-  expiry_date?: number;
-  token_type?: string;
-}
-
-/**
  * Settings from ~/.gemini/settings.json
  */
 interface GeminiSettings {
@@ -114,66 +104,16 @@ export class GeminiProvider implements AgentProvider {
 
   /**
    * Get detailed authentication status.
+   * If Gemini CLI is installed, assume it's authenticated.
+   * The CLI handles auth internally and will error at session start if not authenticated.
    */
   async getAuthStatus(): Promise<AuthStatus> {
     const installed = await this.isInstalled();
-    if (!installed) {
-      return {
-        installed: false,
-        authenticated: false,
-        enabled: false,
-      };
-    }
-
-    // Read OAuth credentials from ~/.gemini/oauth_creds.json
-    const credsPath = join(homedir(), ".gemini", "oauth_creds.json");
-    if (!existsSync(credsPath)) {
-      return {
-        installed: true,
-        authenticated: false,
-        enabled: false,
-      };
-    }
-
-    try {
-      const creds: GeminiOAuthCreds = JSON.parse(
-        readFileSync(credsPath, "utf-8"),
-      );
-
-      // Check if tokens exist
-      if (!creds.access_token && !creds.refresh_token) {
-        return {
-          installed: true,
-          authenticated: false,
-          enabled: false,
-        };
-      }
-
-      // Check expiry
-      let expiresAt: Date | undefined;
-      let authenticated = true;
-      if (creds.expiry_date) {
-        expiresAt = new Date(creds.expiry_date);
-        // If access token is expired but we have refresh token, still consider authenticated
-        // The CLI will handle token refresh
-        if (expiresAt < new Date() && !creds.refresh_token) {
-          authenticated = false;
-        }
-      }
-
-      return {
-        installed: true,
-        authenticated,
-        enabled: authenticated,
-        expiresAt,
-      };
-    } catch {
-      return {
-        installed: true,
-        authenticated: false,
-        enabled: false,
-      };
-    }
+    return {
+      installed,
+      authenticated: installed,
+      enabled: installed,
+    };
   }
 
   /**
