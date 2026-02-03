@@ -1023,10 +1023,7 @@ describe("Secure WebSocket Transport E2E", () => {
       });
     }
 
-    // Skip: Timing-sensitive test that's flaky on slow CI runners.
-    // The test works locally but the message collection timeout races with
-    // server processing time. Tested manually and via other upload tests.
-    it.skip("should upload file using encrypted binary format 0x02 chunks", async () => {
+    it("should upload file using encrypted binary format 0x02 chunks", async () => {
       const ws = await connectWebSocket();
 
       try {
@@ -1164,13 +1161,7 @@ describe("Secure WebSocket Transport E2E", () => {
           ws.send(envelope);
 
           offset = end;
-
-          // Delay to let server process each chunk (longer for CI reliability)
-          await new Promise((resolve) => setTimeout(resolve, 50));
         }
-
-        // Delay before sending end to ensure all chunks processed
-        await new Promise((resolve) => setTimeout(resolve, 200));
 
         // Send encrypted upload_end
         const endMsg: RelayUploadEnd = {

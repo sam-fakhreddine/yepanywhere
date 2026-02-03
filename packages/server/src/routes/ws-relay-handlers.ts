@@ -124,6 +124,8 @@ export interface RelayUploadState {
   bytesReceived: number;
   /** Last progress report sent */
   lastProgressReport: number;
+  /** Pending chunk write promises (awaited before completing upload) */
+  pendingWrites: Promise<void>[];
 }
 
 /**
@@ -801,6 +803,7 @@ export async function handleUploadStart(
       expectedSize: size,
       bytesReceived: 0,
       lastProgressReport: 0,
+      pendingWrites: [],
     });
 
     send({ type: "upload_progress", uploadId, bytesReceived: 0 });
@@ -841,6 +844,13 @@ export async function handleUploadChunk(
     return;
   }
 
+  // Track this write so handleUploadEnd can wait for it
+  let writeResolve: () => void;
+  const writeTracker = new Promise<void>((resolve) => {
+    writeResolve = resolve;
+  });
+  state.pendingWrites.push(writeTracker);
+
   try {
     const chunk = Buffer.from(data, "base64");
     const bytesReceived = await uploadManager.writeChunk(
@@ -867,6 +877,8 @@ export async function handleUploadChunk(
     } catch {
       // Ignore cleanup errors
     }
+  } finally {
+    writeResolve?.();
   }
 }
 
@@ -915,6 +927,13 @@ export async function handleBinaryUploadChunk(
     return;
   }
 
+  // Track this write so handleUploadEnd can wait for it
+  let writeResolve: () => void;
+  const writeTracker = new Promise<void>((resolve) => {
+    writeResolve = resolve;
+  });
+  state.pendingWrites.push(writeTracker);
+
   try {
     const bytesReceived = await uploadManager.writeChunk(
       state.serverUploadId,
@@ -940,6 +959,8 @@ export async function handleBinaryUploadChunk(
     } catch {
       // Ignore cleanup errors
     }
+  } finally {
+    writeResolve?.();
   }
 }
 
@@ -959,6 +980,9 @@ export async function handleUploadEnd(
     send({ type: "upload_error", uploadId, error: "Upload not found" });
     return;
   }
+
+  // Wait for any pending chunk writes to complete before finalizing
+  await Promise.all(state.pendingWrites);
 
   try {
     const file = await uploadManager.completeUpload(state.serverUploadId);
