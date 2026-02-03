@@ -25,7 +25,6 @@ import { NavigationLayout } from "../layouts";
 import { getHostById, getHostByRelayUsername } from "../lib/hostStorage";
 import { ActivityPage } from "./ActivityPage";
 import { AgentsPage } from "./AgentsPage";
-import { BeadsPage } from "./BeadsPage";
 import { FilePage } from "./FilePage";
 import { GlobalSessionsPage } from "./GlobalSessionsPage";
 import { InboxPage } from "./InboxPage";
@@ -67,7 +66,6 @@ function RelayHostInnerRoutes() {
               <Route path="projects" element={<ProjectsPage />} />
               <Route path="sessions" element={<GlobalSessionsPage />} />
               <Route path="agents" element={<AgentsPage />} />
-              <Route path="tasks" element={<BeadsPage />} />
               <Route path="inbox" element={<InboxPage />} />
               <Route path="settings" element={<SettingsLayout />} />
               <Route path="settings/:category" element={<SettingsLayout />} />

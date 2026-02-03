@@ -357,13 +357,6 @@ export function Sidebar({
             />
             <AgentsNavItem onClick={onNavigate} basePath={basePath} />
             <SidebarNavItem
-              to="/tasks"
-              icon={SidebarIcons.tasks}
-              label="Tasks"
-              onClick={onNavigate}
-              basePath={basePath}
-            />
-            <SidebarNavItem
               to="/settings"
               icon={SidebarIcons.settings}
               label="Settings"

@@ -23,7 +23,6 @@ import { initializeTheme } from "./hooks/useTheme";
 import { NavigationLayout } from "./layouts";
 import { ActivityPage } from "./pages/ActivityPage";
 import { AgentsPage } from "./pages/AgentsPage";
-import { BeadsPage } from "./pages/BeadsPage";
 import { DirectLoginPage } from "./pages/DirectLoginPage";
 import { FilePage } from "./pages/FilePage";
 import { GlobalSessionsPage } from "./pages/GlobalSessionsPage";
@@ -77,7 +76,6 @@ createRoot(rootElement).render(
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/sessions" element={<GlobalSessionsPage />} />
             <Route path="/agents" element={<AgentsPage />} />
-            <Route path="/tasks" element={<BeadsPage />} />
             <Route path="/inbox" element={<InboxPage />} />
             <Route path="/settings" element={<SettingsLayout />} />
             <Route path="/settings/:category" element={<SettingsLayout />} />

@@ -30,7 +30,6 @@ import type {
 } from "./remote-access/index.js";
 import { createRemoteAccessRoutes } from "./remote-access/index.js";
 import { createActivityRoutes } from "./routes/activity.js";
-import { createBeadsRoutes } from "./routes/beads.js";
 import { createBrowserProfilesRoutes } from "./routes/browser-profiles.js";
 import { createConnectionsRoutes } from "./routes/connections.js";
 import { createDebugStreamingRoutes } from "./routes/debug-streaming.js";
@@ -419,9 +418,6 @@ export function createApp(options: AppOptions): AppResult {
       geminiSessionsDir: GEMINI_TMP_DIR,
     }),
   );
-
-  // Beads task tracker routes (project-scoped) - must be before files routes
-  app.route("/api/projects", createBeadsRoutes({ scanner }));
 
   // Files routes (file browser)
   app.route("/api/projects", createFilesRoutes({ scanner }));

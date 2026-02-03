@@ -783,35 +783,6 @@ export const api = {
       method: "DELETE",
     }),
 
-  // Beads (task tracker) API - project-scoped
-  getBeadsStatus: (projectId: string) =>
-    fetchJSON<{
-      installed: boolean;
-      initialized: boolean;
-      totalIssues?: number;
-      openCount?: number;
-      closedCount?: number;
-      readyCount?: number;
-    }>(`/projects/${projectId}/beads/status`),
-
-  getBeadsList: (projectId: string) =>
-    fetchJSON<{
-      issues: BeadsIssue[];
-      status: {
-        installed: boolean;
-        initialized: boolean;
-      };
-    }>(`/projects/${projectId}/beads/list`),
-
-  getBeadsReady: (projectId: string) =>
-    fetchJSON<{
-      issues: BeadsIssue[];
-      status: {
-        installed: boolean;
-        initialized: boolean;
-      };
-    }>(`/projects/${projectId}/beads/ready`),
-
   // Onboarding API (first-run wizard state)
   getOnboardingStatus: () => fetchJSON<{ complete: boolean }>("/onboarding"),
 
@@ -879,21 +850,4 @@ export interface ServerSettings {
   serviceWorkerEnabled: boolean;
   /** SSH host aliases for remote executors */
   remoteExecutors?: string[];
-}
-
-/**
- * A beads issue (task) from the bd CLI.
- */
-export interface BeadsIssue {
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-  priority: number;
-  issue_type: string;
-  created_at: string;
-  created_by: string;
-  updated_at: string;
-  dependency_count?: number;
-  dependent_count?: number;
 }
