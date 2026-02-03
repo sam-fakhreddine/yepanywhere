@@ -845,7 +845,7 @@ export async function handleUploadChunk(
   }
 
   // Track this write so handleUploadEnd can wait for it
-  let writeResolve: () => void;
+  let writeResolve!: () => void;
   const writeTracker = new Promise<void>((resolve) => {
     writeResolve = resolve;
   });
@@ -928,7 +928,7 @@ export async function handleBinaryUploadChunk(
   }
 
   // Track this write so handleUploadEnd can wait for it
-  let writeResolve: () => void;
+  let writeResolve!: () => void;
   const writeTracker = new Promise<void>((resolve) => {
     writeResolve = resolve;
   });
