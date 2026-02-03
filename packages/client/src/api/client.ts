@@ -187,11 +187,22 @@ export async function fetchJSON<T>(
       authEvents.signalLoginRequired();
     }
 
+    // Try to parse error message from response body
+    let errorMessage = `API error: ${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json();
+      if (body.error) {
+        errorMessage = body.error;
+      } else if (body.message) {
+        errorMessage = body.message;
+      }
+    } catch {
+      // Response body wasn't JSON, use default message
+    }
+
     // Include setup required info in error for auth handling
     const setupRequired = res.headers.get("X-Setup-Required") === "true";
-    const error = new Error(
-      `API error: ${res.status} ${res.statusText}`,
-    ) as Error & {
+    const error = new Error(errorMessage) as Error & {
       status: number;
       setupRequired?: boolean;
     };
