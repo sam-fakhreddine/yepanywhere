@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2025-02-03
+
+### Added
+- Relay connection status bar
+- Website release process with tag-based deployment
+
+### Fixed
+- Sibling tool branches in conversation tree
+
+### Changed
+- Simplify Claude, Codex, and Gemini auth to CLI detection only
+- Update claude-agent-sdk to 0.2.29
+
 ## [0.2.1] - 2025-01-31
 
 ### Added
