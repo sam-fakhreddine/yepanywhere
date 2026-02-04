@@ -93,7 +93,17 @@ Open http://localhost:3400 in your browser. The app auto-detects installed CLI a
 
 ## Remote Access
 
-**Easiest:** Use our free public relay at `relay.yepanywhere.com` — just enable it in Settings. All traffic is end-to-end encrypted (SRP-6a + TweetNaCl) and we can't see your data. No accounts required.
+**Easiest:** Use our free public relay — configure it in Settings, or via CLI for headless setups:
+
+```bash
+yepanywhere --setup-remote-access --username myserver --password "secretpass123"
+```
+
+Then connect from anywhere at [yepanywhere.com/remote](https://yepanywhere.com/remote).
+
+All traffic is end-to-end encrypted (SRP-6a + TweetNaCl) and we can't see your data. No accounts required.
+
+> **Note:** If you run `--setup-remote-access` while the server is running, restart it to pick up the new config.
 
 **Self-hosted:** Prefer to run your own infrastructure? Use Tailscale, Caddy, or any reverse proxy with SSL termination. See the [remote access docs](docs/project/remote-access.md) for details.
 

@@ -2,13 +2,19 @@
 
 Yep Anywhere runs on your development machine. To access it from your phone or another device outside your local network, you'll need to set up remote access.
 
-## Secure Relay (Coming Soon)
+## Secure Relay
 
-We're building a zero-config relay that makes remote access simple:
+The easiest way to access Yep Anywhere remotely. Zero-config, no port forwarding required.
 
-1. **Set up once**: Enter a username and password in Settings → Remote Access
-2. **Connect from anywhere**: Visit `yepanywhere.com/c/yourusername` (URL TBD) and enter your password
-3. **That's it** — no accounts, no Tailscale, no port forwarding
+**Setup via Settings UI:**
+1. Go to Settings → Remote Access
+2. Enter a username and password
+3. Connect from anywhere at `yepanywhere.com/remote`
+
+**Setup via CLI (for headless/automated deployments):**
+```bash
+yepanywhere --setup-remote-access --username myserver --password "secretpass123"
+```
 
 **How it works:**
 - Your yepanywhere server connects to our public relay
@@ -25,9 +31,9 @@ See [relay-design.md](relay-design.md) for technical details.
 
 ---
 
-## Current Options
+## Alternative Options
 
-Until the relay is ready, use one of these options. All require you to trust some external party with routing your traffic.
+If you prefer not to use the relay, here are other options. All require you to trust some external party with routing your traffic.
 
 ## Option 1: Tailscale (Recommended)
 
