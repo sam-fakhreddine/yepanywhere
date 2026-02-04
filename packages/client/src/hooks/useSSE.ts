@@ -87,8 +87,24 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
         }
         setConnected(false);
         mountedUrlRef.current = null;
-        // Reconnect after short delay
-        reconnectTimeoutRef.current = setTimeout(connectFn, 500);
+
+        // For remote mode, force reconnect the underlying WebSocket first
+        // This handles half-open sockets where readyState is OPEN but the connection is dead
+        const globalConn = getGlobalConnection();
+        if (globalConn?.forceReconnect && useWebSocketRef.current) {
+          globalConn
+            .forceReconnect()
+            .then(() => {
+              reconnectTimeoutRef.current = setTimeout(connectFn, 100);
+            })
+            .catch((err) => {
+              console.error("[useSSE] Force reconnect failed:", err);
+              reconnectTimeoutRef.current = setTimeout(connectFn, 2000);
+            });
+        } else {
+          // Local mode - just reconnect after short delay
+          reconnectTimeoutRef.current = setTimeout(connectFn, 500);
+        }
       }
     }, STALE_CHECK_INTERVAL_MS);
   }, []);
@@ -253,6 +269,9 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
         ) => {
           // Track last event time for stale detection
           lastEventTimeRef.current = Date.now();
+          if (eventType === "heartbeat") {
+            hasReceivedHeartbeatRef.current = true;
+          }
           if (eventId) {
             lastEventIdRef.current = eventId;
           }
@@ -393,6 +412,16 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
         reconnectTimeoutRef.current = setTimeout(connect, 2000);
       };
 
+      // Handle stream ending cleanly (e.g., server restart before first heartbeat)
+      sse.onclose = () => {
+        console.log("[useSSE] Stream closed, reconnecting");
+        setConnected(false);
+        stopStaleCheck();
+        eventSourceRef.current = null;
+        mountedUrlRef.current = null;
+        reconnectTimeoutRef.current = setTimeout(connect, 2000);
+      };
+
       eventSourceRef.current = sse;
     },
     [connect, startStaleCheck, stopStaleCheck],
@@ -404,8 +433,7 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
     // Handle visibility changes to force reconnect when page becomes visible
     // This is needed because:
     // - Local mode: SSE connections go stale during phone sleep
-    // - Remote mode: SecureConnection.forceReconnect() doesn't re-establish session subscriptions
-    //   (only ActivityBus explicitly re-subscribes, session streams are orphaned)
+    // - Remote mode: WebSocket may be half-open (readyState OPEN but connection dead)
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         const hiddenDuration = Date.now() - lastVisibleTimeRef.current;
@@ -425,8 +453,24 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
           }
           setConnected(false);
           mountedUrlRef.current = null;
-          // Reconnect immediately
-          connect();
+
+          // For remote mode, force reconnect the underlying WebSocket first
+          // This handles half-open sockets where readyState is OPEN but the connection is dead
+          const globalConn = getGlobalConnection();
+          if (globalConn?.forceReconnect && useWebSocketRef.current) {
+            globalConn
+              .forceReconnect()
+              .then(() => {
+                connect();
+              })
+              .catch((err) => {
+                console.error("[useSSE] Force reconnect failed:", err);
+                reconnectTimeoutRef.current = setTimeout(connect, 2000);
+              });
+          } else {
+            // Local mode - reconnect immediately
+            connect();
+          }
         }
       } else {
         lastVisibleTimeRef.current = Date.now();

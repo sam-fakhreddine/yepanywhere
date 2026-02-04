@@ -67,6 +67,8 @@ export class FetchSSE {
   onopen: (() => void) | null = null;
   /** Called on error (includes status code for HTTP errors) */
   onerror: ((error: SSEError) => void) | null = null;
+  /** Called when stream ends cleanly (not due to error) */
+  onclose: (() => void) | null = null;
 
   /** Connection state (mirrors EventSource): 0=CONNECTING, 1=OPEN, 2=CLOSED */
   get readyState(): number {
@@ -259,8 +261,9 @@ export class FetchSSE {
         const { done, value } = await reader.read();
 
         if (done) {
-          // Stream ended - attempt reconnect
+          // Stream ended - notify and attempt reconnect
           this.log("stream ended");
+          this.onclose?.();
           this.scheduleReconnect();
           return;
         }
