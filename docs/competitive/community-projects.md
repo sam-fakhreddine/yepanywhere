@@ -85,6 +85,28 @@ Tech: Node.js, Express, WebSocket, Chrome DevTools Protocol
 
 ---
 
+### Moshi
+**Website:** https://getmoshi.app/
+**Status:** Beta (free during beta, iOS App Store)
+
+Mobile terminal specifically for AI coding agents:
+- Uses Mosh protocol for network resilience (survives connection switches, device sleep)
+- Voice-to-terminal via on-device dictation
+- Face ID security for SSH keys in Keychain
+- Native tmux integration
+- Task completion notifications
+- Custom terminal keyboard (Ctrl, Esc, arrows)
+- Session recovery if interrupted by iOS
+- Multiple themes (Nord, Dracula, Solarized)
+
+Platform: iOS (Android in development per GitHub)
+
+Tech: Native iOS, Mosh protocol
+
+**Note:** Different approach than web-based solutions. Native app with Mosh gives better connection resilience than WebSocket-based approaches. Marketing specifically targets "Check on Claude Code from the couch" use case.
+
+---
+
 ## Patterns Observed
 
 1. **Tailscale is popular** — Many use it for secure remote access

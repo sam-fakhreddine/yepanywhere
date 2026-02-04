@@ -884,6 +884,8 @@ function SessionPageContent({
             status={status}
             processState={processState}
             contextUsage={session.contextUsage}
+            sessionStreamConnected={connected}
+            lastSessionEventAt={lastSSEActivityAt}
             onClose={() => setShowProcessInfoModal(false)}
           />
         )}

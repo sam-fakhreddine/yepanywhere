@@ -33,6 +33,10 @@ interface ProcessInfoModalProps {
   status: SessionStatus;
   processState: ProcessState;
   contextUsage?: ContextUsage;
+  /** Whether the session-specific SSE stream is connected */
+  sessionStreamConnected: boolean;
+  /** Timestamp of last SSE activity for this session */
+  lastSessionEventAt?: string | null;
   onClose: () => void;
 }
 
@@ -118,6 +122,8 @@ export function ProcessInfoModal({
   status,
   processState,
   contextUsage,
+  sessionStreamConnected,
+  lastSessionEventAt,
   onClose,
 }: ProcessInfoModalProps) {
   const [processInfo, setProcessInfo] = useState<ProcessInfo | null>(null);
@@ -199,14 +205,30 @@ export function ProcessInfoModal({
         {/* Connection Info */}
         <Section title="Connection">
           <InfoRow
-            label="Event stream"
+            label="Activity stream"
             value={streamConnected ? "Connected" : "Disconnected"}
           />
-          <InfoRow label="Last event" value={formatTimeAgo(lastEventTime)} />
+          <InfoRow label="Last activity" value={formatTimeAgo(lastEventTime)} />
           {lastReconnectTime && (
             <InfoRow
               label="Last reconnect"
               value={formatTimeAgo(lastReconnectTime)}
+            />
+          )}
+          <InfoRow
+            label="Session stream"
+            value={
+              status.owner === "self"
+                ? sessionStreamConnected
+                  ? "Connected"
+                  : "Disconnected"
+                : "Not subscribed"
+            }
+          />
+          {status.owner === "self" && lastSessionEventAt && (
+            <InfoRow
+              label="Last session event"
+              value={formatTimeAgo(new Date(lastSessionEventAt).getTime())}
             />
           )}
         </Section>

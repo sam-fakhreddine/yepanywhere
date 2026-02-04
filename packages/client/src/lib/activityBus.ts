@@ -158,6 +158,13 @@ type Listener<T> = (data: T) => void;
 
 const API_BASE = "/api";
 const RECONNECT_DELAY_MS = 2000;
+/**
+ * Time without events before considering connection stale and forcing reconnect.
+ * Server sends heartbeats every 30s, so 45s gives margin for network latency.
+ */
+const STALE_THRESHOLD_MS = 45_000;
+/** How often to check for stale connections */
+const STALE_CHECK_INTERVAL_MS = 10_000;
 
 /**
  * Singleton that manages activity event subscriptions.
@@ -174,6 +181,9 @@ class ActivityBus {
   private useWebSocket = false;
   private _lastEventTime: number | null = null;
   private _lastReconnectTime: number | null = null;
+  private staleCheckInterval: ReturnType<typeof setInterval> | null = null;
+  /** Track if we've received heartbeats (proves server supports them) */
+  private hasReceivedHeartbeat = false;
 
   get connected(): boolean {
     return this._connected;
@@ -187,6 +197,45 @@ class ActivityBus {
   /** Timestamp of last reconnect attempt */
   get lastReconnectTime(): number | null {
     return this._lastReconnectTime;
+  }
+
+  /**
+   * Start periodic stale connection check.
+   * If no events received within STALE_THRESHOLD_MS, force reconnect.
+   * Only triggers if we've received heartbeats (proves server supports them).
+   */
+  private startStaleCheck(): void {
+    // Don't start if already running
+    if (this.staleCheckInterval) return;
+
+    this.staleCheckInterval = setInterval(() => {
+      // Only check if we've received heartbeats (backward compat with old servers)
+      // and we have a lastEventTime to compare against
+      if (
+        !this._connected ||
+        !this._lastEventTime ||
+        !this.hasReceivedHeartbeat
+      )
+        return;
+
+      const timeSinceLastEvent = Date.now() - this._lastEventTime;
+      if (timeSinceLastEvent > STALE_THRESHOLD_MS) {
+        console.warn(
+          `[ActivityBus] Connection stale (no events in ${Math.round(timeSinceLastEvent / 1000)}s), forcing reconnect`,
+        );
+        this.forceReconnect();
+      }
+    }, STALE_CHECK_INTERVAL_MS);
+  }
+
+  /**
+   * Stop the stale connection check interval.
+   */
+  private stopStaleCheck(): void {
+    if (this.staleCheckInterval) {
+      clearInterval(this.staleCheckInterval);
+      this.staleCheckInterval = null;
+    }
   }
 
   /**
@@ -245,6 +294,7 @@ class ActivityBus {
         const isReconnect = this.hasConnected;
         this.hasConnected = true;
         this._connected = true;
+        this.startStaleCheck();
 
         if (isReconnect) {
           this.emit("reconnect", undefined);
@@ -254,6 +304,7 @@ class ActivityBus {
         console.error("[ActivityBus] Connection error:", err);
         this._connected = false;
         this.wsSubscription = null;
+        this.stopStaleCheck();
 
         // Don't reconnect for non-retryable errors (e.g., auth required)
         if (isNonRetryableError(err)) {
@@ -275,6 +326,7 @@ class ActivityBus {
         console.log("[ActivityBus] Connection closed, reconnecting...");
         this._connected = false;
         this.wsSubscription = null;
+        this.stopStaleCheck();
         this.reconnectTimeout = setTimeout(
           () => this.connect(),
           RECONNECT_DELAY_MS,
@@ -300,6 +352,7 @@ class ActivityBus {
           const isReconnect = this.hasConnected;
           this.hasConnected = true;
           this._connected = true;
+          this.startStaleCheck();
 
           if (isReconnect) {
             this.emit("reconnect", undefined);
@@ -309,6 +362,7 @@ class ActivityBus {
           console.error("[ActivityBus] WebSocket error:", err);
           this._connected = false;
           this.wsSubscription = null;
+          this.stopStaleCheck();
 
           // Don't reconnect for non-retryable errors (e.g., auth required)
           if (isNonRetryableError(err)) {
@@ -330,6 +384,7 @@ class ActivityBus {
           console.log("[ActivityBus] WebSocket closed, reconnecting...");
           this._connected = false;
           this.wsSubscription = null;
+          this.stopStaleCheck();
           this.reconnectTimeout = setTimeout(
             () => this.connect(),
             RECONNECT_DELAY_MS,
@@ -347,7 +402,11 @@ class ActivityBus {
     this._lastEventTime = Date.now();
 
     // Handle special events
-    if (eventType === "connected" || eventType === "heartbeat") {
+    if (eventType === "heartbeat") {
+      this.hasReceivedHeartbeat = true;
+      return;
+    }
+    if (eventType === "connected") {
       return;
     }
 
@@ -414,6 +473,7 @@ class ActivityBus {
       const isReconnect = this.hasConnected;
       this.hasConnected = true;
       this._connected = true;
+      this.startStaleCheck();
 
       if (isReconnect) {
         this.emit("reconnect", undefined);
@@ -462,12 +522,18 @@ class ActivityBus {
       this.handleEvent("worker-activity-changed", event),
     );
 
-    // Ignore these - just acknowledge receipt
-    sse.addEventListener("connected", () => {});
-    sse.addEventListener("heartbeat", () => {});
+    // Track event times for stale detection
+    sse.addEventListener("connected", () => {
+      this._lastEventTime = Date.now();
+    });
+    sse.addEventListener("heartbeat", () => {
+      this._lastEventTime = Date.now();
+      this.hasReceivedHeartbeat = true;
+    });
 
     sse.onerror = (error) => {
       this._connected = false;
+      this.stopStaleCheck();
       sse.close();
       this.eventSource = null;
 
@@ -491,6 +557,7 @@ class ActivityBus {
    * Disconnect from the activity stream.
    */
   disconnect(): void {
+    this.stopStaleCheck();
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;

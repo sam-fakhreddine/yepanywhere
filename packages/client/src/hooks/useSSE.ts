@@ -9,6 +9,16 @@ import {
 import { FetchSSE } from "../lib/connection/FetchSSE";
 import { getWebsocketTransportEnabled } from "./useDeveloperMode";
 
+/**
+ * Time without events before considering connection stale and forcing reconnect.
+ * Server sends heartbeats every 30s, so 45s gives margin for network latency.
+ */
+const STALE_THRESHOLD_MS = 45_000;
+/** How often to check for stale connections */
+const STALE_CHECK_INTERVAL_MS = 10_000;
+/** How long page must be hidden before forcing reconnect on visibility change */
+const VISIBILITY_RECONNECT_THRESHOLD_MS = 5_000;
+
 interface UseSSEOptions {
   onMessage: (data: { eventType: string; [key: string]: unknown }) => void;
   onError?: (error: Event) => void;
@@ -37,6 +47,59 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
   const mountedUrlRef = useRef<string | null>(null);
   // Track if using WebSocket
   const useWebSocketRef = useRef(false);
+  // Track last event time for stale connection detection
+  const lastEventTimeRef = useRef<number | null>(null);
+  const staleCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+  // Track if we've received heartbeats (proves server supports them)
+  const hasReceivedHeartbeatRef = useRef(false);
+  // Track when page was last visible (for visibility change reconnect)
+  const lastVisibleTimeRef = useRef<number>(Date.now());
+
+  // Start periodic stale connection check
+  // Only triggers if we've received heartbeats (backward compat with old servers)
+  const startStaleCheck = useCallback((connectFn: () => void) => {
+    if (staleCheckIntervalRef.current) return;
+
+    staleCheckIntervalRef.current = setInterval(() => {
+      // Only check if we've received heartbeats and have a lastEventTime
+      if (!lastEventTimeRef.current || !hasReceivedHeartbeatRef.current) return;
+
+      const timeSinceLastEvent = Date.now() - lastEventTimeRef.current;
+      if (timeSinceLastEvent > STALE_THRESHOLD_MS) {
+        console.warn(
+          `[useSSE] Connection stale (no events in ${Math.round(timeSinceLastEvent / 1000)}s), forcing reconnect`,
+        );
+        // Stop the interval first to prevent multiple reconnects
+        if (staleCheckIntervalRef.current) {
+          clearInterval(staleCheckIntervalRef.current);
+          staleCheckIntervalRef.current = null;
+        }
+        // Clear current connections
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+          eventSourceRef.current = null;
+        }
+        if (wsSubscriptionRef.current) {
+          wsSubscriptionRef.current.close();
+          wsSubscriptionRef.current = null;
+        }
+        setConnected(false);
+        mountedUrlRef.current = null;
+        // Reconnect after short delay
+        reconnectTimeoutRef.current = setTimeout(connectFn, 500);
+      }
+    }, STALE_CHECK_INTERVAL_MS);
+  }, []);
+
+  // Stop the stale connection check
+  const stopStaleCheck = useCallback(() => {
+    if (staleCheckIntervalRef.current) {
+      clearInterval(staleCheckIntervalRef.current);
+      staleCheckIntervalRef.current = null;
+    }
+  }, []);
 
   const connect = useCallback(() => {
     if (!url) {
@@ -113,6 +176,11 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
           eventId: string | undefined,
           data: unknown,
         ) => {
+          // Track last event time for stale detection
+          lastEventTimeRef.current = Date.now();
+          if (eventType === "heartbeat") {
+            hasReceivedHeartbeatRef.current = true;
+          }
           if (eventId) {
             lastEventIdRef.current = eventId;
           }
@@ -123,10 +191,13 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
         },
         onOpen: () => {
           setConnected(true);
+          lastEventTimeRef.current = Date.now();
+          startStaleCheck(connect);
           optionsRef.current.onOpen?.();
         },
         onError: (error: Error) => {
           setConnected(false);
+          stopStaleCheck();
           optionsRef.current.onError?.(new Event("error"));
 
           // Don't reconnect for non-retryable errors (e.g., auth required)
@@ -149,6 +220,7 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
         onClose: () => {
           // Connection closed cleanly (e.g., relay restart) - trigger reconnect
           setConnected(false);
+          stopStaleCheck();
           wsSubscriptionRef.current = null;
           mountedUrlRef.current = null;
           reconnectTimeoutRef.current = setTimeout(connect, 2000);
@@ -161,7 +233,7 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
         lastEventIdRef.current ?? undefined,
       );
     },
-    [connect],
+    [connect, startStaleCheck, stopStaleCheck],
   );
 
   const connectWebSocket = useCallback(
@@ -179,6 +251,8 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
           eventId: string | undefined,
           data: unknown,
         ) => {
+          // Track last event time for stale detection
+          lastEventTimeRef.current = Date.now();
           if (eventId) {
             lastEventIdRef.current = eventId;
           }
@@ -190,10 +264,13 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
         },
         onOpen: () => {
           setConnected(true);
+          lastEventTimeRef.current = Date.now();
+          startStaleCheck(connect);
           optionsRef.current.onOpen?.();
         },
         onError: (error: Error) => {
           setConnected(false);
+          stopStaleCheck();
           // Create a synthetic error event for compatibility
           optionsRef.current.onError?.(new Event("error"));
 
@@ -217,6 +294,7 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
         onClose: () => {
           // Connection closed cleanly (e.g., relay restart) - trigger reconnect
           setConnected(false);
+          stopStaleCheck();
           wsSubscriptionRef.current = null;
           mountedUrlRef.current = null;
           reconnectTimeoutRef.current = setTimeout(connect, 2000);
@@ -229,7 +307,7 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
         lastEventIdRef.current ?? undefined,
       );
     },
-    [connect],
+    [connect, startStaleCheck, stopStaleCheck],
   );
 
   const connectSSE = useCallback(
@@ -251,11 +329,18 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
 
       sse.onopen = () => {
         setConnected(true);
+        lastEventTimeRef.current = Date.now();
+        startStaleCheck(connect);
         optionsRef.current.onOpen?.();
       };
 
       // Handle named events from SSE stream
       const handleEvent = (eventType: string) => (event: MessageEvent) => {
+        // Track last event time for stale detection
+        lastEventTimeRef.current = Date.now();
+        if (eventType === "heartbeat") {
+          hasReceivedHeartbeatRef.current = true;
+        }
         if (event.lastEventId) {
           lastEventIdRef.current = event.lastEventId;
         }
@@ -290,6 +375,7 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
 
       sse.onerror = (error) => {
         setConnected(false);
+        stopStaleCheck();
         optionsRef.current.onError?.(new Event("error"));
 
         // Don't reconnect for auth errors (FetchSSE handles signaling)
@@ -309,13 +395,49 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
 
       eventSourceRef.current = sse;
     },
-    [connect],
+    [connect, startStaleCheck, stopStaleCheck],
   );
 
   useEffect(() => {
     connect();
 
+    // Handle visibility changes to force reconnect when page becomes visible
+    // This is needed because:
+    // - Local mode: SSE connections go stale during phone sleep
+    // - Remote mode: SecureConnection.forceReconnect() doesn't re-establish session subscriptions
+    //   (only ActivityBus explicitly re-subscribes, session streams are orphaned)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        const hiddenDuration = Date.now() - lastVisibleTimeRef.current;
+        if (hiddenDuration > VISIBILITY_RECONNECT_THRESHOLD_MS) {
+          console.log(
+            `[useSSE] Page visible after ${Math.round(hiddenDuration / 1000)}s, forcing reconnect`,
+          );
+          // Clear current connections
+          stopStaleCheck();
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+          }
+          if (wsSubscriptionRef.current) {
+            wsSubscriptionRef.current.close();
+            wsSubscriptionRef.current = null;
+          }
+          setConnected(false);
+          mountedUrlRef.current = null;
+          // Reconnect immediately
+          connect();
+        }
+      } else {
+        lastVisibleTimeRef.current = Date.now();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      stopStaleCheck();
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
@@ -328,7 +450,7 @@ export function useSSE(url: string | null, options: UseSSEOptions) {
       // This is needed for StrictMode where cleanup runs between mounts
       mountedUrlRef.current = null;
     };
-  }, [connect]);
+  }, [connect, stopStaleCheck]);
 
   return { connected };
 }
