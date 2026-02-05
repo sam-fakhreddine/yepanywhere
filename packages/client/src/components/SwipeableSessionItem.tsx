@@ -265,6 +265,10 @@ export function SwipeableSessionItem({
       <div
         ref={containerRef}
         className={`swipeable-session-item ${state.isDragging ? "swipeable-session-item--dragging" : ""}`}
+        data-testid={`swipeable-session-${session.id}`}
+        data-session-id={session.id}
+        data-swipe-action={state.action}
+        data-swipe-offset={offset}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -318,10 +322,12 @@ export function SwipeableSessionItem({
           {/* biome-ignore lint/a11y/useKeyWithClickEvents: Backdrop click is optional convenience, dialog has Cancel button */}
           <div
             className="swipeable-delete-dialog-overlay"
+            data-testid="delete-dialog-overlay"
             onClick={handleDeleteCancel}
           />
           <dialog
             className="swipeable-delete-dialog"
+            data-testid="delete-dialog"
             open
             aria-labelledby="delete-dialog-title"
             onClose={handleDeleteCancel}
@@ -335,6 +341,7 @@ export function SwipeableSessionItem({
               <button
                 type="button"
                 className="swipeable-delete-dialog__cancel"
+                data-testid="delete-dialog-cancel"
                 onClick={handleDeleteCancel}
               >
                 Cancel
@@ -342,6 +349,7 @@ export function SwipeableSessionItem({
               <button
                 type="button"
                 className="swipeable-delete-dialog__confirm"
+                data-testid="delete-dialog-confirm"
                 onClick={handleDeleteConfirm}
               >
                 Delete
