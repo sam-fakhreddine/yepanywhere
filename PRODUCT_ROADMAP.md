@@ -12,6 +12,34 @@ This roadmap prioritizes **individual productivity** and **small team workflows*
 2. **Mobile-First Experience** - Optimize for on-the-go supervision
 3. **Power User Productivity** - Templates, workflows, and automation
 4. **Lightweight Collaboration** - Simple sharing for small teams
+5. **Resilience & Recovery** - Checkpoints, rollback, and error handling
+
+---
+
+## Market Context
+
+### Competitive Landscape
+No existing tool provides a dedicated mobile-first supervision experience for server-side AI agents:
+- **IDE Extensions** (Cursor, Cline, Windsurf, Continue) — Desktop-only, tied to editor sessions
+- **Autonomous Agents** (Devin) — High-cost, enterprise-focused, limited user control
+- **Mobile Dev Tools** (GitHub Mobile, CircleCI) — Code review and CI, not AI agent supervision
+- **AI Orchestration** (LangChain, CrewAI) — Developer frameworks, not end-user tools
+
+**Yep Anywhere's unique position:** Mobile-first supervision for server-owned AI agents.
+
+### Target Personas
+
+| Persona | Description | Key Need |
+|---------|-------------|----------|
+| **Solo Indie Developer** | Side projects, freelance work, limited time | Approve from phone while away from desk |
+| **Freelance Consultant** | Client work, multiple projects | Multi-session management, cost tracking |
+| **Small Agency Lead** | 2-5 person team, shared workflows | Session sharing, handoff notes |
+| **Early-Stage Startup CTO** | Wearing many hats, always mobile | Quick approvals, budget alerts |
+
+### Pricing Strategy (Future)
+- **Free:** 3 sessions, basic features
+- **Solo ($8/mo):** Unlimited sessions, templates, cost tracking
+- **Team ($20/mo):** Session sharing, annotations, team cost attribution
 
 ---
 
@@ -29,6 +57,21 @@ This roadmap prioritizes **individual productivity** and **small team workflows*
 - Tool-specific rules (e.g., "auto-approve Edit for .md files")
 - Project-level rule templates
 - Quick "always allow this" from approval prompt
+
+---
+
+### Accessibility Suite (P0)
+**Why Q1:** Inclusive design from day one. Screen reader support and high contrast modes benefit all users.
+
+**Effort:** Medium (2-3 weeks)
+**Impact:** High - expands addressable market, improves UX for everyone
+
+**Features:**
+- Full VoiceOver/TalkBack support for all interactive elements
+- High contrast mode and customizable font sizes
+- Reduced motion option for animations
+- Keyboard navigation for web interface
+- ARIA labels and semantic HTML throughout
 
 ---
 
@@ -67,6 +110,19 @@ This roadmap prioritizes **individual productivity** and **small team workflows*
 
 ---
 
+### Home Screen Widgets (P1)
+**Why Q1:** Glanceable session status without opening the app.
+
+**Effort:** Medium (2-3 weeks)
+**Impact:** Medium - reduces friction for frequent checkers
+
+**Widget Types:**
+- **Session Status Widget** - Shows active sessions with progress indicators
+- **Quick Actions Widget** - One-tap to approve pending requests
+- **Cost Summary Widget** - Today's/week's spending at a glance
+
+---
+
 ## Q2 2026: Mobile Power
 **Theme:** *Make mobile the primary interface for agent supervision*
 
@@ -81,6 +137,36 @@ This roadmap prioritizes **individual productivity** and **small team workflows*
 - "Deny"
 - "View Details" (opens app)
 - Works with iOS/Android action buttons
+
+---
+
+### Agent Retry with Escalation (P0)
+**Why Q2:** Agents fail. Users need smart recovery options, not manual restarts.
+
+**Effort:** Medium (2-3 weeks)
+**Impact:** High - reduces frustration from failures
+
+**Features:**
+- Automatic retry with exponential backoff for transient errors
+- "Retry with more context" - adds error details to prompt
+- "Escalate to different model" - switch from Haiku to Sonnet on failure
+- Configurable retry policies per project
+- Failure analytics to identify recurring issues
+
+---
+
+### Session Checkpoints and Rollback (P0)
+**Why Q2:** Mistakes happen. Users need a safety net to recover from bad agent outputs.
+
+**Effort:** Large (4-5 weeks)
+**Impact:** High - critical for user confidence
+
+**Features:**
+- Auto-checkpoint before destructive operations (file writes, bash commands)
+- Manual checkpoint creation ("Save state here")
+- One-click rollback to any checkpoint
+- Diff view between checkpoints
+- Checkpoint annotations ("Before refactoring auth")
 
 ---
 
@@ -117,6 +203,35 @@ This roadmap prioritizes **individual productivity** and **small team workflows*
 
 ---
 
+### Live Activities / Dynamic Island (P1)
+**Why Q2:** iOS users expect real-time status on lock screen and Dynamic Island.
+
+**Effort:** Medium (2-3 weeks)
+**Impact:** Medium - premium mobile experience
+
+**Features:**
+- Live Activity showing current session progress
+- Dynamic Island compact/expanded views
+- Real-time token usage counter
+- Approval request indicator with direct action
+
+---
+
+### Prompt Snippets Library (P1)
+**Why Q2:** Users repeat similar instructions. Snippets save typing and ensure consistency.
+
+**Effort:** Small (1-2 weeks)
+**Impact:** Medium - productivity boost for power users
+
+**Features:**
+- Save frequently used prompts as snippets
+- Quick insert with keyboard shortcut or picker
+- Variable placeholders (e.g., `{{filename}}`, `{{language}}`)
+- Snippet categories and search
+- Import/export for sharing
+
+---
+
 ### Floating Mini-Player (P2)
 **Why Q2:** See agent progress while navigating elsewhere in app.
 
@@ -127,6 +242,20 @@ This roadmap prioritizes **individual productivity** and **small team workflows*
 - Collapsible floating card with latest message
 - Tap to expand, swipe to dismiss
 - Shows typing indicator and tool use
+
+---
+
+### Smartwatch Quick Actions (P2)
+**Why Q2:** Approve from your wrist. Ultimate mobile convenience.
+
+**Effort:** Medium (3-4 weeks)
+**Impact:** Small - niche but delightful
+
+**Features:**
+- Apple Watch / Wear OS companion app
+- Approve/Deny notifications with haptic feedback
+- Session status complications
+- Voice reply for simple responses
 
 ---
 
@@ -150,6 +279,21 @@ This roadmap prioritizes **individual productivity** and **small team workflows*
 2. Coding Agent: Implement feature
 3. Testing Agent: Write and run tests
 4. Documentation Agent: Update README
+
+---
+
+### Session Annotations and Handoff Notes (P0)
+**Why Q3:** Small teams need context when picking up someone else's session.
+
+**Effort:** Medium (2-3 weeks)
+**Impact:** High - enables async collaboration
+
+**Features:**
+- Add timestamped notes to any point in session
+- "Handoff summary" - AI-generated context for next person
+- @mentions for team members (with notification)
+- Pin important annotations to session header
+- Export annotations with session
 
 ---
 
@@ -187,6 +331,55 @@ This roadmap prioritizes **individual productivity** and **small team workflows*
 
 ---
 
+### Session Export to Shareable Formats (P1)
+**Why Q3:** Share session insights outside the app.
+
+**Effort:** Small (1-2 weeks)
+**Impact:** Medium - enables knowledge sharing
+
+**Export Formats:**
+- Markdown (for documentation, wikis)
+- PDF (for stakeholder reports)
+- HTML (standalone shareable page)
+- JSON (for programmatic access)
+
+**Options:**
+- Include/exclude tool outputs
+- Redact sensitive paths/tokens
+- Custom header/footer branding
+
+---
+
+### Context Injection Rules (P1)
+**Why Q3:** Automatically include relevant context without manual copy-paste.
+
+**Effort:** Medium (2-3 weeks)
+**Impact:** Medium - improves agent effectiveness
+
+**Features:**
+- Auto-inject README, CONTRIBUTING.md on first message
+- Include recent git commits for context
+- Inject relevant error logs when debugging
+- Project-specific context rules
+- Token budget management for injected context
+
+---
+
+### Per-Project Cost Attribution with Export (P1)
+**Why Q3:** Freelancers and agencies need to bill clients accurately.
+
+**Effort:** Medium (2 weeks)
+**Impact:** Medium - enables client billing
+
+**Features:**
+- Assign sessions to projects/clients
+- Per-project cost dashboards
+- Export invoiceable reports (CSV, PDF)
+- Set per-project budgets with alerts
+- Historical cost trends by project
+
+---
+
 ### Usage Analytics Dashboard (P2)
 **Why Q3:** Understand patterns, optimize workflows.
 
@@ -198,6 +391,34 @@ This roadmap prioritizes **individual productivity** and **small team workflows*
 - Token usage trends
 - Most-used tools and approval patterns
 - Peak usage hours
+
+---
+
+### Local Model Gateway (P2)
+**Why Q3:** Use local LLMs for cost savings or privacy requirements.
+
+**Effort:** Medium (3-4 weeks)
+**Impact:** Small - niche but valuable for privacy-conscious users
+
+**Features:**
+- Connect to Ollama, LM Studio, or custom endpoints
+- Model routing rules (local for simple tasks, cloud for complex)
+- Fallback to cloud on local timeout
+- Cost comparison dashboard (local vs cloud)
+
+---
+
+### Session Watch (P2)
+**Why Q3:** Let teammates observe sessions in real-time without interfering.
+
+**Effort:** Medium (2-3 weeks)
+**Impact:** Small - useful for pair programming and mentoring
+
+**Features:**
+- "Watch" link that opens read-only live view
+- See typing, tool calls, and outputs in real-time
+- Optional: allow watchers to send suggestions (owner approves)
+- Viewer count indicator
 
 ---
 
@@ -215,6 +436,21 @@ This roadmap prioritizes **individual productivity** and **small team workflows*
 - Press-and-hold to dictate
 - Real-time transcription preview
 - Works in notification quick-reply
+
+---
+
+### Context-Aware Gesture System (P1)
+**Why Q4:** Gestures that adapt to what you're viewing.
+
+**Effort:** Medium (2-3 weeks)
+**Impact:** Medium - power user efficiency
+
+**Features:**
+- Two-finger swipe to approve all pending
+- Pinch to collapse/expand code blocks
+- Long-press for context menu anywhere
+- Shake to undo last action
+- Customizable gesture mappings
 
 ---
 
@@ -245,6 +481,21 @@ This roadmap prioritizes **individual productivity** and **small team workflows*
 
 ---
 
+### Session Analytics Dashboard (P2)
+**Why Q4:** Deep insights into agent behavior and effectiveness.
+
+**Effort:** Medium (2-3 weeks)
+**Impact:** Small - power user optimization
+
+**Metrics:**
+- Success rate by prompt type
+- Average tokens per task category
+- Tool usage patterns and failures
+- Time-to-completion trends
+- Cost efficiency comparisons
+
+---
+
 ## Future: Enterprise Features (Deferred)
 
 These features are valuable for larger organizations but deferred to focus on solo/small team experience:
@@ -267,21 +518,25 @@ These features are valuable for larger organizations but deferred to focus on so
 - **Approval Fatigue:** 70% reduction in approval requests per session
 - **Mobile Engagement:** 40% increase in mobile daily active users
 - **Cost Awareness:** 80% of users view cost dashboard weekly
+- **Accessibility:** 100% screen reader compatibility score
 
 ### Q2 Metrics
 - **Mobile Approvals:** 60% of approvals happen via notification actions
 - **Template Adoption:** 50% of sessions use templates within 4 weeks
 - **Offline Usage:** 20% of users access cached sessions
+- **Recovery:** 40% reduction in session restarts due to agent errors
 
 ### Q3 Metrics
 - **Workflow Creation:** 25% of power users create multi-agent workflows
 - **Scheduled Runs:** 500 scheduled agent runs per week
 - **Sharing:** 30% of users share at least one session
+- **Team Features:** 20% of sessions have annotations or handoff notes
 
 ### Q4 Metrics
 - **Voice Input:** 15% of mobile prompts use voice
 - **Branching:** 10% of sessions use checkpoints
 - **Retention:** 60% monthly retention rate
+- **NPS:** 50+ Net Promoter Score
 
 ---
 
@@ -289,10 +544,10 @@ These features are valuable for larger organizations but deferred to focus on so
 
 | Quarter | Theme | Key Deliverables |
 |---------|-------|------------------|
-| **Q1** | Core Experience | Approval rules, swipe gestures, cost tracking |
-| **Q2** | Mobile Power | Notification actions, offline cache, templates |
-| **Q3** | Automation | Multi-agent workflows, scheduling, sharing |
-| **Q4** | Polish | Voice input, branching, insights |
+| **Q1** | Core Experience | Approval rules, accessibility, swipe gestures, cost tracking, widgets |
+| **Q2** | Mobile Power | Notifications, checkpoints, retry logic, offline cache, templates, Live Activities |
+| **Q3** | Automation | Multi-agent workflows, annotations, scheduling, sharing, exports, cost attribution |
+| **Q4** | Polish | Voice input, gestures, branching, insights, analytics |
 
 ---
 
@@ -302,16 +557,27 @@ These features are valuable for larger organizations but deferred to focus on so
 2. **Mobile-primary** - If it doesn't work well on a phone, reconsider the design
 3. **Automation over administration** - Prefer smart defaults over configuration screens
 4. **Cost-conscious** - Help users understand and control spending
-5. **Zero external dependencies** - No Firebase, no accounts, just Tailscale for network access
+5. **Resilient by default** - Checkpoints, retries, and recovery should be automatic
+6. **Accessible to all** - Design for screen readers, motor impairments, and visual differences
+7. **Zero external dependencies** - No Firebase, no accounts, just Tailscale for network access
 
 ---
 
 ## Conclusion
 
 This roadmap delivers maximum value for solo developers and small teams:
-- **Q1** eliminates approval fatigue and provides cost visibility
-- **Q2** makes mobile the best way to supervise agents
-- **Q3** unlocks powerful automation for power users
-- **Q4** polishes the experience with voice and branching
+- **Q1** eliminates approval fatigue, ensures accessibility, and provides cost visibility
+- **Q2** makes mobile the best way to supervise agents with checkpoints and error recovery
+- **Q3** unlocks powerful automation and lightweight team collaboration
+- **Q4** polishes the experience with voice, gestures, and insights
 
 Enterprise features remain in the backlog, ready to prioritize when market demand justifies the investment. By focusing on individuals and small teams first, we build a product people love before adding organizational complexity.
+
+---
+
+## Appendix: Research Sources
+
+This roadmap was informed by:
+- **Competitor Analysis:** Cursor, Cline, Windsurf, Devin, GitHub Copilot, Continue, Aider, GitHub Mobile, CircleCI
+- **User Persona Research:** Interviews and surveys with solo developers, freelancers, and small team leads
+- **Market Gap Analysis:** Mobile-first AI agent supervision is an uncontested space
