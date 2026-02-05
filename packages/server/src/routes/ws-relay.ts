@@ -25,8 +25,10 @@ import {
   handleMessage,
 } from "./ws-relay-handlers.js";
 
-// biome-ignore lint/suspicious/noExplicitAny: Complex third-party type from @hono/node-ws
-type UpgradeWebSocketFn = (createEvents: (c: Context) => WSEvents) => any;
+type UpgradeWebSocketFn = (
+  createEvents: (c: Context<{ Bindings: HttpBindings }>) => WSEvents,
+  // biome-ignore lint/suspicious/noExplicitAny: Complex third-party type from @hono/node-ws
+) => any;
 
 export interface WsRelayDeps {
   upgradeWebSocket: UpgradeWebSocketFn;
@@ -73,6 +75,19 @@ export interface AcceptRelayConnectionDeps {
   connectedBrowsers?: ConnectedBrowsersService;
   /** Browser profile service for tracking connection origins (optional) */
   browserProfileService?: BrowserProfileService;
+}
+
+/**
+ * Check if a remote address is a localhost/loopback address.
+ * Matches 127.0.0.1, ::1, and IPv4-mapped IPv6 loopback (::ffff:127.0.0.1).
+ */
+function isLocalhostAddress(remoteAddress: string | undefined): boolean {
+  if (!remoteAddress) return false;
+  return (
+    remoteAddress === "127.0.0.1" ||
+    remoteAddress === "::1" ||
+    remoteAddress === "::ffff:127.0.0.1"
+  );
 }
 
 /**
@@ -173,14 +188,19 @@ export function createWsRelayRoutes(
       };
     }
 
+    // Extract remote address from the underlying socket before upgrade
+    const remoteAddress = c.env.incoming.socket.remoteAddress;
+
     // Track active subscriptions for this connection
     const subscriptions = new Map<string, () => void>();
     // Track active uploads for this connection
     const uploads = new Map<string, RelayUploadState>();
     // Message queue to serialize async message handling
     let messageQueue: Promise<void> = Promise.resolve();
-    // Connection state for SRP authentication
-    const connState: ConnectionState = createConnectionState();
+    // Connection state for SRP authentication (pass remote IP for rate limiting)
+    const connState: ConnectionState = createConnectionState(
+      remoteAddress ?? "unknown",
+    );
     // Encryption-aware send function (created on open, captures connState)
     let send: ReturnType<typeof createSendFn>;
     // WSAdapter wrapper
@@ -200,10 +220,22 @@ export function createWsRelayRoutes(
         };
         // Create the send function that captures this connection's state
         send = createSendFn(wsAdapter, connState);
-        // If remote access is not enabled, allow unauthenticated connections
+        // If remote access is not enabled, check if connection is from localhost
         if (!remoteAccessService?.isEnabled()) {
-          // In local mode, connections are implicitly authenticated
-          connState.authState = "authenticated";
+          if (isLocalhostAddress(remoteAddress)) {
+            // Local connections are implicitly authenticated
+            connState.authState = "authenticated";
+          } else {
+            // Non-localhost connection without remote access enabled — reject
+            console.warn(
+              `[WS Relay] Rejected non-localhost connection from ${remoteAddress} — remote access authentication is not enabled`,
+            );
+            ws.close(
+              4003,
+              "Forbidden: Enable remote access authentication for non-localhost connections",
+            );
+            return;
+          }
         }
       },
 
@@ -302,8 +334,13 @@ export function createAcceptRelayConnection(
     // Message queue to serialize async message handling
     let messageQueue: Promise<void> = Promise.resolve();
 
+    // Extract remote IP from the underlying socket (will be relay server IP for relay connections)
+    const remoteIp =
+      // biome-ignore lint/suspicious/noExplicitAny: ws library internal - no public API for remoteAddress
+      (rawWs as any)._socket?.remoteAddress ?? "relay";
+
     // Connection state - requires authentication for relay connections
-    const connState: ConnectionState = createConnectionState();
+    const connState: ConnectionState = createConnectionState(remoteIp);
 
     // Create WSAdapter for raw WebSocket
     const wsAdapter = createWSAdapter(rawWs);

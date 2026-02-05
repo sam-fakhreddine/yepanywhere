@@ -253,6 +253,7 @@ async function runSSHCommand(
         `ConnectTimeout=${Math.ceil(timeoutMs / 1000)}`,
         "-o",
         "BatchMode=yes", // Don't prompt for password
+        "--",
         host,
         command,
       ],
@@ -421,6 +422,7 @@ export function createRemoteSpawn(
         "-t", // PTY allocation for signal propagation
         "-o",
         "BatchMode=yes", // Don't prompt for password
+        "--",
         host,
         remoteCmd,
       ],
@@ -520,7 +522,7 @@ function wrapChildProcess(childProcess: ChildProcess): SpawnedProcess {
 /**
  * Escape a string for use in a shell command.
  */
-function escapeShell(str: string): string {
+export function escapeShell(str: string): string {
   // Replace single quotes with escaped version
   return str.replace(/'/g, "'\\''");
 }

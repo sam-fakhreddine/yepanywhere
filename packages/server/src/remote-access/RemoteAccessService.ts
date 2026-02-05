@@ -270,5 +270,13 @@ export class RemoteAccessService {
   private async doSave(): Promise<void> {
     const content = JSON.stringify(this.state, null, 2);
     await fs.writeFile(this.filePath, content, "utf-8");
+    try {
+      await fs.chmod(this.filePath, 0o600);
+    } catch (err) {
+      console.warn(
+        "[RemoteAccessService] Failed to set file permissions:",
+        err,
+      );
+    }
   }
 }

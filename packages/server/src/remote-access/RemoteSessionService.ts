@@ -16,7 +16,7 @@
  * - Max sessions per user is exceeded (oldest evicted)
  */
 
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { decrypt } from "../crypto/nacl-wrapper.js";
@@ -64,6 +64,8 @@ export interface RemoteSession {
   origin?: string;
   /** When the session was last actively connected (ISO timestamp) */
   lastConnectedAt?: string;
+  /** Pending challenge for next resume (hex string, single-use) */
+  pendingChallenge?: string;
 }
 
 interface RemoteSessionsState {
@@ -201,8 +203,10 @@ export class RemoteSessionService {
   /**
    * Validate a session resume proof.
    *
-   * The proof is an encrypted timestamp. We decrypt it with the stored
-   * session key and verify the timestamp is recent.
+   * The proof is an encrypted JSON object containing a timestamp and
+   * optionally a challenge. We decrypt it with the stored session key,
+   * verify the timestamp is recent, and verify the challenge matches
+   * the server's pending challenge (single-use).
    *
    * @param sessionId - The session to validate
    * @param proof - Encrypted proof (JSON: { nonce: string, ciphertext: string })
@@ -229,12 +233,42 @@ export class RemoteSessionService {
       const plaintext = decrypt(nonce, ciphertext, sessionKey);
       if (!plaintext) return null;
 
-      // Parse timestamp
-      const proofData = JSON.parse(plaintext) as { timestamp: number };
+      // Parse proof data (timestamp required, challenge optional for backward compat)
+      const proofData = JSON.parse(plaintext) as {
+        timestamp: number;
+        challenge?: string;
+      };
       const now = Date.now();
 
       // Verify timestamp is recent (within 5 minutes)
       if (Math.abs(now - proofData.timestamp) > MAX_PROOF_AGE_MS) {
+        return null;
+      }
+
+      // Verify challenge if the server has one pending.
+      // After deployment, all new sessions will have a pendingChallenge set
+      // at the end of initial SRP authentication.
+      if (session.pendingChallenge) {
+        if (
+          !proofData.challenge ||
+          proofData.challenge !== session.pendingChallenge
+        ) {
+          console.log(
+            `[RemoteSessionService] Challenge verification failed for session ${sessionId}: ` +
+              `expected challenge present=${!!session.pendingChallenge}, ` +
+              `proof challenge present=${!!proofData.challenge}`,
+          );
+          return null;
+        }
+        // Clear the challenge after successful verification (single-use)
+        session.pendingChallenge = undefined;
+      } else if (!proofData.challenge) {
+        // No challenge on server and no challenge from client.
+        // This happens for sessions created before the challenge feature was added.
+        // Reject to force re-authentication, which will establish the challenge chain.
+        console.log(
+          `[RemoteSessionService] Rejecting resume for session ${sessionId}: no challenge set (legacy session, re-authentication required)`,
+        );
         return null;
       }
 
@@ -256,6 +290,24 @@ export class RemoteSessionService {
     const session = this.getSession(sessionId);
     if (!session) return null;
     return Buffer.from(session.sessionKey, "base64");
+  }
+
+  /**
+   * Generate a random challenge for session resume and store it on the session.
+   * The challenge is single-use: it must be included in the next resume proof
+   * and is cleared after successful validation.
+   *
+   * @param sessionId - The session to generate a challenge for
+   * @returns The challenge hex string, or null if session doesn't exist
+   */
+  async generateResumeChallenge(sessionId: string): Promise<string | null> {
+    const session = this.getSession(sessionId);
+    if (!session) return null;
+
+    const challenge = randomBytes(32).toString("hex");
+    session.pendingChallenge = challenge;
+    await this.save();
+    return challenge;
   }
 
   /**
@@ -400,5 +452,13 @@ export class RemoteSessionService {
   private async doSave(): Promise<void> {
     const content = JSON.stringify(this.state, null, 2);
     await fs.writeFile(this.filePath, content, "utf-8");
+    try {
+      await fs.chmod(this.filePath, 0o600);
+    } catch (err) {
+      console.warn(
+        "[RemoteSessionService] Failed to set file permissions:",
+        err,
+      );
+    }
   }
 }

@@ -104,9 +104,13 @@ describe("RemoteSessionService", () => {
       const sessionKey = new Uint8Array(32).fill(0x42);
       const sessionId = await service.createSession("testuser", sessionKey);
 
-      // Generate a valid proof (encrypted timestamp)
+      // Generate a challenge first (simulates what server does after initial SRP auth)
+      const challenge = await service.generateResumeChallenge(sessionId);
+      expect(challenge).not.toBeNull();
+
+      // Generate a valid proof (encrypted timestamp + challenge)
       const timestamp = Date.now();
-      const proofData = JSON.stringify({ timestamp });
+      const proofData = JSON.stringify({ timestamp, challenge });
       const { nonce, ciphertext } = encrypt(proofData, sessionKey);
       const proof = JSON.stringify({ nonce, ciphertext });
 
@@ -163,15 +167,18 @@ describe("RemoteSessionService", () => {
       const sessionKey = new Uint8Array(32).fill(0x42);
       const sessionId = await service.createSession("testuser", sessionKey);
 
+      // Generate a challenge first
+      const challenge = await service.generateResumeChallenge(sessionId);
+
       const sessionBefore = service.getSession(sessionId);
       const lastUsedBefore = sessionBefore?.lastUsed;
 
       // Wait a bit
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      // Validate proof
+      // Validate proof with challenge
       const timestamp = Date.now();
-      const proofData = JSON.stringify({ timestamp });
+      const proofData = JSON.stringify({ timestamp, challenge });
       const { nonce, ciphertext } = encrypt(proofData, sessionKey);
       const proof = JSON.stringify({ nonce, ciphertext });
 

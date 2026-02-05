@@ -211,9 +211,9 @@ function renderPlainCodeBlock(code: string, lang: string): string {
  * Render a non-code markdown block using marked.
  */
 function renderMarkdownBlock(block: CompletedBlock): string {
-  // Use marked to render the markdown
+  // Use marked to render the markdown, then sanitize to prevent XSS
   const html = marked.parse(block.content, { async: false }) as string;
-  return html.trim();
+  return sanitizeHtml(html.trim());
 }
 
 /**
@@ -234,10 +234,94 @@ function renderInlineFormatting(text: string): string {
   // Inline code: `text`
   result = result.replace(/`([^`]+)`/g, "<code>$1</code>");
 
-  // Links: [text](url)
-  result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+  // Links: [text](url) - validate URL to prevent javascript: injection
+  result = result.replace(
+    /\[([^\]]+)\]\(([^)]+)\)/g,
+    (_match, text: string, url: string) => {
+      if (hasUnsafeUrl(url)) {
+        return text;
+      }
+      return `<a href="${url}">${text}</a>`;
+    },
+  );
 
   return result;
+}
+
+/**
+ * Sanitize HTML to prevent XSS attacks.
+ *
+ * Strips dangerous tags (script, iframe, object, embed, form, base),
+ * event handler attributes (on*), and dangerous URL protocols
+ * (javascript:, data:text/html) from href/src/action attributes.
+ *
+ * This is applied after marked.parse() to ensure all HTML output
+ * is safe before being sent to the client for dangerouslySetInnerHTML.
+ */
+export function sanitizeHtml(html: string): string {
+  let result = html;
+
+  // 1. Remove <script> tags and their content
+  result = result.replace(/<script\b[\s\S]*?<\/script\s*>/gi, "");
+  // Remove any remaining unclosed/self-closing script tags
+  result = result.replace(/<script\b[^>]*\/?>/gi, "");
+
+  // 2. Remove dangerous tags and their content
+  for (const tag of ["iframe", "object", "embed", "form", "base"]) {
+    result = result.replace(
+      new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}\\s*>`, "gi"),
+      "",
+    );
+    result = result.replace(new RegExp(`<${tag}\\b[^>]*/?>`, "gi"), "");
+  }
+
+  // 3. Process each HTML tag to remove event handlers and dangerous URLs
+  result = result.replace(/<[^>]+>/g, (tag) => {
+    // Remove event handler attributes (onerror, onload, onclick, etc.)
+    let cleaned = tag.replace(
+      /\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi,
+      "",
+    );
+
+    // Neutralize dangerous href/src/action attribute values
+    cleaned = cleaned.replace(
+      /(href|src|action)\s*=\s*("[^"]*"|'[^']*')/gi,
+      (attrMatch, attr: string, quotedValue: string) => {
+        const quote = quotedValue[0];
+        const value = quotedValue.slice(1, -1);
+        if (hasUnsafeUrl(value)) {
+          return `${attr}=${quote}${quote}`;
+        }
+        return attrMatch;
+      },
+    );
+
+    return cleaned;
+  });
+
+  return result;
+}
+
+/**
+ * Check if a URL value contains an unsafe protocol (javascript:, data:text/html).
+ * Handles HTML entity encoding and whitespace obfuscation that browsers normalize.
+ */
+function hasUnsafeUrl(value: string): boolean {
+  // Decode numeric HTML entities (&#NNN; and &#xHH;) to catch encoded bypasses
+  const decoded = value
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    )
+    .replace(/&#(\d+);?/g, (_, dec) =>
+      String.fromCharCode(Number.parseInt(dec, 10)),
+    )
+    // Strip whitespace/control chars that browsers ignore within protocol
+    .replace(/[\s\t\n\r\0\u200B]+/g, "")
+    .toLowerCase();
+
+  return (
+    decoded.startsWith("javascript:") || decoded.startsWith("data:text/html")
+  );
 }
 
 /**

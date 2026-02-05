@@ -46,6 +46,8 @@ export interface SrpServerVerify {
   M2: string;
   /** Session ID for session resumption (optional, set if session service available) */
   sessionId?: string;
+  /** Server-generated challenge for first session resume (hex string) */
+  challenge?: string;
 }
 
 /** SRP error codes */
@@ -74,10 +76,16 @@ export interface SrpSessionResumed {
   type: "srp_resumed";
   /** Session ID that was resumed */
   sessionId: string;
+  /** Server-generated challenge for next session resume (hex string) */
+  challenge?: string;
 }
 
 /** Reasons a session cannot be resumed */
-export type SrpSessionInvalidReason = "expired" | "unknown" | "invalid_proof";
+export type SrpSessionInvalidReason =
+  | "expired"
+  | "unknown"
+  | "invalid_proof"
+  | "challenge_required";
 
 /** Server indicates session is invalid, client must do full SRP */
 export interface SrpSessionInvalid {

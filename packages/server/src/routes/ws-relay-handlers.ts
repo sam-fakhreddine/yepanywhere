@@ -57,6 +57,7 @@ import {
   isStreamingComplete,
   markSubagent,
 } from "../augments/index.js";
+import { RateLimiter } from "../auth/rate-limiter.js";
 import {
   SrpServerSession,
   decompressGzip,
@@ -81,6 +82,9 @@ import type { EventBus } from "../watcher/index.js";
 
 /** Progress report interval in bytes (64KB) */
 export const PROGRESS_INTERVAL = 64 * 1024;
+
+/** Rate limiter for SRP authentication attempts (shared across all connections) */
+export const srpRateLimiter = new RateLimiter();
 
 /** Connection authentication state */
 export type ConnectionAuthState =
@@ -110,6 +114,8 @@ export interface ConnectionState {
   browserProfileId: string | null;
   /** Origin metadata from SRP hello (for session tracking) */
   originMetadata: OriginMetadata | null;
+  /** Remote IP address of the connecting client (for rate limiting) */
+  remoteIp: string;
 }
 
 /** Tracks an active upload over WebSocket relay */
@@ -171,7 +177,7 @@ export interface RelayHandlerDeps {
 /**
  * Create an initial connection state.
  */
-export function createConnectionState(): ConnectionState {
+export function createConnectionState(remoteIp?: string): ConnectionState {
   return {
     srpSession: null,
     sessionKey: null,
@@ -183,6 +189,7 @@ export function createConnectionState(): ConnectionState {
     supportedFormats: new Set([BinaryFormat.JSON]),
     browserProfileId: null,
     originMetadata: null,
+    remoteIp: remoteIp ?? "unknown",
   };
 }
 
@@ -255,6 +262,21 @@ export async function handleSrpResume(
   msg: SrpSessionResume,
   remoteSessionService: RemoteSessionService | undefined,
 ): Promise<void> {
+  // Check rate limit before processing session resume
+  const { blocked, retryAfterMs } = srpRateLimiter.isBlocked(
+    connState.remoteIp,
+  );
+  if (blocked) {
+    const retryAfterSecs = Math.ceil((retryAfterMs ?? 60000) / 1000);
+    sendSrpMessage(ws, {
+      type: "srp_error",
+      code: "server_error",
+      message: `Too many authentication attempts. Try again in ${retryAfterSecs}s.`,
+    });
+    ws.close(4029, "Too many authentication attempts");
+    return;
+  }
+
   if (!remoteSessionService) {
     sendSrpMessage(ws, {
       type: "srp_invalid",
@@ -273,6 +295,7 @@ export async function handleSrpResume(
       console.log(
         `[WS Relay] Session resume failed for ${msg.identity}: invalid or expired`,
       );
+      srpRateLimiter.recordFailure(connState.remoteIp);
       sendSrpMessage(ws, {
         type: "srp_invalid",
         reason: "invalid_proof",
@@ -284,6 +307,7 @@ export async function handleSrpResume(
       console.warn(
         `[WS Relay] Session resume identity mismatch: ${msg.identity} vs ${session.username}`,
       );
+      srpRateLimiter.recordFailure(connState.remoteIp);
       sendSrpMessage(ws, {
         type: "srp_invalid",
         reason: "invalid_proof",
@@ -295,13 +319,20 @@ export async function handleSrpResume(
     connState.authState = "authenticated";
     connState.username = session.username;
     connState.sessionId = session.sessionId;
+    srpRateLimiter.recordSuccess(connState.remoteIp);
 
     // Update lastConnectedAt to track active connection time
     await remoteSessionService.updateLastConnected(session.sessionId);
 
+    // Generate a new single-use challenge for the next resume attempt
+    const nextChallenge = await remoteSessionService.generateResumeChallenge(
+      session.sessionId,
+    );
+
     sendSrpMessage(ws, {
       type: "srp_resumed",
       sessionId: session.sessionId,
+      challenge: nextChallenge ?? undefined,
     });
 
     console.log(
@@ -309,6 +340,7 @@ export async function handleSrpResume(
     );
   } catch (err) {
     console.error("[WS Relay] Session resume error:", err);
+    srpRateLimiter.recordFailure(connState.remoteIp);
     sendSrpMessage(ws, {
       type: "srp_invalid",
       reason: "unknown",
@@ -1029,6 +1061,21 @@ export async function handleSrpHello(
   msg: SrpClientHello,
   remoteAccessService: RemoteAccessService | undefined,
 ): Promise<void> {
+  // Check rate limit before processing SRP handshake
+  const { blocked, retryAfterMs } = srpRateLimiter.isBlocked(
+    connState.remoteIp,
+  );
+  if (blocked) {
+    const retryAfterSecs = Math.ceil((retryAfterMs ?? 60000) / 1000);
+    sendSrpMessage(ws, {
+      type: "srp_error",
+      code: "server_error",
+      message: `Too many authentication attempts. Try again in ${retryAfterSecs}s.`,
+    });
+    ws.close(4029, "Too many authentication attempts");
+    return;
+  }
+
   if (!remoteAccessService) {
     sendSrpMessage(ws, {
       type: "srp_error",
@@ -1117,6 +1164,7 @@ export async function handleSrpProof(
       console.warn(
         `[WS Relay] SRP authentication failed for ${connState.username}`,
       );
+      srpRateLimiter.recordFailure(connState.remoteIp);
       sendSrpMessage(ws, {
         type: "srp_error",
         code: "invalid_proof",
@@ -1124,6 +1172,7 @@ export async function handleSrpProof(
       });
       connState.authState = "unauthenticated";
       connState.srpSession = null;
+      ws.close(4001, "Authentication failed");
       return;
     }
 
@@ -1133,6 +1182,7 @@ export async function handleSrpProof(
     }
     connState.sessionKey = deriveSecretboxKey(rawKey);
     connState.authState = "authenticated";
+    srpRateLimiter.recordSuccess(connState.remoteIp);
 
     let sessionId: string | undefined;
     console.log("[WS Relay] Session creation check:", {
@@ -1154,10 +1204,19 @@ export async function handleSrpProof(
       console.log("[WS Relay] Session created:", sessionId);
     }
 
+    // Generate the first challenge for session resume after initial auth
+    let firstChallenge: string | undefined;
+    if (remoteSessionService && sessionId) {
+      const challenge =
+        await remoteSessionService.generateResumeChallenge(sessionId);
+      firstChallenge = challenge ?? undefined;
+    }
+
     const verify: SrpServerVerify = {
       type: "srp_verify",
       M2: result.M2,
       sessionId,
+      challenge: firstChallenge,
     };
     sendSrpMessage(ws, verify);
 
@@ -1166,6 +1225,7 @@ export async function handleSrpProof(
     );
   } catch (err) {
     console.error("[WS Relay] SRP proof error:", err);
+    srpRateLimiter.recordFailure(connState.remoteIp);
     sendSrpMessage(ws, {
       type: "srp_error",
       code: "server_error",
@@ -1173,6 +1233,7 @@ export async function handleSrpProof(
     });
     connState.authState = "unauthenticated";
     connState.srpSession = null;
+    ws.close(4001, "Authentication failed");
   }
 }
 

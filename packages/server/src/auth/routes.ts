@@ -8,6 +8,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { getLogger } from "../logging/logger.js";
 import type { AuthService } from "./AuthService.js";
 import { getClaudeLoginService } from "./claude-login.js";
+import { RateLimiter } from "./rate-limiter.js";
 
 export const SESSION_COOKIE_NAME = "yep-anywhere-session";
 
@@ -32,6 +33,7 @@ interface ChangePasswordBody {
 export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
   const app = new Hono();
   const { authService, authDisabled = false } = deps;
+  const loginRateLimiter = new RateLimiter();
 
   /**
    * GET /api/auth/status
@@ -196,6 +198,22 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
    * Login with password
    */
   app.post("/login", async (c) => {
+    // Extract client IP for rate limiting
+    const ip =
+      (c.env as Record<string, { socket?: { remoteAddress?: string } }>)
+        ?.incoming?.socket?.remoteAddress ?? "unknown";
+
+    // Check rate limit before processing
+    const { blocked, retryAfterMs } = loginRateLimiter.isBlocked(ip);
+    if (blocked) {
+      const retryAfterSecs = Math.ceil((retryAfterMs ?? 60000) / 1000);
+      c.header("Retry-After", String(retryAfterSecs));
+      return c.json(
+        { error: "Too many login attempts. Please try again later." },
+        429,
+      );
+    }
+
     if (!authService.hasAccount()) {
       c.header("X-Setup-Required", "true");
       return c.json(
@@ -212,8 +230,11 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
 
     const valid = await authService.verifyPassword(body.password);
     if (!valid) {
+      loginRateLimiter.recordFailure(ip);
       return c.json({ error: "Invalid password" }, 401);
     }
+
+    loginRateLimiter.recordSuccess(ip);
 
     const userAgent = c.req.header("User-Agent");
     const sessionId = await authService.createSession(userAgent);

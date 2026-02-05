@@ -13,6 +13,17 @@ export interface SettingsRoutesDeps {
   serverSettingsService: ServerSettingsService;
 }
 
+/**
+ * Validate that a hostname/SSH host string is safe.
+ * Allows: user@hostname, hostname, IPs, domain names, SSH config aliases.
+ * Rejects anything that could be interpreted as SSH options.
+ */
+const VALID_HOST_RE = /^[a-zA-Z0-9._@:-]+$/;
+
+function isValidHost(host: string): boolean {
+  return VALID_HOST_RE.test(host);
+}
+
 export function createSettingsRoutes(deps: SettingsRoutesDeps): Hono {
   const app = new Hono();
   const { serverSettingsService } = deps;
@@ -42,10 +53,17 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps): Hono {
 
     // Handle remoteExecutors array
     if (Array.isArray(body.remoteExecutors)) {
-      // Validate each entry is a non-empty string
+      // Validate each entry is a non-empty string with a safe hostname format
       const validExecutors = body.remoteExecutors.filter(
         (e): e is string => typeof e === "string" && e.trim().length > 0,
       );
+      const invalidHosts = validExecutors.filter((e) => !isValidHost(e));
+      if (invalidHosts.length > 0) {
+        return c.json(
+          { error: `Invalid hostname format: ${invalidHosts.join(", ")}` },
+          400,
+        );
+      }
       updates.remoteExecutors = validExecutors;
     }
 
@@ -77,10 +95,17 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps): Hono {
       return c.json({ error: "executors must be an array" }, 400);
     }
 
-    // Validate each entry is a non-empty string
+    // Validate each entry is a non-empty string with a safe hostname format
     const validExecutors = body.executors.filter(
       (e): e is string => typeof e === "string" && e.trim().length > 0,
     );
+    const invalidHosts = validExecutors.filter((e) => !isValidHost(e));
+    if (invalidHosts.length > 0) {
+      return c.json(
+        { error: `Invalid hostname format: ${invalidHosts.join(", ")}` },
+        400,
+      );
+    }
 
     await serverSettingsService.updateSettings({
       remoteExecutors: validExecutors,
@@ -98,6 +123,10 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps): Hono {
 
     if (!host || host.trim().length === 0) {
       return c.json({ error: "host is required" }, 400);
+    }
+
+    if (!isValidHost(host)) {
+      return c.json({ error: "Invalid hostname format" }, 400);
     }
 
     const result = await testSSHConnection(host);

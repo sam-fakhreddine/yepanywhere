@@ -9,6 +9,7 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { getLogger } from "../logging/logger.js";
+import { escapeShell } from "./remote-spawn.js";
 
 /**
  * Options for session sync operations.
@@ -72,7 +73,13 @@ async function ensureRemoteDir(
   return new Promise((resolve, reject) => {
     const sshProcess = spawn(
       "ssh",
-      ["-o", "BatchMode=yes", host, `mkdir -p '${remotePath}'`],
+      [
+        "-o",
+        "BatchMode=yes",
+        "--",
+        host,
+        `mkdir -p '${escapeShell(remotePath)}'`,
+      ],
       { stdio: ["ignore", "pipe", "pipe"] },
     );
 

@@ -14,3 +14,4 @@ export {
   type ClaudeLoginService,
   type ClaudeLoginState,
 } from "./claude-login.js";
+export { RateLimiter, type RateLimiterOptions } from "./rate-limiter.js";
