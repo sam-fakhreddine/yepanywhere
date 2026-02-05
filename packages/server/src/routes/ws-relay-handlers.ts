@@ -286,22 +286,24 @@ export async function handleSrpResume(
   }
 
   try {
-    const session = await remoteSessionService.validateProof(
+    const result = await remoteSessionService.validateProof(
       msg.sessionId,
       msg.proof,
     );
 
-    if (!session) {
+    if (!result.success) {
       console.log(
-        `[WS Relay] Session resume failed for ${msg.identity}: invalid or expired`,
+        `[WS Relay] Session resume failed for ${msg.identity}: ${result.reason}`,
       );
       srpRateLimiter.recordFailure(connState.remoteIp);
       sendSrpMessage(ws, {
         type: "srp_invalid",
-        reason: "invalid_proof",
+        reason: result.reason,
       });
       return;
     }
+
+    const session = result.session;
 
     if (session.username !== msg.identity) {
       console.warn(

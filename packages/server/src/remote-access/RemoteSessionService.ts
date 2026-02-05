@@ -80,6 +80,14 @@ export interface RemoteSessionServiceOptions {
   dataDir: string;
 }
 
+/** Result of proof validation */
+export type ValidateProofResult =
+  | { success: true; session: RemoteSession }
+  | {
+      success: false;
+      reason: "expired" | "invalid_proof" | "challenge_required" | "unknown";
+    };
+
 export class RemoteSessionService {
   private state: RemoteSessionsState;
   private dataDir: string;
@@ -210,14 +218,14 @@ export class RemoteSessionService {
    *
    * @param sessionId - The session to validate
    * @param proof - Encrypted proof (JSON: { nonce: string, ciphertext: string })
-   * @returns The session if valid, null otherwise
+   * @returns Result object with session if valid, or reason for failure
    */
   async validateProof(
     sessionId: string,
     proof: string,
-  ): Promise<RemoteSession | null> {
+  ): Promise<ValidateProofResult> {
     const session = this.getSession(sessionId);
-    if (!session) return null;
+    if (!session) return { success: false, reason: "expired" };
 
     try {
       // Parse the proof (should be JSON with nonce and ciphertext)
@@ -231,7 +239,7 @@ export class RemoteSessionService {
 
       // Decrypt the proof
       const plaintext = decrypt(nonce, ciphertext, sessionKey);
-      if (!plaintext) return null;
+      if (!plaintext) return { success: false, reason: "invalid_proof" };
 
       // Parse proof data (timestamp required, challenge optional for backward compat)
       const proofData = JSON.parse(plaintext) as {
@@ -242,7 +250,7 @@ export class RemoteSessionService {
 
       // Verify timestamp is recent (within 5 minutes)
       if (Math.abs(now - proofData.timestamp) > MAX_PROOF_AGE_MS) {
-        return null;
+        return { success: false, reason: "invalid_proof" };
       }
 
       // Verify challenge if the server has one pending.
@@ -258,7 +266,8 @@ export class RemoteSessionService {
               `expected challenge present=${!!session.pendingChallenge}, ` +
               `proof challenge present=${!!proofData.challenge}`,
           );
-          return null;
+          // Client needs to use the correct challenge
+          return { success: false, reason: "challenge_required" };
         }
         // Clear the challenge after successful verification (single-use)
         session.pendingChallenge = undefined;
@@ -269,16 +278,16 @@ export class RemoteSessionService {
         console.log(
           `[RemoteSessionService] Rejecting resume for session ${sessionId}: no challenge set (legacy session, re-authentication required)`,
         );
-        return null;
+        return { success: false, reason: "challenge_required" };
       }
 
       // Update last used time
       session.lastUsed = new Date().toISOString();
       await this.save();
 
-      return session;
+      return { success: true, session };
     } catch {
-      return null;
+      return { success: false, reason: "unknown" };
     }
   }
 

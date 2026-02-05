@@ -2,6 +2,7 @@ import type { HttpBindings } from "@hono/node-server";
 import type { Context, Hono } from "hono";
 import type { WSEvents } from "hono/ws";
 import type { WebSocket as RawWebSocket } from "ws";
+import { getClientIp, getClientIpFromSocket } from "../auth/index.js";
 import type {
   RemoteAccessService,
   RemoteSessionService,
@@ -27,7 +28,7 @@ import {
 
 type UpgradeWebSocketFn = (
   createEvents: (c: Context<{ Bindings: HttpBindings }>) => WSEvents,
-  // biome-ignore lint/suspicious/noExplicitAny: Complex third-party type from @hono/node-ws
+  // biome-ignore lint/suspicious/noExplicitAny: Complex third-party return type from @hono/node-ws
 ) => any;
 
 export interface WsRelayDeps {
@@ -188,8 +189,8 @@ export function createWsRelayRoutes(
       };
     }
 
-    // Extract remote address from the underlying socket before upgrade
-    const remoteAddress = c.env.incoming.socket.remoteAddress;
+    // Extract remote address for rate limiting (supports X-Forwarded-For)
+    const remoteAddress = getClientIp(c);
 
     // Track active subscriptions for this connection
     const subscriptions = new Map<string, () => void>();
@@ -335,9 +336,7 @@ export function createAcceptRelayConnection(
     let messageQueue: Promise<void> = Promise.resolve();
 
     // Extract remote IP from the underlying socket (will be relay server IP for relay connections)
-    const remoteIp =
-      // biome-ignore lint/suspicious/noExplicitAny: ws library internal - no public API for remoteAddress
-      (rawWs as any)._socket?.remoteAddress ?? "relay";
+    const remoteIp = getClientIpFromSocket(rawWs) ?? "relay";
 
     // Connection state - requires authentication for relay connections
     const connState: ConnectionState = createConnectionState(remoteIp);

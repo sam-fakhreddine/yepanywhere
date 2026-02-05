@@ -212,6 +212,14 @@ export class RemoteAccessService {
       if (url.protocol !== "ws:" && url.protocol !== "wss:") {
         throw new Error("Relay URL must use ws:// or wss:// protocol");
       }
+      // Require wss:// for non-localhost URLs (security: prevent unencrypted traffic)
+      const isLocalhost =
+        url.hostname === "localhost" || url.hostname === "127.0.0.1";
+      if (!isLocalhost && url.protocol !== "wss:") {
+        throw new Error(
+          "Relay URL must use wss:// for secure connections (ws:// only allowed for localhost)",
+        );
+      }
     } catch (error) {
       if (error instanceof TypeError) {
         throw new Error("Invalid relay URL format");

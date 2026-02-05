@@ -238,7 +238,7 @@ function renderInlineFormatting(text: string): string {
   result = result.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
     (_match, text: string, url: string) => {
-      if (hasUnsafeUrl(url)) {
+      if (!isSafeUrl(url)) {
         return text;
       }
       return `<a href="${url}">${text}</a>`;
@@ -249,25 +249,37 @@ function renderInlineFormatting(text: string): string {
 }
 
 /**
- * Sanitize HTML to prevent XSS attacks.
+ * Sanitize HTML to prevent XSS attacks using a whitelist approach.
  *
- * Strips dangerous tags (script, iframe, object, embed, form, base),
- * event handler attributes (on*), and dangerous URL protocols
- * (javascript:, data:text/html) from href/src/action attributes.
+ * Threat model:
+ * - Input HTML comes from marked.parse() rendering markdown and should be
+ *   treated as untrusted (markdown content may originate from files read by Claude).
+ * - We whitelist only the tags and attributes needed for rendered markdown.
+ * - Any tag not in the whitelist is stripped entirely (contents preserved as text).
+ * - URL-bearing attributes (href, src) are validated against safe schemes only.
+ * - Event handler attributes, style attributes, and all other attributes are stripped.
  *
- * This is applied after marked.parse() to ensure all HTML output
- * is safe before being sent to the client for dangerouslySetInnerHTML.
+ * This runs after marked.parse() and before dangerouslySetInnerHTML on the client.
  */
 export function sanitizeHtml(html: string): string {
   let result = html;
 
-  // 1. Remove <script> tags and their content
+  // Belt-and-suspenders: strip dangerous tags and their content before whitelist pass.
+  // This catches nested/malformed cases the tag regex might miss.
   result = result.replace(/<script\b[\s\S]*?<\/script\s*>/gi, "");
-  // Remove any remaining unclosed/self-closing script tags
   result = result.replace(/<script\b[^>]*\/?>/gi, "");
-
-  // 2. Remove dangerous tags and their content
-  for (const tag of ["iframe", "object", "embed", "form", "base"]) {
+  for (const tag of [
+    "iframe",
+    "object",
+    "embed",
+    "form",
+    "base",
+    "link",
+    "meta",
+    "style",
+    "svg",
+    "math",
+  ]) {
     result = result.replace(
       new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}\\s*>`, "gi"),
       "",
@@ -275,38 +287,164 @@ export function sanitizeHtml(html: string): string {
     result = result.replace(new RegExp(`<${tag}\\b[^>]*/?>`, "gi"), "");
   }
 
-  // 3. Process each HTML tag to remove event handlers and dangerous URLs
-  result = result.replace(/<[^>]+>/g, (tag) => {
-    // Remove event handler attributes (onerror, onload, onclick, etc.)
-    let cleaned = tag.replace(
-      /\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi,
-      "",
-    );
+  // Whitelist-based tag/attribute sanitizer
+  result = result.replace(
+    /<\/?([a-zA-Z][a-zA-Z0-9-]*)\b([^>]*?)\s*\/?>/g,
+    (match, tagNameRaw: string, attrsChunk: string) => {
+      const tagName = tagNameRaw.toLowerCase();
+      const isClosing = match.startsWith("</");
+      const isSelfClosing = match.endsWith("/>");
 
-    // Neutralize dangerous href/src/action attribute values
-    cleaned = cleaned.replace(
-      /(href|src|action)\s*=\s*("[^"]*"|'[^']*')/gi,
-      (attrMatch, attr: string, quotedValue: string) => {
-        const quote = quotedValue[0];
-        const value = quotedValue.slice(1, -1);
-        if (hasUnsafeUrl(value)) {
-          return `${attr}=${quote}${quote}`;
-        }
-        return attrMatch;
-      },
-    );
+      if (!ALLOWED_TAGS.has(tagName)) {
+        return "";
+      }
 
-    return cleaned;
-  });
+      if (isClosing) {
+        return `</${tagName}>`;
+      }
+
+      const attrs = sanitizeAttributes(tagName, attrsChunk);
+      const suffix = isSelfClosing ? " /" : "";
+      return attrs ? `<${tagName} ${attrs}${suffix}>` : `<${tagName}${suffix}>`;
+    },
+  );
 
   return result;
 }
 
+/** Tags permitted in sanitized markdown output. */
+const ALLOWED_TAGS = new Set([
+  // Inline formatting
+  "a",
+  "strong",
+  "em",
+  "b",
+  "i",
+  "code",
+  "del",
+  "sup",
+  "sub",
+  "br",
+  "span",
+  // Block elements
+  "p",
+  "pre",
+  "blockquote",
+  "hr",
+  // Headings
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  // Lists
+  "ul",
+  "ol",
+  "li",
+  // Tables
+  "table",
+  "thead",
+  "tbody",
+  "tr",
+  "th",
+  "td",
+  // Description lists
+  "dl",
+  "dt",
+  "dd",
+  // Details/summary
+  "details",
+  "summary",
+  // Images (src validated)
+  "img",
+  // Input (for task list checkboxes from GFM)
+  "input",
+]);
+
 /**
- * Check if a URL value contains an unsafe protocol (javascript:, data:text/html).
- * Handles HTML entity encoding and whitespace obfuscation that browsers normalize.
+ * Per-tag allowed attributes. Tags not listed here get no attributes.
+ * All attributes not in these sets are stripped.
  */
-function hasUnsafeUrl(value: string): boolean {
+const ALLOWED_ATTRS: Record<string, Set<string>> = {
+  a: new Set(["href", "title", "target", "rel"]),
+  img: new Set(["src", "alt", "title", "width", "height"]),
+  code: new Set(["class"]),
+  pre: new Set(["class"]),
+  span: new Set(["class"]),
+  td: new Set(["align"]),
+  th: new Set(["align"]),
+  ol: new Set(["start"]),
+  input: new Set(["type", "checked", "disabled"]),
+};
+
+/** Attributes that hold URLs and need scheme validation. */
+const URL_ATTRS = new Set(["href", "src"]);
+
+/**
+ * Parse and sanitize attributes for an allowed tag.
+ * Only keeps attributes from the per-tag whitelist.
+ * URL-bearing attributes are validated against safe schemes.
+ */
+function sanitizeAttributes(
+  tagName: string,
+  rawAttrs: string | undefined,
+): string {
+  if (!rawAttrs?.trim()) return "";
+
+  const allowedForTag = ALLOWED_ATTRS[tagName];
+  if (!allowedForTag || allowedForTag.size === 0) return "";
+
+  // Match quoted and unquoted attribute values
+  const attrRegex =
+    /([a-zA-Z][a-zA-Z0-9_-]*)\s*(?:=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+
+  const keptAttrs: string[] = [];
+  let hasRel = false;
+  let targetBlank = false;
+
+  for (const attrMatch of rawAttrs.matchAll(attrRegex)) {
+    const attrNameRaw = attrMatch[1];
+    if (!attrNameRaw) continue;
+    const attrName = attrNameRaw.toLowerCase();
+    if (!allowedForTag.has(attrName)) continue;
+
+    const value = attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? "";
+
+    // Validate URL attributes against safe schemes
+    if (URL_ATTRS.has(attrName) && !isSafeUrl(value)) continue;
+
+    // Track target and rel for security enforcement
+    if (attrName === "target" && value === "_blank") targetBlank = true;
+    if (attrName === "rel") hasRel = true;
+
+    keptAttrs.push(`${attrName}="${escapeHtmlAttr(value)}"`);
+  }
+
+  // Enforce rel="noopener noreferrer" on target="_blank" links
+  if (tagName === "a" && targetBlank && !hasRel) {
+    keptAttrs.push('rel="noopener noreferrer"');
+  }
+
+  return keptAttrs.join(" ");
+}
+
+/** Escape a value for safe use inside an HTML attribute. */
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * Check if a URL is safe for use in href/src attributes.
+ * Allows http(s), mailto, tel, relative paths, and anchors.
+ * Blocks javascript:, data:text/html, vbscript:, and unknown schemes.
+ * Handles HTML entity encoding and whitespace obfuscation.
+ */
+function isSafeUrl(value: string): boolean {
   // Decode numeric HTML entities (&#NNN; and &#xHH;) to catch encoded bypasses
   const decoded = value
     .replace(/&#x([0-9a-f]+);?/gi, (_, hex) =>
@@ -319,9 +457,24 @@ function hasUnsafeUrl(value: string): boolean {
     .replace(/[\s\t\n\r\0\u200B]+/g, "")
     .toLowerCase();
 
-  return (
-    decoded.startsWith("javascript:") || decoded.startsWith("data:text/html")
-  );
+  // Anchors and relative paths are safe
+  if (decoded.startsWith("#") || decoded.startsWith("/")) return true;
+
+  // No scheme = relative URL (safe)
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(decoded)) return true;
+
+  // Explicitly allow common safe protocols
+  if (
+    decoded.startsWith("http:") ||
+    decoded.startsWith("https:") ||
+    decoded.startsWith("mailto:") ||
+    decoded.startsWith("tel:")
+  ) {
+    return true;
+  }
+
+  // Block everything else (javascript:, data:, vbscript:, etc.)
+  return false;
 }
 
 /**

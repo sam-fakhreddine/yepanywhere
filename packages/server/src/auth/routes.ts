@@ -8,6 +8,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { getLogger } from "../logging/logger.js";
 import type { AuthService } from "./AuthService.js";
 import { getClaudeLoginService } from "./claude-login.js";
+import { getClientIp } from "./client-ip.js";
 import { RateLimiter } from "./rate-limiter.js";
 
 export const SESSION_COOKIE_NAME = "yep-anywhere-session";
@@ -198,10 +199,8 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
    * Login with password
    */
   app.post("/login", async (c) => {
-    // Extract client IP for rate limiting
-    const ip =
-      (c.env as Record<string, { socket?: { remoteAddress?: string } }>)
-        ?.incoming?.socket?.remoteAddress ?? "unknown";
+    // Extract client IP for rate limiting (falls back to "unknown" if unavailable)
+    const ip = getClientIp(c) ?? "unknown";
 
     // Check rate limit before processing
     const { blocked, retryAfterMs } = loginRateLimiter.isBlocked(ip);

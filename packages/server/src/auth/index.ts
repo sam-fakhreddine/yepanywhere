@@ -15,3 +15,4 @@ export {
   type ClaudeLoginState,
 } from "./claude-login.js";
 export { RateLimiter, type RateLimiterOptions } from "./rate-limiter.js";
+export { getClientIp, getClientIpFromSocket } from "./client-ip.js";
