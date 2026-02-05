@@ -1,44 +1,42 @@
 # Yep Anywhere Product Roadmap 2026
-**Synthesized from Mobile UX, AI/Agent Workflows, and Enterprise/Teams proposals**
+**Focus: Solo Developers & Small Teams**
 
 ---
 
 ## Executive Summary
 
-This roadmap balances three critical dimensions: **mobile-first user experience**, **intelligent agent supervision**, and **enterprise readiness**. The sequencing prioritizes foundational capabilities that unlock downstream features while delivering quick wins each quarter.
+This roadmap prioritizes **individual productivity** and **small team workflows**. Enterprise features (RBAC, SSO, compliance) are deferred to a future phase. The goal is to make Yep Anywhere the best mobile-first AI agent supervisor for developers who work solo or in teams of 2-5.
 
 **Key Strategic Themes:**
 1. **Intelligent Supervision** - Reduce cognitive load through smart automation
 2. **Mobile-First Experience** - Optimize for on-the-go supervision
-3. **Enterprise Readiness** - Enable team adoption with security and compliance
-4. **Advanced Automation** - Unlock sophisticated multi-agent workflows
+3. **Power User Productivity** - Templates, workflows, and automation
+4. **Lightweight Collaboration** - Simple sharing for small teams
 
 ---
 
-## Q1 2026: Foundation & Quick Wins
-**Theme:** *Reduce supervision burden and polish core mobile experience*
+## Q1 2026: Core Experience
+**Theme:** *Reduce supervision burden and polish mobile interactions*
 
-### Approval Rule Engine (P0 - AI/Agent)
-**Why First:** This is the highest-leverage feature. Users are overwhelmed by approval requests. Auto-approving safe patterns (read-only operations, familiar tools) dramatically reduces interruptions while maintaining control.
+### Approval Rule Engine (P0)
+**Why First:** Highest-leverage feature. Users are overwhelmed by approval requests. Auto-approving safe patterns dramatically reduces interruptions.
 
-**Dependencies:** None - can ship independently
 **Effort:** Medium (2-3 weeks)
-**Impact:** High - reduces approval fatigue by 60-80% based on usage patterns
+**Impact:** High - reduces approval fatigue by 60-80%
 
 **Key Capabilities:**
 - Pre-approve read-only operations (Read, Grep, Glob)
 - Tool-specific rules (e.g., "auto-approve Edit for .md files")
 - Project-level rule templates
-- Usage analytics dashboard
+- Quick "always allow this" from approval prompt
 
 ---
 
-### Swipe Actions on Session List (P0 - Mobile UX)
-**Why First:** Quick win that improves daily workflows. Archive, star, delete without tapping into menus.
+### Swipe Actions on Session List (P0)
+**Why First:** Quick win for daily workflows. Archive, star, delete without tapping into menus.
 
-**Dependencies:** None
 **Effort:** Small (1 week)
-**Impact:** Medium - quality-of-life improvement for power users
+**Impact:** Medium - quality-of-life for power users
 
 **Gesture Patterns:**
 - Swipe right: Star/Unstar
@@ -47,89 +45,50 @@ This roadmap balances three critical dimensions: **mobile-first user experience*
 
 ---
 
-### Cost Tracking and Budget Management (P0 - AI/Agent)
-**Why First:** Critical for user trust and enterprise adoption. Users need visibility into API costs before bills surprise them.
+### Cost Tracking and Budget Alerts (P0)
+**Why First:** Critical for trust. Solo devs and small teams need visibility into API costs.
 
-**Dependencies:** None
 **Effort:** Medium (2 weeks)
-**Impact:** High - enables budgeting and prevents overspend
+**Impact:** High - prevents bill shock
 
 **Features:**
 - Per-session cost tracking (token usage × pricing)
-- Project-level budgets with alerts
 - Monthly spending dashboard
-- Export to CSV for accounting
+- Budget alerts (configurable thresholds)
+- Export to CSV
 
 ---
 
-### Pull-to-Refresh with Haptic Feedback (P1 - Mobile UX)
-**Why Q1:** Natural mobile pattern, builds on swipe actions work, small effort for good UX polish.
+### Pull-to-Refresh with Haptic Feedback (P1)
+**Why Q1:** Natural mobile pattern, small effort, good polish.
 
-**Dependencies:** None
 **Effort:** Small (3 days)
-**Impact:** Small - polish and mobile convention adherence
+**Impact:** Small - mobile convention adherence
 
 ---
 
-## Q2 2026: Enterprise Foundation
-**Theme:** *Enable team adoption with security, compliance, and mobile enhancements*
+## Q2 2026: Mobile Power
+**Theme:** *Make mobile the primary interface for agent supervision*
 
-### Multi-User Role-Based Access (P0 - Enterprise)
-**Why Q2:** Foundational for all team features. Must come before workspaces and session sharing. Q2 timing allows Q1 to solidify individual-user experience first.
+### Quick Approval Actions from Notification (P0)
+**Why Q2:** Approve/deny without unlocking phone. Core mobile value proposition.
 
-**Dependencies:** None, but unlocks Q3 workspace permissions and Q4 session sharing
-**Effort:** Large (4-6 weeks)
-**Impact:** Critical - gates enterprise sales
-
-**Roles:**
-- **Admin:** Full system access, user management, billing
-- **Operator:** Create/manage sessions, approve actions, configure rules
-- **Viewer:** Read-only access to sessions and logs
-
-**Technical Considerations:**
-- Extends existing auth.json to multi-user table
-- Session ownership and access control
-- Audit trail for all permission changes
-
----
-
-### Comprehensive Audit Logging (P0 - Enterprise)
-**Why Q2:** Required for SOC2 compliance. Natural companion to RBAC - logs must capture "who did what."
-
-**Dependencies:** Multi-User RBAC (same quarter)
-**Effort:** Medium (3 weeks)
-**Impact:** Critical - required for enterprise security reviews
-
-**Logged Events:**
-- User authentication and authorization
-- Session creation, modification, deletion
-- Approval decisions and rule changes
-- System configuration changes
-- Export to SIEM systems (JSON format)
-
----
-
-### Quick Approval Actions from Notification (P1 - Mobile UX)
-**Why Q2:** Builds on Q1 approval rule engine. Enables approve/deny without unlocking phone.
-
-**Dependencies:** None, enhanced by approval rules
 **Effort:** Medium (2 weeks)
-**Impact:** Medium - reduces supervision latency
+**Impact:** High - reduces supervision latency to seconds
 
 **Notification Actions:**
-- "Approve" (with rule creation option)
+- "Approve" (with "always allow" option)
 - "Deny"
 - "View Details" (opens app)
 - Works with iOS/Android action buttons
 
 ---
 
-### Offline Session History Cache (P1 - Mobile UX)
-**Why Q2:** Mobile resilience. Users on trains, planes, poor connectivity can still review past sessions.
+### Offline Session History Cache (P1)
+**Why Q2:** Mobile resilience for commuters, travelers, spotty connectivity.
 
-**Dependencies:** None
 **Effort:** Medium (2 weeks)
-**Impact:** Medium - improves mobile reliability
+**Impact:** Medium - true mobile-first experience
 
 **Implementation:**
 - IndexedDB cache of session metadata
@@ -139,13 +98,9 @@ This roadmap balances three critical dimensions: **mobile-first user experience*
 
 ---
 
-## Q3 2026: Productivity & Templates
-**Theme:** *Enhance productivity with reusable configurations and granular permissions*
+### Session Templates and Presets (P1)
+**Why Q2:** Power users repeat similar configurations. Templates save setup time.
 
-### Session Templates and Project Presets (P1 - AI/Agent)
-**Why Q3:** Builds on Q1 approval rules and Q2 multi-user. Teams can share standardized workflows.
-
-**Dependencies:** Multi-User RBAC (Q2) for template sharing
 **Effort:** Medium (3 weeks)
 **Impact:** High - reduces session setup time by 80%
 
@@ -153,7 +108,7 @@ This roadmap balances three critical dimensions: **mobile-first user experience*
 - Tool configurations (enabled tools, model selection)
 - Approval rule bundles
 - Initial prompt templates
-- Environment variables and working directory
+- Project-specific defaults
 
 **Examples:**
 - "Security Audit" - Enable grep/read/bash, require approval for edits
@@ -162,128 +117,147 @@ This roadmap balances three critical dimensions: **mobile-first user experience*
 
 ---
 
-### SSO/SAML Integration (P1 - Enterprise)
-**Why Q3:** Enterprise requirement but less urgent than RBAC/audit. Integrates with Q2 multi-user foundation.
+### Floating Mini-Player (P2)
+**Why Q2:** See agent progress while navigating elsewhere in app.
 
-**Dependencies:** Multi-User RBAC (Q2)
-**Effort:** Large (4-5 weeks)
-**Impact:** Medium - removes adoption friction for enterprises
-
-**Providers:**
-- Okta, Azure AD, Google Workspace
-- SAML 2.0 standard
-- Just-in-time user provisioning
-- Group-based role assignment
-
----
-
-### Workspace & Project Permissions (P1 - Enterprise)
-**Why Q3:** Logical extension of Q2 RBAC. Enables data separation for multiple teams on shared instance.
-
-**Dependencies:** Multi-User RBAC (Q2)
-**Effort:** Large (4 weeks)
-**Impact:** Medium - enables multi-team deployments
-
-**Features:**
-- Workspaces map to Claude Code project directories
-- Per-workspace access control (which users see which projects)
-- Inherited approval rules at workspace level
-- Cross-workspace access logs
-
----
-
-### Floating Mini-Player for Active Sessions (P2 - Mobile UX)
-**Why Q3:** Polish feature. Users navigating app can see agent progress without returning to session view.
-
-**Dependencies:** None
 **Effort:** Medium (2 weeks)
-**Impact:** Small - quality-of-life for active supervision
+**Impact:** Medium - quality-of-life for active supervision
 
 **Design:**
 - Collapsible floating card with latest message
 - Tap to expand, swipe to dismiss
 - Shows typing indicator and tool use
-- Works across all app screens
 
 ---
 
-## Q4 2026: Advanced Automation
-**Theme:** *Unlock sophisticated workflows with orchestration and collaboration*
+## Q3 2026: Automation & Workflows
+**Theme:** *Unlock sophisticated agent patterns for power users*
 
-### Multi-Agent Workflow Orchestration (P1 - AI/Agent)
-**Why Q4:** Complex feature requiring Q1-Q3 foundations. Allows chaining agents (research → code → test → document).
+### Multi-Agent Workflow Orchestration (P0)
+**Why Q3:** Chain agents together for complex tasks (research → code → test).
 
-**Dependencies:** Session Templates (Q3) for agent configuration
-**Effort:** Very Large (6-8 weeks)
-**Impact:** High - unlocks complex automation
+**Effort:** Large (6-8 weeks)
+**Impact:** High - unlocks advanced automation
 
 **Capabilities:**
 - Visual workflow builder (DAG of agent tasks)
 - Pass artifacts between agents (files, summaries)
-- Conditional branching based on agent outcomes
-- Parallel agent execution
+- Conditional branching based on outcomes
 - Human approval gates between stages
 
 **Example Workflow:**
-1. Research Agent: Gather requirements from docs
-2. Planning Agent: Create technical design
-3. Coding Agent: Implement features
-4. Testing Agent: Write and run tests
-5. Documentation Agent: Update README
+1. Research Agent: Gather requirements
+2. Coding Agent: Implement feature
+3. Testing Agent: Write and run tests
+4. Documentation Agent: Update README
 
 ---
 
-### Scheduled Agent Tasks (P2 - AI/Agent)
-**Why Q4:** Builds on orchestration work. Enables "CI/CD for agents."
+### Scheduled Agent Tasks (P1)
+**Why Q3:** "CI/CD for agents" - run agents on schedule or triggers.
 
-**Dependencies:** Multi-Agent Orchestration (Q4) for workflow definitions
 **Effort:** Medium (3 weeks)
-**Impact:** Medium - enables proactive maintenance
+**Impact:** Medium - proactive maintenance
 
 **Scheduling:**
 - Cron-style expressions
-- Event triggers (git push, new issues, failed builds)
-- Rate limiting and cost budgets
-- Email/Slack notifications on completion
+- Event triggers (git push, file changes)
+- Cost budgets per scheduled run
+- Email/push notifications on completion
 
 **Use Cases:**
-- Daily security audit scans
+- Daily security scans
 - Weekly dependency updates
-- Nightly test suite analysis
-- Weekly changelog generation
+- Nightly test analysis
+- Periodic documentation refresh
 
 ---
 
-### Session Sharing & Collaboration (P2 - Enterprise)
-**Why Q4:** Requires Q2 multi-user and Q3 workspace permissions. Complex collaboration patterns.
+### Simple Session Sharing (P1)
+**Why Q3:** Small teams need to share sessions without full RBAC.
 
-**Dependencies:** Multi-User RBAC (Q2), Workspace Permissions (Q3)
-**Effort:** Large (5 weeks)
-**Impact:** Medium - enables team collaboration
+**Effort:** Medium (3 weeks)
+**Impact:** Medium - enables lightweight collaboration
 
 **Features:**
-- Share session link with team members
-- Collaborative approval (any team member can respond)
-- Session handoff (transfer ownership)
-- Comment threads on messages
-- Real-time co-viewing with presence indicators
+- Generate shareable link (expires in 24h by default)
+- View-only access for link recipients
+- Optional: allow link recipient to send messages
+- No accounts required for viewers
 
 ---
 
-## Priority Resolution Rationale
+### Usage Analytics Dashboard (P2)
+**Why Q3:** Understand patterns, optimize workflows.
 
-**Five P0 Features - How We Sequenced Them:**
+**Effort:** Medium (2 weeks)
+**Impact:** Small - power user insight
 
-1. **Approval Rule Engine (Q1)** - Highest leverage, no dependencies, benefits all users immediately
-2. **Swipe Actions (Q1)** - Quick win, mobile-first principle
-3. **Cost Tracking (Q1)** - Trust and transparency, gates enterprise adoption
-4. **Multi-User RBAC (Q2)** - Foundational but requires Q1 stability, unlocks all team features
-5. **Audit Logging (Q2)** - Companion to RBAC, both needed for enterprise
+**Metrics:**
+- Sessions per project over time
+- Token usage trends
+- Most-used tools and approval patterns
+- Peak usage hours
 
-**Why Not All P0s in Q1?**
-- Engineering capacity constraints (can't ship 3 large features simultaneously)
-- Multi-user is foundational but benefits from stable single-user product first
-- Approval rules provide immediate value to existing users while we build team features
+---
+
+## Q4 2026: Polish & Expansion
+**Theme:** *Refine the experience and prepare for growth*
+
+### Voice Input for Prompts (P1)
+**Why Q4:** True hands-free mobile supervision.
+
+**Effort:** Medium (3 weeks)
+**Impact:** Medium - accessibility and convenience
+
+**Features:**
+- Web Speech API integration
+- Press-and-hold to dictate
+- Real-time transcription preview
+- Works in notification quick-reply
+
+---
+
+### Session Branching / Checkpoints (P2)
+**Why Q4:** Explore "what-if" scenarios, rollback mistakes.
+
+**Effort:** Large (4 weeks)
+**Impact:** Medium - advanced power user feature
+
+**Features:**
+- Create checkpoint at any message
+- Branch from checkpoint with different prompt
+- Compare branch outcomes side-by-side
+- Merge successful branch back
+
+---
+
+### Project Insights & Recommendations (P2)
+**Why Q4:** AI-powered suggestions based on usage patterns.
+
+**Effort:** Medium (3 weeks)
+**Impact:** Small - delight feature
+
+**Features:**
+- "You often approve X, consider adding an auto-approve rule"
+- "This project averages $X/session, above your budget"
+- "Sessions in this project frequently fail at Y tool"
+
+---
+
+## Future: Enterprise Features (Deferred)
+
+These features are valuable for larger organizations but deferred to focus on solo/small team experience:
+
+| Feature | Description | Why Deferred |
+|---------|-------------|--------------|
+| Multi-User RBAC | Admin/Operator/Viewer roles | Adds complexity; small teams share one account |
+| Audit Logging | SOC2-compliant action trails | Compliance need, not individual need |
+| SSO/SAML | Okta, Azure AD integration | Enterprise IT requirement |
+| Workspace Permissions | Data separation between teams | Multi-tenant need |
+| Collaborative Approvals | Multiple users approve same session | Full RBAC dependency |
+
+**When to revisit:** Once monthly active users exceed 1,000 or enterprise demand becomes clear through support requests.
 
 ---
 
@@ -291,83 +265,53 @@ This roadmap balances three critical dimensions: **mobile-first user experience*
 
 ### Q1 Metrics
 - **Approval Fatigue:** 70% reduction in approval requests per session
-- **Mobile Engagement:** 40% increase in mobile app daily active users
-- **Cost Awareness:** 90% of users set monthly budgets within 2 weeks
+- **Mobile Engagement:** 40% increase in mobile daily active users
+- **Cost Awareness:** 80% of users view cost dashboard weekly
 
 ### Q2 Metrics
-- **Enterprise Adoption:** 10 paying teams by end of Q2
-- **Security Compliance:** Pass 2 enterprise security reviews
-- **Mobile Approvals:** 50% of approvals happen via notification actions
+- **Mobile Approvals:** 60% of approvals happen via notification actions
+- **Template Adoption:** 50% of sessions use templates within 4 weeks
+- **Offline Usage:** 20% of users access cached sessions
 
 ### Q3 Metrics
-- **Template Usage:** 60% of sessions created from templates
-- **SSO Adoption:** 80% of enterprise teams use SSO
-- **Workspace Utilization:** Average 3.2 workspaces per team account
+- **Workflow Creation:** 25% of power users create multi-agent workflows
+- **Scheduled Runs:** 500 scheduled agent runs per week
+- **Sharing:** 30% of users share at least one session
 
 ### Q4 Metrics
-- **Orchestration:** 30% of power users create multi-agent workflows
-- **Automation:** 1,000 scheduled agent runs per week
-- **Collaboration:** 40% of team sessions use sharing features
+- **Voice Input:** 15% of mobile prompts use voice
+- **Branching:** 10% of sessions use checkpoints
+- **Retention:** 60% monthly retention rate
 
 ---
 
-## Risk & Mitigation
+## Quarterly Summary
 
-### Technical Risks
-- **Multi-User Complexity:** Data isolation bugs could leak sessions between users
-  - *Mitigation:* Comprehensive E2E test suite, security audit before launch
-
-- **Mobile Offline Sync:** Conflict resolution when online/offline changes clash
-  - *Mitigation:* Read-only offline mode (Q2), write sync in future iteration
-
-- **Orchestration Scale:** Chaining agents could cause runaway costs
-  - *Mitigation:* Cost tracking (Q1) provides circuit breakers
-
-### Market Risks
-- **Feature Fatigue:** Too many features too fast could compromise stability
-  - *Mitigation:* Beta flags for Q3/Q4 features, phased rollout
-
-- **Enterprise Sales Cycle:** Long Q2 builds might not convert to revenue in-quarter
-  - *Mitigation:* Design partner program to de-risk with feedback
+| Quarter | Theme | Key Deliverables |
+|---------|-------|------------------|
+| **Q1** | Core Experience | Approval rules, swipe gestures, cost tracking |
+| **Q2** | Mobile Power | Notification actions, offline cache, templates |
+| **Q3** | Automation | Multi-agent workflows, scheduling, sharing |
+| **Q4** | Polish | Voice input, branching, insights |
 
 ---
 
-## Feature Parking Lot (Deferred Beyond 2026)
+## Design Principles
 
-These proposals are valuable but deferred to focus roadmap:
-- **Advanced Analytics Dashboard:** Usage patterns, agent performance trends
-- **Custom Tool Marketplace:** Share and discover user-created tools
-- **Agent Fine-Tuning:** Train agents on project-specific patterns
-- **Mobile Native Voice Input:** Speak prompts instead of typing
-- **Branching Session History:** Explore "what-if" scenarios with checkpoint restore
-
----
-
-## Stakeholder Alignment
-
-### For Mobile UX PO
-- **Q1 Quick Wins:** Swipe actions and pull-to-refresh deliver immediate value
-- **Q2 Mobile Power:** Notification actions and offline cache are tentpole mobile features
-- **Q3 Polish:** Mini-player completes mobile-first vision
-
-### For AI/Agent Workflows PO
-- **Q1 Foundation:** Approval rules and cost tracking enable all future AI features
-- **Q3 Productivity:** Templates unlock reusable workflows
-- **Q4 Advanced:** Orchestration and scheduling are power-user features
-
-### For Enterprise/Teams PO
-- **Q2 Foundation:** RBAC and audit logging are table stakes for enterprise
-- **Q3 Expansion:** SSO and workspaces enable multi-team deployments
-- **Q4 Collaboration:** Session sharing completes team feature set
+1. **Solo-first, team-friendly** - Every feature works great for one person, scales to small teams
+2. **Mobile-primary** - If it doesn't work well on a phone, reconsider the design
+3. **Automation over administration** - Prefer smart defaults over configuration screens
+4. **Cost-conscious** - Help users understand and control spending
+5. **Zero external dependencies** - No Firebase, no accounts, just Tailscale for network access
 
 ---
 
 ## Conclusion
 
-This roadmap delivers value every quarter while building toward a comprehensive platform:
-- **Q1** reduces supervision burden for individuals
-- **Q2** enables team and enterprise adoption
-- **Q3** enhances productivity with templates and permissions
-- **Q4** unlocks advanced automation and collaboration
+This roadmap delivers maximum value for solo developers and small teams:
+- **Q1** eliminates approval fatigue and provides cost visibility
+- **Q2** makes mobile the best way to supervise agents
+- **Q3** unlocks powerful automation for power users
+- **Q4** polishes the experience with voice and branching
 
-Each quarter builds on previous foundations, balancing quick wins with strategic investments. By Q4 2026, Yep Anywhere will be the premier platform for mobile-supervised AI agent workflows at individual, team, and enterprise scale.
+Enterprise features remain in the backlog, ready to prioritize when market demand justifies the investment. By focusing on individuals and small teams first, we build a product people love before adding organizational complexity.
