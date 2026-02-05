@@ -80,6 +80,34 @@ pnpm test:e2e   # E2E tests (if UI changes)
 
 Fix any errors before considering the task complete.
 
+## UI/UX Testing Requirements
+
+**Always write Playwright E2E tests for UI/UX features and changes.** This includes:
+
+- New interactive components (buttons, dialogs, gestures)
+- User flows and navigation changes
+- Mobile-specific interactions (swipe, touch, viewport changes)
+- Accessibility features
+
+Tests should be placed in `packages/client/e2e/` and follow existing patterns:
+
+```typescript
+import { expect, test } from "./fixtures.js";
+
+test.describe("Feature Name", () => {
+  test("describes expected behavior", async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/`);
+    // Test implementation
+  });
+});
+```
+
+Key patterns:
+- Use `data-testid` attributes for reliable element selection
+- Test both mobile and desktop viewports when relevant
+- Verify API calls complete successfully for state changes
+- Test error states and edge cases
+
 ## Git Commits
 
 Never mention Claude, AI, or any AI assistant in commit messages. Write commit messages as if a human developer wrote them.
