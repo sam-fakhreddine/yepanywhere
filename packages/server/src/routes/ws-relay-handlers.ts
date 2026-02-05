@@ -114,8 +114,8 @@ export interface ConnectionState {
   browserProfileId: string | null;
   /** Origin metadata from SRP hello (for session tracking) */
   originMetadata: OriginMetadata | null;
-  /** Remote IP address of the connecting client (for rate limiting) */
-  remoteIp: string;
+  /** Remote IP address of the connecting client (for rate limiting, undefined if unavailable) */
+  remoteIp: string | undefined;
 }
 
 /** Tracks an active upload over WebSocket relay */
@@ -189,7 +189,7 @@ export function createConnectionState(remoteIp?: string): ConnectionState {
     supportedFormats: new Set([BinaryFormat.JSON]),
     browserProfileId: null,
     originMetadata: null,
-    remoteIp: remoteIp ?? "unknown",
+    remoteIp,
   };
 }
 

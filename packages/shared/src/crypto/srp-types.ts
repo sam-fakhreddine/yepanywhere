@@ -80,14 +80,30 @@ export interface SrpSessionResumed {
   challenge?: string;
 }
 
-/** Reasons a session cannot be resumed */
+/**
+ * Reasons a session cannot be resumed.
+ *
+ * - "expired": Session exists but exceeded idle timeout or max lifetime
+ * - "unknown": Session ID is not recognized by the server
+ * - "invalid_proof": Resume proof decryption failed or timestamp is too old
+ * - "challenge_required": Server requires a valid challenge in the proof.
+ *   This occurs when: (1) server has a pending challenge but client didn't include it,
+ *   (2) client provided a wrong challenge, or (3) legacy session without challenge
+ *   chain needs re-authentication. Client must perform full SRP authentication.
+ */
 export type SrpSessionInvalidReason =
   | "expired"
   | "unknown"
   | "invalid_proof"
   | "challenge_required";
 
-/** Server indicates session is invalid, client must do full SRP */
+/**
+ * Server indicates session is invalid, client must do full SRP authentication.
+ *
+ * When `reason === "challenge_required"`, the client MUST initiate a fresh SRP
+ * handshake rather than treating this as a transient error. The server will
+ * establish a new challenge chain during the authentication flow.
+ */
 export interface SrpSessionInvalid {
   type: "srp_invalid";
   /** Why the session could not be resumed */
