@@ -42,6 +42,8 @@ Server state is stored in a data directory (default: `~/.yep-anywhere/`). This i
 - `push-subscriptions.json` - Web push subscriptions
 - `vapid.json` - VAPID keys for push
 - `auth.json` - Authentication state (password hash, sessions)
+- `remote-access.json` - SRP salt and verifier (file permissions: 0600)
+- `remote-sessions.json` - Active remote session keys (file permissions: 0600)
 
 ### Running Multiple Instances
 
@@ -169,9 +171,14 @@ Available endpoints:
 - `GET|PUT /log/level` - Get/set log levels
 - `GET|PUT /proxy/debug` - Get/set proxy debug logging
 - `GET /inspector` - Inspector status
-- `POST /inspector/open` - Enable Chrome DevTools
+- `POST /inspector/open` - Enable Chrome DevTools (host restricted to localhost only)
 - `POST /inspector/close` - Disable Chrome DevTools
 - `POST /reload` - Restart server
+
+Security notes:
+- Request bodies are limited to 1MB
+- Inspector host is restricted to `127.0.0.1`, `::1`, or `localhost`
+- Rejects cross-origin browser requests (Origin header check)
 
 Environment variables:
 - `MAINTENANCE_PORT` - Port for maintenance server (default: PORT + 1, set to 0 to disable)

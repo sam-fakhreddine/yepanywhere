@@ -26,6 +26,10 @@ yepanywhere --setup-remote-access --username myserver --password "secretpass123"
 - The relay never sees your password or session keys
 - Traffic is encrypted with XSalsa20-Poly1305 (same as Signal, Keybase, etc.)
 - No accounts or sign-ups required — just a username/password you control
+- Authentication is rate-limited with exponential backoff to prevent brute-force attacks
+- Session resume uses single-use challenge-response tokens to prevent replay attacks
+- Sensitive files (`remote-access.json`, `remote-sessions.json`) are stored with 0600 permissions
+- Markdown content from Claude is sanitized to prevent XSS
 
 See [relay-design.md](relay-design.md) for technical details.
 
@@ -139,3 +143,5 @@ systemctl --user start claude-tunnel
 - Always use HTTPS for remote access (all options above provide this).
 - Consider adding authentication (basic auth, Cloudflare Access, etc.) as an extra layer.
 - The server listens on localhost by default. Remote access methods tunnel to localhost rather than exposing on all interfaces.
+- **Network binding:** If you bind the server to `0.0.0.0` (all interfaces), SRP remote access authentication is **required** on the WebSocket endpoint. Without it, the server will reject non-localhost WebSocket connections to prevent unauthenticated LAN access.
+- **SSH executors:** Remote executor hostnames are validated against a strict pattern to prevent command injection. Only alphanumeric characters, dots, underscores, `@`, colons, and hyphens are allowed.

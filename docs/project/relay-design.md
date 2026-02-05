@@ -110,7 +110,7 @@ Lightweight WebSocket router. Responsibilities:
 
 ### SRP Authentication
 
-Using SRP-6a with SHA-256. Yepanywhere server stores verifier, never password.
+Using SRP-6a with SHA-512 (2048-bit RFC 5054 prime). Yepanywhere server stores verifier, never password.
 
 ```
 Phone                      Relay                      Yepanywhere
@@ -769,12 +769,13 @@ type SrpSessionResume = {
 type SrpSessionResumed = {
   type: "srp_resumed";
   sessionId: string;
+  challenge?: string;    // Server-generated challenge for next resume (single-use)
 };
 
 // Server → Client: Session invalid, do full SRP
 type SrpSessionInvalid = {
   type: "srp_invalid";
-  reason: "expired" | "unknown" | "invalid_proof";
+  reason: "expired" | "unknown" | "invalid_proof" | "challenge_required";
 };
 ```
 
@@ -838,9 +839,10 @@ Client                           Server
 #### Security Considerations
 
 - **Session key storage**: localStorage is accessible to JS on same origin. Acceptable for convenience vs. security tradeoff. Users can choose to not save session.
-- **Proof mechanism**: Encrypting timestamp prevents replay attacks. Server validates timestamp is recent (within 5 minutes).
+- **Proof mechanism**: Encrypting timestamp + server-generated challenge prevents replay attacks. Server validates timestamp is recent (within 5 minutes) and that the challenge matches a single-use token issued after the previous authentication. Each successful resume returns a new challenge for the next attempt.
 - **Session revocation**: Changing password invalidates all sessions. Add explicit "sign out everywhere" option.
 - **Session limits**: Max 5 active sessions per user. Oldest evicted on new auth.
+- **Rate limiting**: SRP authentication attempts are rate-limited per IP with exponential backoff (5 failures → 1 min block, 10 → 5 min, 20 → 15 min). WebSocket is closed after a failed SRP proof.
 
 #### Checklist
 
