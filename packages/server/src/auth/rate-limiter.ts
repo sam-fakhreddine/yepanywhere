@@ -44,9 +44,18 @@ export class RateLimiter {
   /**
    * Check if a key is currently blocked from making attempts.
    *
+   * @param key - The key to check (typically IP address). If undefined, rate limiting is skipped.
    * @returns `{ blocked: false }` if allowed, or `{ blocked: true, retryAfterMs }` if blocked.
    */
-  isBlocked(key: string): { blocked: boolean; retryAfterMs?: number } {
+  isBlocked(key: string | undefined): {
+    blocked: boolean;
+    retryAfterMs?: number;
+  } {
+    // Skip rate limiting when key is unavailable (e.g., IP couldn't be determined)
+    if (!key) {
+      return { blocked: false };
+    }
+
     const record = this.attempts.get(key);
     if (!record) {
       return { blocked: false };
@@ -74,8 +83,13 @@ export class RateLimiter {
   /**
    * Record a failed authentication attempt for the given key.
    * Applies exponential backoff blocking after threshold failures.
+   *
+   * @param key - The key to record failure for. If undefined, the call is ignored.
    */
-  recordFailure(key: string): void {
+  recordFailure(key: string | undefined): void {
+    // Skip tracking when key is unavailable
+    if (!key) return;
+
     const now = Date.now();
     let record = this.attempts.get(key);
 
@@ -103,8 +117,11 @@ export class RateLimiter {
 
   /**
    * Record a successful authentication, resetting the failure counter for the key.
+   *
+   * @param key - The key to clear. If undefined, the call is ignored.
    */
-  recordSuccess(key: string): void {
+  recordSuccess(key: string | undefined): void {
+    if (!key) return;
     this.attempts.delete(key);
   }
 
