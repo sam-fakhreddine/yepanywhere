@@ -80,16 +80,71 @@ pnpm test:e2e   # E2E tests (if UI changes)
 
 Fix any errors before considering the task complete.
 
-## UI/UX Testing Requirements
+## UI/UX Guidelines
 
-**Always write Playwright E2E tests for UI/UX features and changes.** This includes:
+This project follows strict UI/UX standards. Apply these guidelines when designing, building, or reviewing UI code.
+
+### Design Rules by Priority
+
+| Priority | Category | Key Rules |
+|----------|----------|-----------|
+| CRITICAL | Accessibility | 4.5:1 contrast, focus states, ARIA labels, keyboard nav |
+| CRITICAL | Touch & Interaction | 44x44px touch targets, cursor-pointer on clickables, loading states |
+| HIGH | Performance | Image optimization, `prefers-reduced-motion`, no layout shifts |
+| HIGH | Layout & Responsive | Mobile-first, 16px min font, no horizontal scroll |
+| MEDIUM | Typography | 1.5-1.75 line-height, 65-75 char line length |
+| MEDIUM | Animation | 150-300ms micro-interactions, use transform/opacity only |
+
+### Common Mistakes to Avoid
+
+| Rule | Do | Don't |
+|------|----|----- |
+| **Icons** | Use SVG icons (Lucide, Heroicons) | Use emojis as UI icons |
+| **Clickables** | Add `cursor-pointer` to all interactive elements | Leave default cursor |
+| **Hover states** | Use color/opacity transitions | Use scale transforms that shift layout |
+| **Light mode** | Use `bg-white/80` or higher for glass effects | Use `bg-white/10` (invisible) |
+| **Text contrast** | Use slate-900 for body text | Use slate-400 or lighter |
+| **Borders** | Use `border-gray-200` in light mode | Use `border-white/10` (invisible) |
+| **Navbar** | Add `top-4 left-4 right-4` spacing for floating | Stick to `top-0 left-0 right-0` |
+
+### Pre-Delivery Checklist
+
+Before delivering UI code, verify:
+
+**Visual Quality**
+- [ ] No emojis used as icons (use SVG)
+- [ ] Icons from consistent set (Lucide preferred)
+- [ ] Hover states don't cause layout shift
+- [ ] Works in both light and dark mode
+
+**Interaction**
+- [ ] All clickable elements have `cursor-pointer`
+- [ ] Transitions are 150-300ms
+- [ ] Focus states visible for keyboard nav
+- [ ] Loading states for async operations
+
+**Accessibility**
+- [ ] Color contrast 4.5:1 minimum
+- [ ] All images have alt text
+- [ ] Form inputs have labels
+- [ ] `prefers-reduced-motion` respected
+
+**Responsive**
+- [ ] Test at 375px, 768px, 1024px, 1440px
+- [ ] No horizontal scroll on mobile
+- [ ] Touch targets minimum 44x44px
+- [ ] Content not hidden behind fixed elements
+
+### Testing Requirements
+
+**Always write Playwright E2E tests for UI/UX features.** This includes:
 
 - New interactive components (buttons, dialogs, gestures)
 - User flows and navigation changes
 - Mobile-specific interactions (swipe, touch, viewport changes)
 - Accessibility features
 
-Tests should be placed in `packages/client/e2e/` and follow existing patterns:
+Tests go in `packages/client/e2e/`:
 
 ```typescript
 import { expect, test } from "./fixtures.js";
@@ -102,9 +157,9 @@ test.describe("Feature Name", () => {
 });
 ```
 
-Key patterns:
+Testing patterns:
 - Use `data-testid` attributes for reliable element selection
-- Test both mobile and desktop viewports when relevant
+- Test both mobile (375px) and desktop (1200px) viewports
 - Verify API calls complete successfully for state changes
 - Test error states and edge cases
 
