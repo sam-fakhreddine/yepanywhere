@@ -13,6 +13,7 @@
 
 import { marked } from "marked";
 import { highlightFile } from "../highlighting/index.js";
+import { sanitizeHtml } from "./augment-generator.js";
 
 /**
  * Input for computing a read augment.
@@ -61,7 +62,8 @@ async function renderMarkdown(content: string): Promise<string> {
     })
     .join("\n");
 
-  return marked.parse(contentWithoutLineNumbers, { async: true });
+  const html = await marked.parse(contentWithoutLineNumbers, { async: true });
+  return sanitizeHtml(html);
 }
 
 /**

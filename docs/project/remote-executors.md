@@ -15,6 +15,12 @@ Run Claude sessions on remote machines over SSH, with session files synced back 
 3. Project paths are symmetric (`$HOME/code/project` exists on both machines)
 4. Remote has valid Claude credentials (`~/.claude/.credentials.json` or `ANTHROPIC_API_KEY`)
 
+## Security
+
+- **Hostname validation:** Executor hostnames are validated at the API boundary against the pattern `/^[a-zA-Z0-9._@:-]+$/` to prevent SSH option injection and command injection attacks.
+- **Shell escaping:** Remote paths used in SSH commands are properly escaped using `escapeShell()` to prevent shell metacharacter injection.
+- **SSH argument separation:** All SSH spawn calls use `--` before the host argument to prevent hostnames from being interpreted as SSH options.
+
 ## Architecture
 
 ```

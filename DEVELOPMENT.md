@@ -81,3 +81,8 @@ A lightweight HTTP server runs on PORT + 1 for diagnostics when the main server 
 curl http://localhost:3401/status          # Server status
 curl -X POST http://localhost:3401/reload  # Restart server
 ```
+
+Security notes:
+- Inspector host is restricted to localhost (`127.0.0.1`, `::1`, `localhost`) to prevent external exposure
+- Request bodies are limited to 1MB
+- Cross-origin browser requests are rejected (Origin header check)

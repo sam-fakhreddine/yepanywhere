@@ -104,15 +104,21 @@ describe("RemoteSessionService", () => {
       const sessionKey = new Uint8Array(32).fill(0x42);
       const sessionId = await service.createSession("testuser", sessionKey);
 
-      // Generate a valid proof (encrypted timestamp)
+      // Generate a challenge first (simulates what server does after initial SRP auth)
+      const challenge = await service.generateResumeChallenge(sessionId);
+      expect(challenge).not.toBeNull();
+
+      // Generate a valid proof (encrypted timestamp + challenge)
       const timestamp = Date.now();
-      const proofData = JSON.stringify({ timestamp });
+      const proofData = JSON.stringify({ timestamp, challenge });
       const { nonce, ciphertext } = encrypt(proofData, sessionKey);
       const proof = JSON.stringify({ nonce, ciphertext });
 
-      const validatedSession = await service.validateProof(sessionId, proof);
-      expect(validatedSession).not.toBeNull();
-      expect(validatedSession?.sessionId).toBe(sessionId);
+      const result = await service.validateProof(sessionId, proof);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.session.sessionId).toBe(sessionId);
+      }
     });
 
     it("rejects proof with wrong session key", async () => {
@@ -126,8 +132,11 @@ describe("RemoteSessionService", () => {
       const { nonce, ciphertext } = encrypt(proofData, wrongKey);
       const proof = JSON.stringify({ nonce, ciphertext });
 
-      const validatedSession = await service.validateProof(sessionId, proof);
-      expect(validatedSession).toBeNull();
+      const result = await service.validateProof(sessionId, proof);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.reason).toBe("invalid_proof");
+      }
     });
 
     it("rejects proof with old timestamp", async () => {
@@ -140,8 +149,11 @@ describe("RemoteSessionService", () => {
       const { nonce, ciphertext } = encrypt(proofData, sessionKey);
       const proof = JSON.stringify({ nonce, ciphertext });
 
-      const validatedSession = await service.validateProof(sessionId, proof);
-      expect(validatedSession).toBeNull();
+      const result = await service.validateProof(sessionId, proof);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.reason).toBe("invalid_proof");
+      }
     });
 
     it("rejects proof for non-existent session", async () => {
@@ -152,16 +164,19 @@ describe("RemoteSessionService", () => {
       const { nonce, ciphertext } = encrypt(proofData, sessionKey);
       const proof = JSON.stringify({ nonce, ciphertext });
 
-      const validatedSession = await service.validateProof(
-        "nonexistent",
-        proof,
-      );
-      expect(validatedSession).toBeNull();
+      const result = await service.validateProof("nonexistent", proof);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.reason).toBe("expired");
+      }
     });
 
     it("updates lastUsed on successful validation", async () => {
       const sessionKey = new Uint8Array(32).fill(0x42);
       const sessionId = await service.createSession("testuser", sessionKey);
+
+      // Generate a challenge first
+      const challenge = await service.generateResumeChallenge(sessionId);
 
       const sessionBefore = service.getSession(sessionId);
       const lastUsedBefore = sessionBefore?.lastUsed;
@@ -169,9 +184,9 @@ describe("RemoteSessionService", () => {
       // Wait a bit
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      // Validate proof
+      // Validate proof with challenge
       const timestamp = Date.now();
-      const proofData = JSON.stringify({ timestamp });
+      const proofData = JSON.stringify({ timestamp, challenge });
       const { nonce, ciphertext } = encrypt(proofData, sessionKey);
       const proof = JSON.stringify({ nonce, ciphertext });
 
@@ -179,6 +194,113 @@ describe("RemoteSessionService", () => {
 
       const sessionAfter = service.getSession(sessionId);
       expect(sessionAfter?.lastUsed).not.toBe(lastUsedBefore);
+    });
+
+    it("rejects proof with wrong challenge", async () => {
+      const sessionKey = new Uint8Array(32).fill(0x42);
+      const sessionId = await service.createSession("testuser", sessionKey);
+
+      // Generate a challenge
+      await service.generateResumeChallenge(sessionId);
+
+      // Generate proof with WRONG challenge
+      const timestamp = Date.now();
+      const wrongChallenge = "0".repeat(64); // Different challenge
+      const proofData = JSON.stringify({
+        timestamp,
+        challenge: wrongChallenge,
+      });
+      const { nonce, ciphertext } = encrypt(proofData, sessionKey);
+      const proof = JSON.stringify({ nonce, ciphertext });
+
+      const result = await service.validateProof(sessionId, proof);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.reason).toBe("challenge_required");
+      }
+    });
+
+    it("rejects proof missing challenge when server expects one", async () => {
+      const sessionKey = new Uint8Array(32).fill(0x42);
+      const sessionId = await service.createSession("testuser", sessionKey);
+
+      // Generate a challenge (server now expects client to include it)
+      await service.generateResumeChallenge(sessionId);
+
+      // Generate proof WITHOUT challenge
+      const timestamp = Date.now();
+      const proofData = JSON.stringify({ timestamp });
+      const { nonce, ciphertext } = encrypt(proofData, sessionKey);
+      const proof = JSON.stringify({ nonce, ciphertext });
+
+      const result = await service.validateProof(sessionId, proof);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.reason).toBe("challenge_required");
+      }
+    });
+
+    it("rejects legacy session without any challenge", async () => {
+      const sessionKey = new Uint8Array(32).fill(0x42);
+      const sessionId = await service.createSession("testuser", sessionKey);
+
+      // Don't generate a challenge (simulates legacy session)
+      // Generate proof without challenge
+      const timestamp = Date.now();
+      const proofData = JSON.stringify({ timestamp });
+      const { nonce, ciphertext } = encrypt(proofData, sessionKey);
+      const proof = JSON.stringify({ nonce, ciphertext });
+
+      const result = await service.validateProof(sessionId, proof);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.reason).toBe("challenge_required");
+      }
+    });
+
+    it("consumes challenge on successful validation (single-use)", async () => {
+      const sessionKey = new Uint8Array(32).fill(0x42);
+      const sessionId = await service.createSession("testuser", sessionKey);
+
+      // Generate a challenge
+      const challenge = await service.generateResumeChallenge(sessionId);
+      expect(challenge).not.toBeNull();
+
+      // First validation should succeed
+      const timestamp1 = Date.now();
+      const proofData1 = JSON.stringify({ timestamp: timestamp1, challenge });
+      const encrypted1 = encrypt(proofData1, sessionKey);
+      const proof1 = JSON.stringify(encrypted1);
+
+      const result1 = await service.validateProof(sessionId, proof1);
+      expect(result1.success).toBe(true);
+
+      // Generate a new challenge for next resume
+      const newChallenge = await service.generateResumeChallenge(sessionId);
+
+      // Reusing the OLD challenge should fail
+      const timestamp2 = Date.now();
+      const proofData2 = JSON.stringify({ timestamp: timestamp2, challenge }); // Old challenge
+      const encrypted2 = encrypt(proofData2, sessionKey);
+      const proof2 = JSON.stringify(encrypted2);
+
+      const result2 = await service.validateProof(sessionId, proof2);
+      expect(result2.success).toBe(false);
+      if (!result2.success) {
+        expect(result2.reason).toBe("challenge_required");
+      }
+
+      // Using the NEW challenge should succeed
+      const timestamp3 = Date.now();
+      const proofData3 = JSON.stringify({
+        timestamp: timestamp3,
+        challenge: newChallenge,
+      });
+      const encrypted3 = encrypt(proofData3, sessionKey);
+      const proof3 = JSON.stringify(encrypted3);
+
+      const result3 = await service.validateProof(sessionId, proof3);
+      expect(result3.success).toBe(true);
     });
   });
 

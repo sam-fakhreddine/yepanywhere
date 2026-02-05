@@ -232,7 +232,17 @@ function sendJson(
 async function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (chunk) => chunks.push(chunk));
+    let totalSize = 0;
+    const MAX_BODY_SIZE = 1024 * 1024; // 1MB
+    req.on("data", (chunk) => {
+      totalSize += chunk.length;
+      if (totalSize > MAX_BODY_SIZE) {
+        req.destroy();
+        reject(new Error("Request body too large"));
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on("end", () => {
       try {
         const body = Buffer.concat(chunks).toString();
@@ -480,6 +490,18 @@ async function handleOpenInspector(
     const body = (await readJsonBody(req)) as { port?: number; host?: string };
     const port = body.port || 9229;
     const host = body.host || "127.0.0.1";
+
+    // Validate host to prevent binding to external interfaces
+    const allowedHosts = ["127.0.0.1", "::1", "localhost"];
+    if (!allowedHosts.includes(host)) {
+      sendJson(res, 400, {
+        error: "Invalid host",
+        message:
+          "Inspector host must be 127.0.0.1, ::1, or localhost to prevent external access",
+        allowedHosts,
+      });
+      return;
+    }
 
     // Open the inspector
     inspector.open(port, host, false);

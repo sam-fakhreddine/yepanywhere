@@ -8,11 +8,11 @@ import {
   type FilterOption,
 } from "../components/FilterDropdown";
 import { PageHeader } from "../components/PageHeader";
-import { SessionListItem } from "../components/SessionListItem";
+import { SwipeableSessionItem } from "../components/SwipeableSessionItem";
 import { useGlobalSessions } from "../hooks/useGlobalSessions";
 import { useRemoteBasePath } from "../hooks/useRemoteBasePath";
 import { useNavigationLayout } from "../layouts";
-import { getSessionDisplayTitle, toUrlProjectId } from "../utils";
+import { toUrlProjectId } from "../utils";
 
 // Long-press threshold for entering selection mode on mobile
 const LONG_PRESS_MS = 500;
@@ -456,6 +456,34 @@ export function GlobalSessionsPage() {
     };
   }, [sessions, selectedIds]);
 
+  // Single-session swipe action handlers
+  const handleSwipeStar = useCallback(
+    async (sessionId: string) => {
+      const session = sessions.find((s) => s.id === sessionId);
+      if (!session) return;
+      await api.updateSessionMetadata(sessionId, {
+        starred: !session.isStarred,
+      });
+    },
+    [sessions],
+  );
+
+  const handleSwipeArchive = useCallback(
+    async (sessionId: string) => {
+      const session = sessions.find((s) => s.id === sessionId);
+      if (!session) return;
+      await api.updateSessionMetadata(sessionId, {
+        archived: !session.isArchived,
+      });
+    },
+    [sessions],
+  );
+
+  const handleSwipeLongPress = useCallback((sessionId: string) => {
+    setSelectedIds(new Set([sessionId]));
+    setIsSelectionMode(true);
+  }, []);
+
   // Handle search form submit
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -664,57 +692,28 @@ export function GlobalSessionsPage() {
                   className={`session-list ${isSelectionMode ? "session-list--selection-mode" : ""}`}
                 >
                   {filteredSessions.map((session) => (
-                    <div
+                    <SwipeableSessionItem
                       key={session.id}
-                      onTouchStart={(e) => handleLongPressStart(session.id, e)}
-                      onTouchMove={handleTouchMove}
-                      onTouchEnd={handleLongPressEnd}
-                      onTouchCancel={handleLongPressEnd}
-                      onMouseDown={(e) =>
-                        !isWideScreen && handleLongPressStart(session.id, e)
-                      }
-                      onMouseUp={handleLongPressEnd}
-                      onMouseLeave={handleLongPressEnd}
-                      onContextMenu={handleContextMenu}
-                    >
-                      <SessionListItem
-                        sessionId={session.id}
-                        projectId={session.projectId}
-                        title={getSessionDisplayTitle(session)}
-                        fullTitle={getSessionDisplayTitle(session)}
-                        updatedAt={session.updatedAt}
-                        hasUnread={session.hasUnread}
-                        activity={session.activity}
-                        pendingInputType={session.pendingInputType}
-                        status={session.ownership}
-                        provider={session.provider}
-                        executor={session.executor}
-                        isStarred={session.isStarred}
-                        isArchived={session.isArchived}
-                        mode="card"
-                        showContextUsage={false}
-                        isSelected={selectedIds.has(session.id)}
-                        isSelectionMode={isSelectionMode && !isWideScreen}
-                        onNavigate={() => {
-                          // In selection mode on mobile, tap toggles selection
-                          if (isSelectionMode && !isWideScreen) {
-                            handleSelect(
-                              session.id,
-                              !selectedIds.has(session.id),
-                            );
-                          }
-                        }}
-                        onSelect={
-                          isWideScreen || isSelectionMode
-                            ? handleSelect
-                            : undefined
+                      session={session}
+                      basePath={basePath}
+                      showProjectName={!projectFilter}
+                      isSelected={selectedIds.has(session.id)}
+                      isSelectionMode={isSelectionMode}
+                      isWideScreen={isWideScreen}
+                      onSelect={handleSelect}
+                      onNavigate={() => {
+                        // In selection mode on mobile, tap toggles selection
+                        if (isSelectionMode && !isWideScreen) {
+                          handleSelect(
+                            session.id,
+                            !selectedIds.has(session.id),
+                          );
                         }
-                        showProjectName={!projectFilter}
-                        projectName={session.projectName}
-                        basePath={basePath}
-                        messageCount={session.messageCount}
-                      />
-                    </div>
+                      }}
+                      onStar={handleSwipeStar}
+                      onArchive={handleSwipeArchive}
+                      onLongPress={handleSwipeLongPress}
+                    />
                   ))}
                 </ul>
 

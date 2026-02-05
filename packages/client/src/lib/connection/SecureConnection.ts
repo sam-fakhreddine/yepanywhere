@@ -88,6 +88,8 @@ export interface StoredSession {
   sessionId: string;
   /** Base64-encoded session key (32 bytes) */
   sessionKey: string;
+  /** Server-generated challenge for next resume (hex string) */
+  challenge?: string;
 }
 
 /** Handlers for pending uploads */
@@ -339,14 +341,18 @@ export class SecureConnection implements Connection {
   }
 
   /**
-   * Generate a resume proof by encrypting the current timestamp with the session key.
+   * Generate a resume proof by encrypting the current timestamp and
+   * server-provided challenge with the session key.
    */
   private generateResumeProof(base64SessionKey: string): string {
     const sessionKeyBytes = Uint8Array.from(atob(base64SessionKey), (c) =>
       c.charCodeAt(0),
     );
     const timestamp = Date.now();
-    const proofData = JSON.stringify({ timestamp });
+    const proofData = JSON.stringify({
+      timestamp,
+      challenge: this.storedSession?.challenge,
+    });
     const { nonce, ciphertext } = encrypt(proofData, sessionKeyBytes);
     return JSON.stringify({ nonce, ciphertext });
   }
@@ -413,6 +419,16 @@ export class SecureConnection implements Connection {
         );
         this.sessionId = msg.sessionId;
         this.connectionState = "authenticated";
+
+        // Store the new challenge from the server for the next resume
+        if (msg.challenge) {
+          this.storedSession = {
+            ...this.storedSession,
+            challenge: msg.challenge,
+          };
+          // Notify caller to persist updated session with new challenge
+          this.onSessionEstablished?.(this.storedSession);
+        }
 
         // Switch to encrypted message handler now that we're authenticated
         if (this.ws) {
@@ -907,6 +923,7 @@ export class SecureConnection implements Connection {
           username: this.username,
           sessionId: this.sessionId,
           sessionKey: sessionKeyBase64,
+          challenge: msg.challenge,
         };
         // Notify caller for external storage (e.g., localStorage)
         this.onSessionEstablished?.(this.storedSession);

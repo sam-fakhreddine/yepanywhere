@@ -8,6 +8,7 @@ export {
   RemoteSessionService,
   type RemoteSession,
   type RemoteSessionServiceOptions,
+  type ValidateProofResult,
 } from "./RemoteSessionService.js";
 
 export {
